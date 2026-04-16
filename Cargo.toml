@@ -19,6 +19,10 @@ path = "tests/cli/test_args.rs"
 name = "test_model"
 path = "tests/session/test_model.rs"
 
+[[test]]
+name = "test_store"
+path = "tests/session/test_store.rs"
+
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
@@ -26,3 +30,4 @@ serde_json = "1"
 
 [dev-dependencies]
 assert_cmd = "2"
+tempfile = "3"
