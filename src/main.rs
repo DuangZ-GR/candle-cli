@@ -1,9 +1,6 @@
+use candle_cli::cli::args::Cli;
 use clap::Parser;
 
-#[derive(Parser, Debug)]
-#[command(name = "candle-cli")]
-struct Args {}
-
 fn main() {
-    let _ = Args::parse();
+    let _cli = Cli::parse();
 }

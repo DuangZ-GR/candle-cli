@@ -11,6 +11,10 @@ path = "src/main.rs"
 name = "test_bootstrap"
 path = "tests/cli/test_bootstrap.rs"
 
+[[test]]
+name = "test_args"
+path = "tests/cli/test_args.rs"
+
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
