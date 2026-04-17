@@ -1,3 +1,4 @@
+pub mod agent;
 pub mod cli;
 pub mod context;
 pub mod model;

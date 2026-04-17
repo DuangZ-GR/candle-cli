@@ -47,6 +47,10 @@ path = "tests/model/test_mock_runtime.rs"
 name = "test_context_builder"
 path = "tests/agent/test_context_builder.rs"
 
+[[test]]
+name = "test_agent_loop"
+path = "tests/agent/test_agent_loop.rs"
+
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
