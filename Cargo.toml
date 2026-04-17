@@ -63,6 +63,10 @@ path = "tests/cli/test_repl_session_integration.rs"
 name = "test_doctor_status"
 path = "tests/cli/test_doctor_status.rs"
 
+[[test]]
+name = "test_bridge_runtime"
+path = "tests/model/test_bridge_runtime.rs"
+
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
