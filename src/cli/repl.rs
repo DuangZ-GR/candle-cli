@@ -9,7 +9,7 @@ use std::path::PathBuf;
 pub fn run_repl(session_dir: PathBuf) -> io::Result<()> {
     let store = SessionStore::new(session_dir);
     let mut session = Session::new(std::env::current_dir()?.display().to_string());
-    let mut runtime = MockRuntime::default();
+    let mut runtime = MockRuntime;
     let tools = ToolRegistry::default_read_only();
 
     let input = read_line("> ")?;
@@ -18,8 +18,7 @@ pub fn run_repl(session_dir: PathBuf) -> io::Result<()> {
             role: MessageRole::User,
             blocks: vec![ContentBlock::Text { text: input }],
         });
-        run_single_turn(&mut session, &mut runtime, &tools, "sys")
-            .map_err(io::Error::other)?;
+        run_single_turn(&mut session, &mut runtime, &tools, "sys").map_err(io::Error::other)?;
         store.save(&session)?;
     }
 
@@ -29,7 +28,7 @@ pub fn run_repl(session_dir: PathBuf) -> io::Result<()> {
 pub fn run_prompt(session_dir: PathBuf, input: String) -> io::Result<()> {
     let store = SessionStore::new(session_dir);
     let mut session = Session::new(std::env::current_dir()?.display().to_string());
-    let mut runtime = MockRuntime::default();
+    let mut runtime = MockRuntime;
     let tools = ToolRegistry::default_read_only();
 
     session.messages.push(Message {

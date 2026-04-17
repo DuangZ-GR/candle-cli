@@ -15,16 +15,14 @@ impl SessionStore {
     pub fn save(&self, session: &Session) -> io::Result<()> {
         fs::create_dir_all(&self.root)?;
         let path = self.root.join(format!("{}.json", session.session_id));
-        let body = serde_json::to_vec_pretty(session)
-            .map_err(|error| io::Error::new(io::ErrorKind::Other, error))?;
+        let body = serde_json::to_vec_pretty(session).map_err(io::Error::other)?;
         fs::write(path, body)
     }
 
     pub fn load(&self, id: &str) -> io::Result<Session> {
         let path = self.root.join(format!("{}.json", id));
         let body = fs::read(path)?;
-        serde_json::from_slice(&body)
-            .map_err(|error| io::Error::new(io::ErrorKind::Other, error))
+        serde_json::from_slice(&body).map_err(io::Error::other)
     }
 
     pub fn list(&self) -> io::Result<Vec<String>> {

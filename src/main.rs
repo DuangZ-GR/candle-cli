@@ -23,7 +23,10 @@ fn main() {
         }
         Some(CommandMode::Doctor) => {
             render_line(&format_status_line("runtime", "mock"));
-            render_line(&format_status_line("session_dir", &session_dir.display().to_string()));
+            render_line(&format_status_line(
+                "session_dir",
+                &session_dir.display().to_string(),
+            ));
         }
         None => {
             let _ = run_repl(session_dir);

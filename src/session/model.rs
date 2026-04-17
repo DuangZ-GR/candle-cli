@@ -10,9 +10,19 @@ pub enum MessageRole {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ContentBlock {
-    Text { text: String },
-    ToolCall { id: String, name: String, input: String },
-    ToolResult { tool_call_id: String, output: String, is_error: bool },
+    Text {
+        text: String,
+    },
+    ToolCall {
+        id: String,
+        name: String,
+        input: String,
+    },
+    ToolResult {
+        tool_call_id: String,
+        output: String,
+        is_error: bool,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

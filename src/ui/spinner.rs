@@ -5,3 +5,9 @@ impl Spinner {
         Self
     }
 }
+
+impl Default for Spinner {
+    fn default() -> Self {
+        Self::new()
+    }
+}
