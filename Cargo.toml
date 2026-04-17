@@ -27,6 +27,10 @@ path = "tests/session/test_store.rs"
 name = "test_commands"
 path = "tests/cli/test_commands.rs"
 
+[[test]]
+name = "test_policy"
+path = "tests/permissions/test_policy.rs"
+
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
