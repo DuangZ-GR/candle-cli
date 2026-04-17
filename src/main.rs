@@ -1,6 +1,12 @@
-use candle_cli::cli::args::Cli;
+use candle_cli::cli::args::{Cli, CommandMode};
 use clap::Parser;
 
 fn main() {
-    let _cli = Cli::parse();
+    let cli = Cli::parse();
+
+    match cli.command {
+        Some(CommandMode::Prompt { .. }) => {}
+        Some(CommandMode::Doctor) => {}
+        None => {}
+    }
 }
