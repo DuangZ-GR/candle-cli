@@ -35,6 +35,10 @@ path = "tests/permissions/test_policy.rs"
 name = "test_read_only_tools"
 path = "tests/tools/test_read_only_tools.rs"
 
+[[test]]
+name = "test_runtime_contract"
+path = "tests/model/test_runtime_contract.rs"
+
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
