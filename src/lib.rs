@@ -5,3 +5,4 @@ pub mod model;
 pub mod permissions;
 pub mod session;
 pub mod tools;
+pub mod ui;

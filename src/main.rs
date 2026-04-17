@@ -1,5 +1,7 @@
 use candle_cli::cli::args::{Cli, CommandMode};
 use candle_cli::cli::repl::{run_prompt, run_repl};
+use candle_cli::ui::format::format_status_line;
+use candle_cli::ui::render::render_line;
 use clap::Parser;
 use std::path::PathBuf;
 
@@ -19,7 +21,10 @@ fn main() {
         Some(CommandMode::Prompt { input }) => {
             let _ = run_prompt(session_dir, input);
         }
-        Some(CommandMode::Doctor) => {}
+        Some(CommandMode::Doctor) => {
+            render_line(&format_status_line("runtime", "mock"));
+            render_line(&format_status_line("session_dir", &session_dir.display().to_string()));
+        }
         None => {
             let _ = run_repl(session_dir);
         }

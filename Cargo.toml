@@ -59,6 +59,10 @@ path = "tests/tools/test_write_edit_shell.rs"
 name = "test_repl_session_integration"
 path = "tests/cli/test_repl_session_integration.rs"
 
+[[test]]
+name = "test_doctor_status"
+path = "tests/cli/test_doctor_status.rs"
+
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
