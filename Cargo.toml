@@ -39,6 +39,10 @@ path = "tests/tools/test_read_only_tools.rs"
 name = "test_runtime_contract"
 path = "tests/model/test_runtime_contract.rs"
 
+[[test]]
+name = "test_mock_runtime"
+path = "tests/model/test_mock_runtime.rs"
+
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
