@@ -55,6 +55,10 @@ path = "tests/agent/test_agent_loop.rs"
 name = "test_write_edit_shell"
 path = "tests/tools/test_write_edit_shell.rs"
 
+[[test]]
+name = "test_repl_session_integration"
+path = "tests/cli/test_repl_session_integration.rs"
+
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
