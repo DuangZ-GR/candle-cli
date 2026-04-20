@@ -19,7 +19,7 @@ impl CandleTargetRuntime for LocalBridgeRuntime {
     fn healthcheck(&self) -> RuntimeHealth {
         RuntimeHealth {
             ok: !self.command.is_empty(),
-            message: "bridge placeholder".into(),
+            message: format!("bridge configured for {}", self.command),
         }
     }
 
