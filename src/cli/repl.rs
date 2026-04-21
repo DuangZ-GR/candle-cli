@@ -1,4 +1,5 @@
 use crate::agent::r#loop::run_single_turn;
+use crate::model::bridge::LocalBridgeRuntime;
 use crate::model::mock::MockRuntime;
 use crate::session::model::{ContentBlock, Message, MessageRole, Session};
 use crate::session::store::SessionStore;
@@ -9,7 +10,6 @@ use std::path::PathBuf;
 pub fn run_repl(session_dir: PathBuf) -> io::Result<()> {
     let store = SessionStore::new(session_dir);
     let mut session = Session::new(std::env::current_dir()?.display().to_string());
-    let mut runtime = MockRuntime;
     let tools = ToolRegistry::default_read_only();
 
     let input = read_line("> ")?;
@@ -18,7 +18,20 @@ pub fn run_repl(session_dir: PathBuf) -> io::Result<()> {
             role: MessageRole::User,
             blocks: vec![ContentBlock::Text { text: input }],
         });
-        run_single_turn(&mut session, &mut runtime, &tools, "sys").map_err(io::Error::other)?;
+
+        match std::env::var("CANDLE_CLI_RUNTIME").ok().as_deref() {
+            Some("bridge") => {
+                let mut runtime = LocalBridgeRuntime::new("python3 python/bridge_worker.py".into());
+                run_single_turn(&mut session, &mut runtime, &tools, "sys")
+                    .map_err(io::Error::other)?;
+            }
+            _ => {
+                let mut runtime = MockRuntime;
+                run_single_turn(&mut session, &mut runtime, &tools, "sys")
+                    .map_err(io::Error::other)?;
+            }
+        }
+
         store.save(&session)?;
     }
 
@@ -28,14 +41,24 @@ pub fn run_repl(session_dir: PathBuf) -> io::Result<()> {
 pub fn run_prompt(session_dir: PathBuf, input: String) -> io::Result<()> {
     let store = SessionStore::new(session_dir);
     let mut session = Session::new(std::env::current_dir()?.display().to_string());
-    let mut runtime = MockRuntime;
     let tools = ToolRegistry::default_read_only();
 
     session.messages.push(Message {
         role: MessageRole::User,
         blocks: vec![ContentBlock::Text { text: input }],
     });
-    run_single_turn(&mut session, &mut runtime, &tools, "sys").map_err(io::Error::other)?;
+
+    match std::env::var("CANDLE_CLI_RUNTIME").ok().as_deref() {
+        Some("bridge") => {
+            let mut runtime = LocalBridgeRuntime::new("python3 python/bridge_worker.py".into());
+            run_single_turn(&mut session, &mut runtime, &tools, "sys").map_err(io::Error::other)?;
+        }
+        _ => {
+            let mut runtime = MockRuntime;
+            run_single_turn(&mut session, &mut runtime, &tools, "sys").map_err(io::Error::other)?;
+        }
+    }
+
     store.save(&session)?;
     Ok(())
 }

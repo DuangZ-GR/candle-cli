@@ -1,13 +1,12 @@
 use crate::agent::turn::finish_turn;
-use crate::model::mock::MockRuntime;
 use crate::model::runtime::CandleTargetRuntime;
 use crate::model::types::TurnResult;
 use crate::session::model::{ContentBlock, Message, MessageRole, Session};
 use crate::tools::registry::ToolRegistry;
 
-pub fn run_single_turn(
+pub fn run_single_turn<R: CandleTargetRuntime>(
     session: &mut Session,
-    runtime: &mut MockRuntime,
+    runtime: &mut R,
     _tools: &ToolRegistry,
     system_prompt: &str,
 ) -> Result<TurnResult, String> {
