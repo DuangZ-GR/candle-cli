@@ -28,7 +28,7 @@ fn prompt_mode_can_run_through_bridge_runtime() {
 
     let session_path = session_dir.path().join("session-1.json");
     let session_body = fs::read_to_string(session_path).unwrap();
-    assert!(session_body.contains("bridge response"));
+    assert!(session_body.contains("generated: hello"));
 }
 
 #[test]
@@ -43,5 +43,5 @@ fn repl_mode_can_run_through_bridge_runtime() {
 
     let session_path = session_dir.path().join("session-1.json");
     let session_body = fs::read_to_string(session_path).unwrap();
-    assert!(session_body.contains("bridge response"));
+    assert!(session_body.contains("generated: hello"));
 }

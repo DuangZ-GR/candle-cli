@@ -1,30 +1,23 @@
-import json
 import sys
+
+from bridge_protocol import decode_request, encode_error, encode_ok
+from bridge_runtime import BridgeRuntime
+
+runtime = BridgeRuntime()
 
 for line in sys.stdin:
     line = line.strip()
     if not line:
         continue
 
-    request = json.loads(line)
+    request = decode_request(line)
     match request.get("type"):
         case "healthcheck":
-            print(json.dumps({"ok": True, "message": "bridge worker ok"}), flush=True)
+            print(encode_ok(runtime.health()), flush=True)
         case "generate_turn":
-            print(
-                json.dumps(
-                    {
-                        "ok": True,
-                        "result": {
-                            "final_text": "bridge response",
-                            "tool_calls": [],
-                        },
-                    }
-                ),
-                flush=True,
-            )
+            print(encode_ok(runtime.generate_turn(request.get("request", {}))), flush=True)
         case "shutdown":
-            print(json.dumps({"ok": True, "message": "shutdown"}), flush=True)
+            print(encode_ok({"message": "shutdown"}), flush=True)
             break
         case _:
-            print(json.dumps({"ok": False, "error": "unknown request"}), flush=True)
+            print(encode_error("unknown request"), flush=True)
