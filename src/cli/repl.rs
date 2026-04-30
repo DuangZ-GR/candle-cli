@@ -15,7 +15,7 @@ pub fn run_repl(session_dir: PathBuf) -> io::Result<()> {
     let mut session = Session::new(std::env::current_dir()?.display().to_string());
     let tools = ToolRegistry::default_read_only();
 
-    print_banner();
+    print_banner(&session);
 
     while let Ok(input) = read_line("> ") {
         if input.is_empty() {
@@ -99,16 +99,17 @@ pub fn run_prompt(session_dir: PathBuf, input: String) -> io::Result<()> {
 fn handle_slash_command(input: &str, session: &mut Session, store: &SessionStore) -> bool {
     use std::io::Write;
 
-    let cmd = input
-        .strip_prefix('/')
-        .unwrap_or(input)
-        .trim()
-        .to_lowercase();
+    let body = input.strip_prefix('/').unwrap_or(input).trim().to_string();
+
+    let (cmd, arg) = body
+        .split_once(char::is_whitespace)
+        .map(|(c, a)| (c.trim().to_lowercase(), a.trim().to_string()))
+        .unwrap_or((body.to_lowercase(), String::new()));
 
     let mut stdout = io::stdout();
 
     match cmd.as_str() {
-        "exit" | "quit" | "q" => {
+        "exit" | "quit" | "q" if arg.is_empty() => {
             store.save(session).ok();
             let _ = writeln!(stdout, "bye.");
             return true;
@@ -119,13 +120,13 @@ fn handle_slash_command(input: &str, session: &mut Session, store: &SessionStore
         "clear" => {
             *session = Session::new(session.workspace_root.clone());
             store.save(session).ok();
-            let _ = writeln!(stdout, "session cleared.");
+            let _ = writeln!(stdout, "session cleared (id: {}).", session.session_id);
         }
         "system" => {
             let prompt = resolve_system_prompt();
             let _ = writeln!(stdout, "system prompt:\n{prompt}");
         }
-        "session" => {
+        "session" | "info" => {
             let _ = writeln!(
                 stdout,
                 "session: {} | messages: {} | workspace: {}",
@@ -134,6 +135,62 @@ fn handle_slash_command(input: &str, session: &mut Session, store: &SessionStore
                 session.workspace_root,
             );
         }
+        "list" | "ls" => match store.list() {
+            Ok(ids) => {
+                if ids.is_empty() {
+                    let _ = writeln!(stdout, "no saved sessions.");
+                } else {
+                    let _ = writeln!(stdout, "saved sessions:");
+                    for id in ids {
+                        let meta = store.load(&id).map(|s| s.messages.len());
+                        match meta {
+                            Ok(n) => {
+                                let _ = writeln!(stdout, "  {id}  ({n} messages)");
+                            }
+                            Err(_) => {
+                                let _ = writeln!(stdout, "  {id}");
+                            }
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                let _ = writeln!(stdout, "error listing sessions: {e}");
+            }
+        },
+        "resume" => {
+            if arg.is_empty() {
+                let _ = writeln!(stdout, "usage: /resume <session-id>");
+            } else {
+                match store.load(&arg) {
+                    Ok(loaded) => {
+                        *session = loaded;
+                        let _ = writeln!(
+                            stdout,
+                            "resumed session: {} ({} messages).",
+                            session.session_id,
+                            session.messages.len()
+                        );
+                    }
+                    Err(e) => {
+                        let _ = writeln!(stdout, "error: cannot resume '{arg}' — {e}");
+                    }
+                }
+            }
+        }
+        "save" => match store.save(session) {
+            Ok(()) => {
+                let _ = writeln!(
+                    stdout,
+                    "saved session: {} ({} messages).",
+                    session.session_id,
+                    session.messages.len()
+                );
+            }
+            Err(e) => {
+                let _ = writeln!(stdout, "error saving session: {e}");
+            }
+        },
         "" => {
             // bare "/" — ignore
         }
@@ -147,12 +204,13 @@ fn handle_slash_command(input: &str, session: &mut Session, store: &SessionStore
 
 // ── helpers ─────────────────────────────────────────────────────────────
 
-fn print_banner() {
+fn print_banner(session: &Session) {
     use std::io::Write;
     let mut stdout = io::stdout();
     let _ = writeln!(
         stdout,
-        "candle-cli REPL   type /help for commands, /exit to quit"
+        "candle-cli REPL   session: {}   /help for commands, /exit to quit",
+        session.session_id
     );
     let _ = stdout.flush();
 }
@@ -196,5 +254,8 @@ const HELP_TEXT: &str = r#"
   /help            显示帮助
   /system          查看当前系统提示词
   /clear           清空当前 session
-  /session         查看 session 信息
+  /session         查看当前 session 信息
+  /list            列出所有已保存 session
+  /resume <id>     恢复指定 session
+  /save            保存当前 session
 "#;

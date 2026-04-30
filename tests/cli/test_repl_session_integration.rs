@@ -164,3 +164,87 @@ fn repl_empty_line_skipped() {
         .assert()
         .success(); // empty lines shouldn't crash
 }
+
+// ── session management tests ──────────────────────────────────────────
+
+#[test]
+fn repl_slash_list_shows_sessions() {
+    let session_dir = tempdir().unwrap();
+    let mut cmd = Command::cargo_bin("candle-cli").unwrap();
+    cmd.env("CANDLE_CLI_SESSION_DIR", session_dir.path())
+        .write_stdin("/list\n")
+        .assert()
+        .success();
+}
+
+#[test]
+fn repl_slash_list_with_saved_session() {
+    let session_dir = tempdir().unwrap();
+    let mut cmd = Command::cargo_bin("candle-cli").unwrap();
+    cmd.env("CANDLE_CLI_SESSION_DIR", session_dir.path())
+        .write_stdin("hello\n/list\n")
+        .assert()
+        .success();
+}
+
+#[test]
+fn repl_slash_save_succeeds() {
+    let session_dir = tempdir().unwrap();
+    let mut cmd = Command::cargo_bin("candle-cli").unwrap();
+    cmd.env("CANDLE_CLI_SESSION_DIR", session_dir.path())
+        .write_stdin("/save\n")
+        .assert()
+        .success();
+}
+
+#[test]
+fn repl_slash_resume_requires_argument() {
+    let session_dir = tempdir().unwrap();
+    let mut cmd = Command::cargo_bin("candle-cli").unwrap();
+    cmd.env("CANDLE_CLI_SESSION_DIR", session_dir.path())
+        .write_stdin("/resume\n")
+        .assert()
+        .success();
+}
+
+#[test]
+fn repl_slash_resume_invalid_id_shows_error() {
+    let session_dir = tempdir().unwrap();
+    let mut cmd = Command::cargo_bin("candle-cli").unwrap();
+    cmd.env("CANDLE_CLI_SESSION_DIR", session_dir.path())
+        .write_stdin("/resume nonexistent\n")
+        .assert()
+        .success();
+}
+
+#[test]
+fn repl_can_save_list_and_resume_session() {
+    let session_dir = tempdir().unwrap();
+
+    // first session: say something, then exit (auto-saves)
+    let mut cmd = Command::cargo_bin("candle-cli").unwrap();
+    cmd.env("CANDLE_CLI_SESSION_DIR", session_dir.path())
+        .write_stdin("hello from session one\n/exit\n")
+        .assert()
+        .success();
+
+    // find the saved session ID
+    let saved_path = find_session_json(session_dir.path());
+    let saved_body = fs::read_to_string(&saved_path).unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&saved_body).unwrap();
+    let saved_id = parsed["session_id"].as_str().unwrap().to_string();
+    assert!(saved_body.contains("hello from session one"));
+
+    // second session: resume the previous one, add more messages
+    let resume_cmd = format!("/resume {saved_id}\n");
+    let mut cmd2 = Command::cargo_bin("candle-cli").unwrap();
+    cmd2.env("CANDLE_CLI_SESSION_DIR", session_dir.path())
+        .write_stdin(format!("{resume_cmd}more text\n/exit\n"))
+        .assert()
+        .success();
+
+    // the resumed session should contain both old and new messages
+    let resumed_body = fs::read_to_string(&saved_path).unwrap();
+    assert!(resumed_body.contains("hello from session one"));
+    assert!(resumed_body.contains("more text"));
+}
