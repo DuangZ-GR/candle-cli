@@ -8,9 +8,8 @@ pub fn run_single_turn<R: CandleTargetRuntime>(
     session: &mut Session,
     runtime: &mut R,
     _tools: &ToolRegistry,
-    system_prompt: &str,
 ) -> Result<TurnResult, String> {
-    let request = crate::context::builder::build_turn_request(session, system_prompt, "[]")?;
+    let request = crate::context::builder::build_turn_request(session, "[]")?;
     let result = runtime.generate_turn(request)?;
     session.messages.push(Message {
         role: MessageRole::Assistant,

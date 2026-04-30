@@ -9,7 +9,7 @@ fn agent_loop_returns_final_text() {
     let mut session = Session::new("/tmp/workspace".into());
     let mut runtime = MockRuntime;
     let tools = ToolRegistry::default_read_only();
-    let result = run_single_turn(&mut session, &mut runtime, &tools, "sys").unwrap();
+    let result = run_single_turn(&mut session, &mut runtime, &tools).unwrap();
     assert!(!result.final_text.is_empty());
 }
 
@@ -18,6 +18,6 @@ fn agent_loop_accepts_bridge_runtime() {
     let mut session = Session::new("/tmp/workspace".into());
     let mut runtime = LocalBridgeRuntime::new("python3 python/bridge_worker.py".into());
     let tools = ToolRegistry::default_read_only();
-    let result = run_single_turn(&mut session, &mut runtime, &tools, "sys").unwrap();
+    let result = run_single_turn(&mut session, &mut runtime, &tools).unwrap();
     assert!(!result.final_text.is_empty());
 }

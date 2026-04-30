@@ -219,6 +219,17 @@ class BridgeRuntime:
         try:
             data = json.loads(raw)
             content = data["choices"][0]["message"]["content"]
+
+            # log token usage if available
+            usage = data.get("usage", {})
+            if usage:
+                prompt_tokens = usage.get("prompt_tokens", 0)
+                completion_tokens = usage.get("completion_tokens", 0)
+                total_tokens = usage.get("total_tokens", 0)
+                self._log(
+                    f"  tokens: prompt={prompt_tokens} completion={completion_tokens} total={total_tokens}"
+                )
+
             self._log(f"  response length: {len(content)} chars")
             return {"result": {"final_text": content.strip(), "tool_calls": []}}
         except (KeyError, IndexError, json.JSONDecodeError) as exc:

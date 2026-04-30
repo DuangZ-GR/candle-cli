@@ -41,9 +41,18 @@ pub struct Session {
 impl Session {
     pub fn new(workspace_root: String) -> Self {
         Self {
-            session_id: "session-1".into(),
+            session_id: new_session_id(),
             workspace_root,
             messages: Vec::new(),
         }
     }
+}
+
+fn new_session_id() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let ts = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    format!("session-{ts}")
 }

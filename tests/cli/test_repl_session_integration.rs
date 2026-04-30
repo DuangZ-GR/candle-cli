@@ -1,6 +1,19 @@
 use assert_cmd::Command;
 use std::fs;
+use std::path::PathBuf;
 use tempfile::tempdir;
+
+/// Find the first JSON session file in the session directory.
+fn find_session_json(dir: &std::path::Path) -> PathBuf {
+    for entry in fs::read_dir(dir).unwrap() {
+        let entry = entry.unwrap();
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) == Some("json") {
+            return path;
+        }
+    }
+    panic!("no session JSON file found in {:?}", dir);
+}
 
 // ── prompt mode tests ──────────────────────────────────────────────────
 
@@ -28,8 +41,7 @@ fn prompt_mode_can_run_through_bridge_runtime() {
         .assert()
         .success();
 
-    let session_path = session_dir.path().join("session-1.json");
-    let session_body = fs::read_to_string(session_path).unwrap();
+    let session_body = fs::read_to_string(find_session_json(session_dir.path())).unwrap();
     assert!(session_body.contains("generated: hello"));
 }
 
@@ -45,8 +57,7 @@ fn repl_mode_can_run_through_bridge_runtime() {
         .assert()
         .success();
 
-    let session_path = session_dir.path().join("session-1.json");
-    let session_body = fs::read_to_string(session_path).unwrap();
+    let session_body = fs::read_to_string(find_session_json(session_dir.path())).unwrap();
     assert!(session_body.contains("generated: hello"));
 }
 
@@ -60,8 +71,7 @@ fn repl_loop_runs_multiple_turns() {
         .assert()
         .success();
 
-    let session_path = session_dir.path().join("session-1.json");
-    let session_body = fs::read_to_string(session_path).unwrap();
+    let session_body = fs::read_to_string(find_session_json(session_dir.path())).unwrap();
 
     // both user messages should be in the session
     assert!(session_body.contains("first"));
@@ -127,8 +137,7 @@ fn repl_slash_clear_resets_session() {
         .assert()
         .success();
 
-    let session_path = session_dir.path().join("session-1.json");
-    let session_body = fs::read_to_string(session_path).unwrap();
+    let session_body = fs::read_to_string(find_session_json(session_dir.path())).unwrap();
 
     // after /clear, the session should be reset (no message containing "hello")
     let parsed: serde_json::Value = serde_json::from_str(&session_body).unwrap();

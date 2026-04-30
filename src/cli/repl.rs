@@ -1,4 +1,5 @@
 use crate::agent::r#loop::run_single_turn;
+use crate::context::builder::resolve_system_prompt;
 use crate::model::bridge::LocalBridgeRuntime;
 use crate::model::mock::MockRuntime;
 use crate::session::model::{ContentBlock, Message, MessageRole, Session};
@@ -40,11 +41,11 @@ pub fn run_repl(session_dir: PathBuf) -> io::Result<()> {
         let result = match std::env::var("CANDLE_CLI_RUNTIME").ok().as_deref() {
             Some("bridge") => {
                 let mut runtime = LocalBridgeRuntime::new("python3 python/bridge_worker.py".into());
-                run_single_turn(&mut session, &mut runtime, &tools, "sys")
+                run_single_turn(&mut session, &mut runtime, &tools)
             }
             _ => {
                 let mut runtime = MockRuntime;
-                run_single_turn(&mut session, &mut runtime, &tools, "sys")
+                run_single_turn(&mut session, &mut runtime, &tools)
             }
         };
 
@@ -79,11 +80,11 @@ pub fn run_prompt(session_dir: PathBuf, input: String) -> io::Result<()> {
     match std::env::var("CANDLE_CLI_RUNTIME").ok().as_deref() {
         Some("bridge") => {
             let mut runtime = LocalBridgeRuntime::new("python3 python/bridge_worker.py".into());
-            run_single_turn(&mut session, &mut runtime, &tools, "sys").map_err(io::Error::other)?;
+            run_single_turn(&mut session, &mut runtime, &tools).map_err(io::Error::other)?;
         }
         _ => {
             let mut runtime = MockRuntime;
-            run_single_turn(&mut session, &mut runtime, &tools, "sys").map_err(io::Error::other)?;
+            run_single_turn(&mut session, &mut runtime, &tools).map_err(io::Error::other)?;
         }
     }
 
@@ -119,6 +120,10 @@ fn handle_slash_command(input: &str, session: &mut Session, store: &SessionStore
             *session = Session::new(session.workspace_root.clone());
             store.save(session).ok();
             let _ = writeln!(stdout, "session cleared.");
+        }
+        "system" => {
+            let prompt = resolve_system_prompt();
+            let _ = writeln!(stdout, "system prompt:\n{prompt}");
         }
         "session" => {
             let _ = writeln!(
@@ -189,6 +194,7 @@ pub fn read_line(prompt: &str) -> io::Result<String> {
 const HELP_TEXT: &str = r#"
   /exit, /quit     退出 REPL
   /help            显示帮助
+  /system          查看当前系统提示词
   /clear           清空当前 session
   /session         查看 session 信息
 "#;
