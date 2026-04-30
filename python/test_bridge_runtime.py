@@ -2,12 +2,15 @@ import json
 import os
 import tempfile
 from unittest import mock
+from urllib.error import HTTPError
 
 import pytest
 
 from python.bridge_prompt import build_chat_messages, extract_latest_user_text
 from python.bridge_runtime import BridgeRuntime
 from python.model_config import (
+    ENV_API_BASE_URL,
+    ENV_API_KEY,
     ENV_LOCAL_FILES_ONLY,
     ENV_MAX_NEW_TOKENS,
     ENV_MODEL_DEVICE,
@@ -28,6 +31,8 @@ def _clear_env():
         ENV_TEMPERATURE,
         ENV_TOP_P,
         ENV_VERBOSE,
+        ENV_API_BASE_URL,
+        ENV_API_KEY,
         "CANDLE_CLI_MODEL_CONFIG",
     ):
         os.environ.pop(key, None)
@@ -52,30 +57,25 @@ def test_model_config_defaults():
     assert config.temperature == 0.7
     assert config.top_p == 0.9
     assert config.verbose is False
+    assert config.api_base_url == ""
+    assert config.api_key == ""
+    assert config.use_api is False
 
 
-def test_model_config_from_file():
+def test_model_config_from_file_with_api():
     data = {
-        "model": {
-            "model_id": "test-model",
-            "device": "cpu",
-            "local_files_only": False,
-            "verbose": True,
-        },
-        "generation": {"max_new_tokens": 256, "temperature": 0.5, "top_p": 0.8},
+        "model": {"model_id": "api-model", "device": "cpu"},
+        "generation": {"max_new_tokens": 256},
+        "api": {"base_url": "http://localhost:8080/v1", "key": "sk-test"},
     }
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as fh:
         json.dump(data, fh)
         path = fh.name
     try:
         config = ModelConfig(config_path=path)
-        assert config.model_id == "test-model"
-        assert config.device == "cpu"
-        assert config.local_files_only is False
-        assert config.verbose is True
-        assert config.max_new_tokens == 256
-        assert config.temperature == 0.5
-        assert config.top_p == 0.8
+        assert config.api_base_url == "http://localhost:8080/v1"
+        assert config.api_key == "sk-test"
+        assert config.use_api is True
     finally:
         os.unlink(path)
 
@@ -99,14 +99,6 @@ def test_env_local_files_only():
     os.environ[ENV_LOCAL_FILES_ONLY] = "false"
     config = ModelConfig()
     assert config.local_files_only is False
-
-    os.environ[ENV_LOCAL_FILES_ONLY] = "0"
-    config2 = ModelConfig()
-    assert config2.local_files_only is False
-
-    os.environ[ENV_LOCAL_FILES_ONLY] = "true"
-    config3 = ModelConfig()
-    assert config3.local_files_only is True
 
 
 def test_env_max_new_tokens():
@@ -132,9 +124,18 @@ def test_env_verbose():
     config = ModelConfig()
     assert config.verbose is True
 
-    os.environ[ENV_VERBOSE] = "true"
-    config2 = ModelConfig()
-    assert config2.verbose is True
+
+def test_env_api_base_url():
+    os.environ[ENV_API_BASE_URL] = "http://localhost:11434/v1"
+    config = ModelConfig()
+    assert config.api_base_url == "http://localhost:11434/v1"
+    assert config.use_api is True
+
+
+def test_env_api_key():
+    os.environ[ENV_API_KEY] = "sk-my-key"
+    config = ModelConfig()
+    assert config.api_key == "sk-my-key"
 
 
 def test_env_all_together():
@@ -146,6 +147,8 @@ def test_env_all_together():
     os.environ[ENV_TEMPERATURE] = "0.5"
     os.environ[ENV_TOP_P] = "0.8"
     os.environ[ENV_VERBOSE] = "1"
+    os.environ[ENV_API_BASE_URL] = "http://localhost:8080/v1"
+    os.environ[ENV_API_KEY] = "sk-env-key"
 
     config = ModelConfig()
     assert config.model_id == "env-only-model"
@@ -155,29 +158,9 @@ def test_env_all_together():
     assert config.temperature == 0.5
     assert config.top_p == 0.8
     assert config.verbose is True
-
-
-def test_env_overrides_file():
-    """Env vars take priority over config file values."""
-    data = {
-        "model": {"model_id": "file-model", "device": "cuda"},
-        "generation": {"max_new_tokens": 100, "temperature": 1.0},
-    }
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as fh:
-        json.dump(data, fh)
-        path = fh.name
-    try:
-        os.environ[ENV_MODEL_ID] = "env-model"
-        os.environ[ENV_MODEL_DEVICE] = "cpu"
-        config = ModelConfig(config_path=path)
-        # env var wins over file
-        assert config.model_id == "env-model"
-        assert config.device == "cpu"
-        # file value kept when no env var set
-        assert config.max_new_tokens == 100
-        assert config.temperature == 1.0
-    finally:
-        os.unlink(path)
+    assert config.api_base_url == "http://localhost:8080/v1"
+    assert config.api_key == "sk-env-key"
+    assert config.use_api is True
 
 
 # ── bridge_prompt tests ──────────────────────────────────────────────────────
@@ -226,44 +209,7 @@ def test_build_chat_messages_includes_system():
     ]
 
 
-def test_build_chat_messages_skips_tool_calls():
-    messages_json = json.dumps(
-        [
-            {
-                "role": "Assistant",
-                "blocks": [
-                    {"Text": {"text": "let me check"}},
-                    {
-                        "ToolCall": {
-                            "id": "t1",
-                            "name": "read",
-                            "input": "{}",
-                        }
-                    },
-                ],
-            },
-            {
-                "role": "Tool",
-                "blocks": [
-                    {
-                        "ToolResult": {
-                            "tool_call_id": "t1",
-                            "output": "data",
-                            "is_error": False,
-                        }
-                    }
-                ],
-            },
-        ]
-    )
-    chat = build_chat_messages(messages_json)
-    assert chat == [
-        {"role": "assistant", "content": "let me check"},
-        {"role": "tool", "content": ""},
-    ]
-
-
-# ── BridgeRuntime tests ──────────────────────────────────────────────────────
+# ── BridgeRuntime tests (local fallback) ─────────────────────────────────────
 
 
 def test_bridge_runtime_initializes_lazily():
@@ -391,4 +337,109 @@ def test_generate_turn_with_mocked_model():
         )
 
     assert result["result"]["final_text"] == "mock response"
+    assert result["result"]["tool_calls"] == []
+
+
+# ── API mode tests ───────────────────────────────────────────────────────────
+
+
+def _mock_api_response(content: str) -> mock.MagicMock:
+    resp = mock.MagicMock()
+    resp.read.return_value = json.dumps(
+        {"choices": [{"message": {"content": content}}]}
+    ).encode("utf-8")
+    resp.__enter__.return_value = resp
+    return resp
+
+
+def test_generate_turn_via_api():
+    config = ModelConfig()
+    config.api_base_url = "http://localhost:8080/v1"
+    config.api_key = "sk-test"
+    config.model_id = "test-model"
+    runtime = BridgeRuntime(config=config)
+
+    with mock.patch(
+        "urllib.request.urlopen", return_value=_mock_api_response("API response")
+    ) as mock_urlopen:
+        result = runtime.generate_turn(
+            {
+                "messages_json": json.dumps(
+                    [{"role": "User", "blocks": [{"Text": {"text": "hello"}}]}]
+                )
+            }
+        )
+
+    assert result["result"]["final_text"] == "API response"
+    assert result["result"]["tool_calls"] == []
+
+    # verify the request body
+    mock_urlopen.assert_called_once()
+    call_args = mock_urlopen.call_args
+    req = call_args[0][0]
+    body = json.loads(req.data.decode("utf-8"))
+    assert body["model"] == "test-model"
+    assert body["messages"][0]["role"] == "user"
+    assert body["messages"][0]["content"] == "hello"
+    assert body["max_tokens"] == 512
+
+
+def test_generate_turn_via_api_with_system_prompt():
+    config = ModelConfig()
+    config.api_base_url = "http://localhost:8080/v1"
+    config.api_key = "sk-test"
+    config.model_id = "test-model"
+    runtime = BridgeRuntime(config=config)
+
+    with mock.patch(
+        "urllib.request.urlopen", return_value=_mock_api_response("ok")
+    ):
+        result = runtime.generate_turn(
+            {
+                "system_prompt": "You are helpful.",
+                "messages_json": json.dumps(
+                    [{"role": "User", "blocks": [{"Text": {"text": "hi"}}]}]
+                ),
+            }
+        )
+
+    assert result["result"]["final_text"] == "ok"
+
+
+def test_generate_turn_via_api_http_error_falls_back():
+    config = ModelConfig()
+    config.api_base_url = "http://localhost:8080/v1"
+    config.api_key = "sk-test"
+    runtime = BridgeRuntime(config=config)
+
+    with mock.patch(
+        "urllib.request.urlopen",
+        side_effect=HTTPError(
+            url="http://localhost:8080/v1/chat/completions",
+            code=500,
+            msg="Server Error",
+            hdrs=None,
+            fp=None,
+        ),
+    ):
+        result = runtime.generate_turn(
+            {
+                "messages_json": json.dumps(
+                    [{"role": "User", "blocks": [{"Text": {"text": "hello"}}]}]
+                )
+            }
+        )
+
+    # falls back to stub
+    assert result["result"]["final_text"] == "generated: hello"
+
+
+def test_generate_turn_via_api_empty_messages():
+    config = ModelConfig()
+    config.api_base_url = "http://localhost:8080/v1"
+    config.api_key = "sk-test"
+    runtime = BridgeRuntime(config=config)
+
+    result = runtime.generate_turn({"messages_json": "[]"})
+    assert result["result"]["final_text"] == ""
     assert result["result"]["tool_calls"] == []

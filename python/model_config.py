@@ -43,6 +43,8 @@ ENV_TEMPERATURE = "CANDLE_CLI_TEMPERATURE"
 ENV_TOP_P = "CANDLE_CLI_TOP_P"
 ENV_VERBOSE = "CANDLE_CLI_VERBOSE"
 ENV_MODEL_CONFIG = "CANDLE_CLI_MODEL_CONFIG"
+ENV_API_BASE_URL = "CANDLE_CLI_API_BASE_URL"
+ENV_API_KEY = "CANDLE_CLI_API_KEY"
 
 # ── defaults ──────────────────────────────────────────────────────────────────
 
@@ -63,6 +65,8 @@ class ModelConfig:
         self.temperature: float = DEFAULT_TEMPERATURE
         self.top_p: float = DEFAULT_TOP_P
         self.verbose: bool = False
+        self.api_base_url: str = ""
+        self.api_key: str = ""
 
         if config_path:
             self._load_from_file(config_path)
@@ -77,6 +81,7 @@ class ModelConfig:
             data = json.load(fh)
         model = data.get("model", {})
         generation = data.get("generation", {})
+        api = data.get("api", {})
         if "model_id" in model:
             self.model_id = model["model_id"]
         if "device" in model:
@@ -91,6 +96,10 @@ class ModelConfig:
             self.temperature = generation["temperature"]
         if "top_p" in generation:
             self.top_p = generation["top_p"]
+        if "base_url" in api:
+            self.api_base_url = api["base_url"]
+        if "key" in api:
+            self.api_key = api["key"]
 
     def _apply_env_overrides(self):
         self.model_id = _env_str(ENV_MODEL_ID, self.model_id)
@@ -100,6 +109,12 @@ class ModelConfig:
         self.temperature = _env_float(ENV_TEMPERATURE, self.temperature)
         self.top_p = _env_float(ENV_TOP_P, self.top_p)
         self.verbose = _env_bool(ENV_VERBOSE, self.verbose)
+        self.api_base_url = _env_str(ENV_API_BASE_URL, self.api_base_url)
+        self.api_key = _env_str(ENV_API_KEY, self.api_key)
+
+    @property
+    def use_api(self) -> bool:
+        return bool(self.api_base_url)
 
 
 def _cuda_available() -> bool:

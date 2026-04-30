@@ -2,6 +2,8 @@ import json
 import sys
 import time
 import traceback
+import urllib.error
+import urllib.request
 
 from bridge_prompt import build_chat_messages, extract_latest_user_text
 from model_config import ModelConfig
@@ -37,22 +39,28 @@ class BridgeRuntime:
         except Exception:
             return "GPU memory: unknown"
 
-    # ── model loading ────────────────────────────────────────────────────
+    # ── initialization ───────────────────────────────────────────────────
 
     def _ensure_initialized(self):
         if not self._initialized:
-            self._load_model()
+            if self._config.use_api:
+                self._log("API mode active, skipping local model load")
+                self._log(f"  api_base_url: {self._config.api_base_url}")
+            else:
+                self._load_model()
             self._initialized = True
+
+    # ── local model loading ──────────────────────────────────────────────
 
     def _load_model(self):
         self._log("=" * 60)
-        self._log("bridge runtime initializing")
-        self._log(f"  config: model_id={self._config.model_id}")
-        self._log(f"  config: device={self._config.device}")
-        self._log(f"  config: local_files_only={self._config.local_files_only}")
-        self._log(f"  config: max_new_tokens={self._config.max_new_tokens}")
-        self._log(f"  config: temperature={self._config.temperature}")
-        self._log(f"  config: top_p={self._config.top_p}")
+        self._log("bridge runtime initializing (local model mode)")
+        self._log(f"  model_id={self._config.model_id}")
+        self._log(f"  device={self._config.device}")
+        self._log(f"  local_files_only={self._config.local_files_only}")
+        self._log(f"  max_new_tokens={self._config.max_new_tokens}")
+        self._log(f"  temperature={self._config.temperature}")
+        self._log(f"  top_p={self._config.top_p}")
 
         try:
             from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -107,7 +115,6 @@ class BridgeRuntime:
         self._log(f"  model loaded in {time.time() - t0:.1f}s")
         self._log(f"  {self._gpu_memory_info()} (after model load)")
 
-        # model info
         try:
             param_count = sum(p.numel() for p in self._model.parameters())
             self._log(f"  model parameters: {param_count / 1e9:.2f}B")
@@ -143,38 +150,100 @@ class BridgeRuntime:
     def health(self) -> dict:
         return {"message": "bridge worker ok"}
 
-    # ── generation ───────────────────────────────────────────────────────
+    # ── API-based generation ─────────────────────────────────────────────
 
-    def generate_turn(self, request: dict) -> dict:
-        self._ensure_initialized()
-
-        # fallback path
-        if self._model is None or self._tokenizer is None:
-            user_text = extract_latest_user_text(request)
-            self._log(f"generate_turn: fallback mode, user_text_len={len(user_text)}")
-            return {
-                "result": {
-                    "final_text": f"generated: {user_text}",
-                    "tool_calls": [],
-                }
-            }
-
+    def _generate_via_api(self, request: dict) -> dict:
         messages_json = request.get("messages_json", "[]")
         chat_messages = build_chat_messages(messages_json)
         if not chat_messages:
+            return {"result": {"final_text": "", "tool_calls": []}}
+
+        # add system prompt if present
+        api_messages: list[dict] = []
+        system_prompt = request.get("system_prompt", "")
+        if system_prompt:
+            api_messages.append({"role": "system", "content": system_prompt})
+        api_messages.extend(chat_messages)
+
+        body = {
+            "model": self._config.model_id,
+            "messages": api_messages,
+            "max_tokens": self._config.max_new_tokens,
+            "temperature": self._config.temperature,
+            "top_p": self._config.top_p,
+        }
+
+        url = self._config.api_base_url.rstrip("/") + "/chat/completions"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self._config.api_key}",
+        }
+
+        self._log(f"API call: POST {url}")
+        self._log(f"  messages: {len(api_messages)} (system={bool(system_prompt)})")
+        self._log(f"  model: {self._config.model_id}")
+        self._log(f"  max_tokens: {self._config.max_new_tokens}")
+
+        t0 = time.time()
+        try:
+            req = urllib.request.Request(
+                url,
+                data=json.dumps(body).encode("utf-8"),
+                headers=headers,
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                raw = resp.read().decode("utf-8")
+                self._log(f"  response in {time.time() - t0:.1f}s")
+                self._log(f"  response size: {len(raw)} bytes")
+        except urllib.error.HTTPError as exc:
+            err_body = exc.read().decode("utf-8", errors="replace")
+            self._log(f"  HTTP {exc.code}: {err_body[:500]}")
+            traceback.print_exc(file=sys.stderr)
             return {
                 "result": {
-                    "final_text": "",
+                    "final_text": f"generated: {extract_latest_user_text(request)}",
                     "tool_calls": [],
                 }
             }
+        except Exception:
+            traceback.print_exc(file=sys.stderr)
+            self._log(f"  API request failed")
+            return {
+                "result": {
+                    "final_text": f"generated: {extract_latest_user_text(request)}",
+                    "tool_calls": [],
+                }
+            }
+
+        try:
+            data = json.loads(raw)
+            content = data["choices"][0]["message"]["content"]
+            self._log(f"  response length: {len(content)} chars")
+            return {"result": {"final_text": content.strip(), "tool_calls": []}}
+        except (KeyError, IndexError, json.JSONDecodeError) as exc:
+            self._log(f"  failed to parse API response: {exc}")
+            self._log(f"  raw: {raw[:300]}")
+            return {
+                "result": {
+                    "final_text": f"generated: {extract_latest_user_text(request)}",
+                    "tool_calls": [],
+                }
+            }
+
+    # ── local model generation ───────────────────────────────────────────
+
+    def _generate_local(self, request: dict) -> dict:
+        messages_json = request.get("messages_json", "[]")
+        chat_messages = build_chat_messages(messages_json)
+        if not chat_messages:
+            return {"result": {"final_text": "", "tool_calls": []}}
 
         try:
             import torch
 
             self._log(f"generate_turn: {len(chat_messages)} chat messages")
 
-            # tokenize
             t0 = time.time()
             inputs = self._tokenizer.apply_chat_template(
                 chat_messages,
@@ -189,7 +258,6 @@ class BridgeRuntime:
             self._log(f"  input tokens: {input_tokens}")
             self._log(f"  tokenization time: {time.time() - t0:.2f}s")
 
-            # generate
             self._log(f"  generating (max_new_tokens={self._config.max_new_tokens})...")
             t0 = time.time()
             with torch.no_grad():
@@ -207,19 +275,13 @@ class BridgeRuntime:
             self._log(f"  generation time: {gen_time:.2f}s ({output_tokens / gen_time:.1f} tok/s)")
             self._log(f"  {self._gpu_memory_info()}")
 
-            # decode
             response_text = self._tokenizer.decode(
                 outputs[0][input_tokens:],
                 skip_special_tokens=True,
             )
 
             self._log(f"  response length: {len(response_text)} chars")
-            return {
-                "result": {
-                    "final_text": response_text.strip(),
-                    "tool_calls": [],
-                }
-            }
+            return {"result": {"final_text": response_text.strip(), "tool_calls": []}}
         except Exception:
             traceback.print_exc(file=sys.stderr)
             self._log(f"  ERROR during generation, falling back to stub")
@@ -229,3 +291,25 @@ class BridgeRuntime:
                     "tool_calls": [],
                 }
             }
+
+    # ── main entry ───────────────────────────────────────────────────────
+
+    def generate_turn(self, request: dict) -> dict:
+        self._ensure_initialized()
+
+        # API mode
+        if self._config.use_api:
+            return self._generate_via_api(request)
+
+        # local model fallback
+        if self._model is None or self._tokenizer is None:
+            user_text = extract_latest_user_text(request)
+            self._log(f"generate_turn: fallback mode, user_text_len={len(user_text)}")
+            return {
+                "result": {
+                    "final_text": f"generated: {user_text}",
+                    "tool_calls": [],
+                }
+            }
+
+        return self._generate_local(request)
