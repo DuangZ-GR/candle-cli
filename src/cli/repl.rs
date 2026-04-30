@@ -33,6 +33,7 @@ pub fn run_repl(session_dir: PathBuf) -> io::Result<()> {
         }
 
         store.save(&session)?;
+        print_last_assistant(&session);
     }
 
     Ok(())
@@ -60,7 +61,24 @@ pub fn run_prompt(session_dir: PathBuf, input: String) -> io::Result<()> {
     }
 
     store.save(&session)?;
+    print_last_assistant(&session);
     Ok(())
+}
+
+fn print_last_assistant(session: &Session) {
+    use std::io::Write;
+    for msg in session.messages.iter().rev() {
+        if msg.role == MessageRole::Assistant {
+            for block in &msg.blocks {
+                if let ContentBlock::Text { text } = block {
+                    let mut stdout = io::stdout();
+                    let _ = writeln!(stdout, "\n{}", text);
+                    let _ = stdout.flush();
+                }
+            }
+            break;
+        }
+    }
 }
 
 pub fn read_line(prompt: &str) -> io::Result<String> {
