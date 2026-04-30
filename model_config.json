@@ -2,7 +2,8 @@
     "model": {
         "model_id": "Qwen/Qwen2-0.5B-Instruct",
         "device": "auto",
-        "local_files_only": true
+        "local_files_only": true,
+        "verbose": false
     },
     "generation": {
         "max_new_tokens": 512,
