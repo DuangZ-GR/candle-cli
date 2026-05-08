@@ -1,5 +1,8 @@
 # candle-cli
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+![Rust Edition](https://img.shields.io/badge/Rust-2021-orange.svg)
+
 Rust-first terminal AI assistant with multi-turn conversation, session persistence, and flexible model backends.
 
 ## 快速开始
@@ -175,6 +178,28 @@ cargo run -- prompt "你好"
 - 两种模型后端：本地 transformers / 远程 OpenAI 兼容 API
 - 纯环境变量驱动，零配置文件
 - Verbose 诊断：token 用量、API 请求详情、显存状态
+
+## Python 依赖
+
+Bridge runtime 和示例脚本需要 Python 依赖：
+
+```bash
+python3 -m pip install -r requirements.txt
+```
+
+如果只使用 API 模式，通常不需要本地 GPU；如果使用本地 transformers 推理，请根据你的 CUDA/CPU 环境安装合适的 PyTorch wheel。
+
+## 示例脚本
+
+仓库包含两个独立示例，方便在不启动 Rust CLI 的情况下验证模型路径：
+
+```bash
+python3 examples/api_inference.py
+python3 examples/qwen3_local_inference.py
+```
+
+- `examples/api_inference.py`：调用 OpenAI 兼容 API，例如 Ollama 或 vLLM。
+- `examples/qwen3_local_inference.py`：直接通过 transformers 加载本地模型。
 
 ## 开发
 
