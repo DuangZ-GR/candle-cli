@@ -201,6 +201,33 @@ python3 examples/qwen3_local_inference.py
 - `examples/api_inference.py`：调用 OpenAI 兼容 API，例如 Ollama 或 vLLM。
 - `examples/qwen3_local_inference.py`：直接通过 transformers 加载本地模型。
 
+## 最小 Agent 闭环（v0.3.0）
+
+`candle-cli` 支持一个文本 JSON 工具调用协议。模型需要读取文件、搜索代码、编辑文件或运行命令时，可以输出：
+
+```text
+<tool_call>{"id":"call-1","name":"read","input":{"file_path":"README.md"}}</tool_call>
+```
+
+Rust 侧会解析该工具调用，执行工具，把结果写回 session，然后继续调用模型，直到模型输出最终回答。
+
+首批闭环工具：
+
+- `pwd`：返回当前工作目录。
+- `read`：读取 UTF-8 文件。
+- `glob`：按简单 glob pattern 查找文件。
+- `grep`：搜索文件内容。
+- `edit`：替换已有文件中的唯一匹配文本。
+- `shell`：运行 shell 命令并返回输出。
+
+示例任务：
+
+```bash
+CANDLE_CLI_RUNTIME=bridge cargo run -- prompt "读取 README.md，总结如何运行项目"
+```
+
+当前版本先固定使用 workspace-write 工具集合。交互式权限确认、sandbox、streaming 和原生 OpenAI tools schema 会在后续版本加入。
+
 ## 开发
 
 ```bash
