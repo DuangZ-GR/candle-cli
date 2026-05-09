@@ -255,6 +255,40 @@ cargo run -- prompt "读取当前项目 Cargo.toml，并用一句话总结 crate
 
 当前版本已经限制文件工具只能访问 workspace 内路径，shell 命令也会从 workspace 根目录执行，并带有超时限制。
 
+## v0.4.0 权限模式
+
+`candle-cli` 现在支持通过环境变量控制工具执行权限：
+
+```bash
+export CANDLE_CLI_PERMISSION="read-only"
+```
+
+可选值：
+
+- `read-only`：只允许 `pwd` / `read` / `glob` / `grep`
+- `workspace-write`：允许当前所有工具，不询问
+- `prompt`：读工具自动放行，`edit` / `write` / `shell` 逐次确认
+- `danger-full-access`：允许当前所有工具，不询问
+
+示例：
+
+```bash
+CANDLE_CLI_PERMISSION=read-only cargo run -- prompt "读取 README.md 并总结"
+CANDLE_CLI_PERMISSION=prompt cargo run -- prompt "运行 cargo test 并总结失败原因"
+```
+
+在 `prompt` 模式下，当模型请求危险工具时，终端会显示类似提示：
+
+```text
+Allow tool call?
+- tool: shell
+- input: {"command":"cargo test"}
+[y] allow
+[n] deny
+```
+
+如果你拒绝执行，Rust 会把拒绝结果作为工具输出回传给模型，让模型继续解释或改用别的策略。
+
 ## 开发
 
 ```bash
