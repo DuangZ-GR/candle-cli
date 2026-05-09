@@ -21,9 +21,35 @@ impl ToolRegistry {
     pub fn execute(&self, name: &str, input_json: &str) -> ToolResult {
         match name {
             "pwd" => Ok(pwd::run()),
-            "glob" => Ok(glob::run("", None)),
-            "grep" => Ok(grep::run("", None)),
-            "read" => Ok(read::run("")),
+            "glob" => {
+                let value: serde_json::Value =
+                    serde_json::from_str(input_json).map_err(|e| e.to_string())?;
+                let pattern = value
+                    .get("pattern")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| "missing pattern".to_string())?;
+                let root = value.get("root").and_then(|v| v.as_str());
+                glob::run(pattern, root)
+            }
+            "grep" => {
+                let value: serde_json::Value =
+                    serde_json::from_str(input_json).map_err(|e| e.to_string())?;
+                let pattern = value
+                    .get("pattern")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| "missing pattern".to_string())?;
+                let path = value.get("path").and_then(|v| v.as_str());
+                grep::run(pattern, path)
+            }
+            "read" => {
+                let value: serde_json::Value =
+                    serde_json::from_str(input_json).map_err(|e| e.to_string())?;
+                let file_path = value
+                    .get("file_path")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| "missing file_path".to_string())?;
+                read::run(file_path)
+            }
             "shell" if self.allow_mutation => {
                 let value: serde_json::Value =
                     serde_json::from_str(input_json).map_err(|e| e.to_string())?;
