@@ -52,6 +52,10 @@ name = "test_agent_loop"
 path = "tests/agent/test_agent_loop.rs"
 
 [[test]]
+name = "test_tool_call_parser"
+path = "tests/agent/test_tool_call_parser.rs"
+
+[[test]]
 name = "test_write_edit_shell"
 path = "tests/tools/test_write_edit_shell.rs"
 
