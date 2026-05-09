@@ -83,7 +83,7 @@ impl ToolRegistry {
                     .get("command")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| "missing command".to_string())?;
-                shell::run(command)
+                shell::run(command, &self.workspace_root, self.shell_timeout())
             }
             "write" if self.allow_mutation => {
                 let value: serde_json::Value =
