@@ -2,6 +2,8 @@ use crate::agent::r#loop::run_single_turn;
 use crate::context::builder::resolve_system_prompt;
 use crate::model::bridge::LocalBridgeRuntime;
 use crate::model::mock::MockRuntime;
+use crate::permissions::mode::PermissionMode;
+use crate::permissions::policy::PermissionPolicy;
 use crate::session::model::{ContentBlock, Message, MessageRole, Session};
 use crate::session::store::SessionStore;
 use crate::tools::registry::ToolRegistry;
@@ -15,6 +17,7 @@ pub fn run_repl(session_dir: PathBuf) -> io::Result<()> {
     let store = SessionStore::new(session_dir);
     let mut session = Session::new(workspace_root.display().to_string());
     let tools = ToolRegistry::workspace_write(workspace_root.clone());
+    let policy = PermissionPolicy::new(resolve_permission_mode());
 
     print_banner(&session);
 
@@ -42,11 +45,11 @@ pub fn run_repl(session_dir: PathBuf) -> io::Result<()> {
         let result = match std::env::var("CANDLE_CLI_RUNTIME").ok().as_deref() {
             Some("bridge") => {
                 let mut runtime = LocalBridgeRuntime::new("python3 python/bridge_worker.py".into());
-                run_single_turn(&mut session, &mut runtime, &tools)
+                run_single_turn(&mut session, &mut runtime, &tools, &policy)
             }
             _ => {
                 let mut runtime = MockRuntime;
-                run_single_turn(&mut session, &mut runtime, &tools)
+                run_single_turn(&mut session, &mut runtime, &tools, &policy)
             }
         };
 
@@ -73,6 +76,7 @@ pub fn run_prompt(session_dir: PathBuf, input: String) -> io::Result<()> {
     let store = SessionStore::new(session_dir);
     let mut session = Session::new(workspace_root.display().to_string());
     let tools = ToolRegistry::workspace_write(workspace_root.clone());
+    let policy = PermissionPolicy::new(resolve_permission_mode());
 
     session.messages.push(Message {
         role: MessageRole::User,
@@ -82,11 +86,11 @@ pub fn run_prompt(session_dir: PathBuf, input: String) -> io::Result<()> {
     match std::env::var("CANDLE_CLI_RUNTIME").ok().as_deref() {
         Some("bridge") => {
             let mut runtime = LocalBridgeRuntime::new("python3 python/bridge_worker.py".into());
-            run_single_turn(&mut session, &mut runtime, &tools).map_err(io::Error::other)?;
+            run_single_turn(&mut session, &mut runtime, &tools, &policy).map_err(io::Error::other)?;
         }
         _ => {
             let mut runtime = MockRuntime;
-            run_single_turn(&mut session, &mut runtime, &tools).map_err(io::Error::other)?;
+            run_single_turn(&mut session, &mut runtime, &tools, &policy).map_err(io::Error::other)?;
         }
     }
 
@@ -95,7 +99,12 @@ pub fn run_prompt(session_dir: PathBuf, input: String) -> io::Result<()> {
     Ok(())
 }
 
-// ── slash commands ──────────────────────────────────────────────────────
+fn resolve_permission_mode() -> PermissionMode {
+    std::env::var("CANDLE_CLI_PERMISSION")
+        .ok()
+        .and_then(|value| PermissionMode::from_str(&value))
+        .unwrap_or(PermissionMode::WorkspaceWrite)
+}
 
 /// Returns `true` if the REPL should exit.
 fn handle_slash_command(input: &str, session: &mut Session, store: &SessionStore) -> bool {

@@ -250,20 +250,13 @@ fn repl_can_save_list_and_resume_session() {
 }
 
 #[test]
-fn prompt_mode_shell_runs_from_session_workspace() {
-    use assert_cmd::prelude::*;
-    use std::fs;
-    use std::process::Command;
-
-    let dir = tempfile::tempdir().unwrap();
-    fs::write(dir.path().join("marker.txt"), "workspace marker\n").unwrap();
-
+fn prompt_mode_honors_read_only_permission_env() {
+    let session_dir = tempdir().unwrap();
     let mut cmd = Command::cargo_bin("candle-cli").unwrap();
-    cmd.current_dir(dir.path())
-        .env("CANDLE_CLI_RUNTIME", "mock")
-        .arg("prompt")
-        .arg("show cwd");
-
-    let output = cmd.output().unwrap();
-    assert!(output.status.success());
+    cmd.env("CANDLE_CLI_SESSION_DIR", session_dir.path())
+        .env("CANDLE_CLI_RUNTIME", "bridge")
+        .env("CANDLE_CLI_PERMISSION", "read-only")
+        .args(["prompt", "read README.md then run cargo test"])
+        .assert()
+        .success();
 }

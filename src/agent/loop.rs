@@ -2,6 +2,7 @@ use crate::agent::tool_call::{parse_tool_call, ToolCallParseError};
 use crate::agent::turn::finish_turn;
 use crate::model::runtime::CandleTargetRuntime;
 use crate::model::types::{ToolCallIntent, TurnResult};
+use crate::permissions::policy::PermissionPolicy;
 use crate::session::model::{ContentBlock, Message, MessageRole, Session};
 use crate::tools::registry::ToolRegistry;
 
@@ -11,14 +12,16 @@ pub fn run_single_turn<R: CandleTargetRuntime>(
     session: &mut Session,
     runtime: &mut R,
     tools: &ToolRegistry,
+    policy: &PermissionPolicy,
 ) -> Result<TurnResult, String> {
-    run_single_turn_with_limit(session, runtime, tools, DEFAULT_MAX_TOOL_STEPS)
+    run_single_turn_with_limit(session, runtime, tools, policy, DEFAULT_MAX_TOOL_STEPS)
 }
 
 pub fn run_single_turn_with_limit<R: CandleTargetRuntime>(
     session: &mut Session,
     runtime: &mut R,
     tools: &ToolRegistry,
+    policy: &PermissionPolicy,
     max_steps: usize,
 ) -> Result<TurnResult, String> {
     for _ in 0..max_steps {
@@ -28,10 +31,23 @@ pub fn run_single_turn_with_limit<R: CandleTargetRuntime>(
         match parse_tool_call(&result.final_text) {
             Ok(Some(tool_call)) => {
                 append_tool_call(session, &tool_call);
-                let (output, is_error) = match tools.execute(&tool_call.name, &tool_call.input_json)
+                let (output, is_error) = if !policy.allows(&tool_call.name) {
+                    (
+                        format!("tool not allowed in read-only mode: {}", tool_call.name),
+                        true,
+                    )
+                } else if policy.requires_prompt(&tool_call.name)
+                    && !crate::permissions::prompt::confirm_dangerous_action(
+                        &tool_call.name,
+                        &tool_call.input_json,
+                    )
                 {
-                    Ok(output) => (output, false),
-                    Err(err) => (err, true),
+                    ("tool execution denied by user".to_string(), true)
+                } else {
+                    match tools.execute(&tool_call.name, &tool_call.input_json) {
+                        Ok(output) => (output, false),
+                        Err(err) => (err, true),
+                    }
                 };
                 append_tool_result(session, &tool_call.id, output, is_error);
             }

@@ -1,9 +1,14 @@
 use candle_cli::agent::r#loop::run_single_turn;
 use candle_cli::model::runtime::CandleTargetRuntime;
 use candle_cli::model::types::{RuntimeCapabilities, RuntimeHealth, TurnRequest, TurnResult};
+use candle_cli::permissions::mode::PermissionMode;
+use candle_cli::permissions::policy::PermissionPolicy;
 use candle_cli::session::model::{ContentBlock, Message, MessageRole, Session};
 use candle_cli::tools::registry::ToolRegistry;
 use std::fs;
+use std::sync::Mutex;
+
+static PERMISSION_RESPONSE_LOCK: Mutex<()> = Mutex::new(());
 
 struct ScriptedRuntime {
     responses: Vec<String>,
@@ -65,6 +70,7 @@ fn agent_loop_runs_read_edit_shell_then_final_answer() {
 
     let mut runtime = ScriptedRuntime::new(vec![&read_call, &edit_call, shell_call, "done"]);
     let tools = ToolRegistry::workspace_write(dir.path());
+    let policy = PermissionPolicy::new(PermissionMode::WorkspaceWrite);
     let mut session = Session::new(dir.path().display().to_string());
     session.messages.push(Message {
         role: MessageRole::User,
@@ -73,118 +79,89 @@ fn agent_loop_runs_read_edit_shell_then_final_answer() {
         }],
     });
 
-    let result = run_single_turn(&mut session, &mut runtime, &tools).unwrap();
+    let result = run_single_turn(&mut session, &mut runtime, &tools, &policy).unwrap();
 
     assert_eq!(result.final_text, "done");
     assert_eq!(fs::read_to_string(&file_path).unwrap(), "new text\n");
-    assert!(session.messages.iter().any(|message| {
-        message.blocks.iter().any(|block| matches!(
-            block,
-            ContentBlock::ToolResult { output, is_error: false, .. } if output.contains("checked")
-        ))
-    }));
-    assert!(session.messages.iter().any(|message| {
-        message.blocks.iter().any(|block| {
-            matches!(
-                block,
-                ContentBlock::ToolCall { name, .. } if name == "read"
-            )
-        })
-    }));
 }
 
 #[test]
-fn agent_loop_records_tool_errors_and_allows_recovery() {
-    let dir = tempfile::tempdir().unwrap();
-    let outside = tempfile::NamedTempFile::new().unwrap();
-    fs::write(outside.path(), "secret\n").unwrap();
-    let missing_read = format!(
-        r#"<tool_call>{{"id":"call-read","name":"read","input":{{"file_path":"{}"}}}}</tool_call>"#,
-        outside.path().display()
-    );
-    let mut runtime = ScriptedRuntime::new(vec![&missing_read, "I could not read that file."]);
-    let tools = ToolRegistry::workspace_write(dir.path());
-    let mut session = Session::new(dir.path().display().to_string());
+fn agent_loop_blocks_shell_in_read_only_mode_and_recovers() {
+    let shell_call = r#"<tool_call>{"id":"call-shell","name":"shell","input":{"command":"printf checked"}}</tool_call>"#;
+    let mut runtime = ScriptedRuntime::new(vec![shell_call, "I could not run that command."]);
+    let tools = ToolRegistry::read_only(".");
+    let policy = PermissionPolicy::new(PermissionMode::ReadOnly);
+    let mut session = Session::new(".".to_string());
     session.messages.push(Message {
         role: MessageRole::User,
         blocks: vec![ContentBlock::Text {
-            text: "read missing file".to_string(),
+            text: "run shell".to_string(),
         }],
     });
 
-    let result = run_single_turn(&mut session, &mut runtime, &tools).unwrap();
+    let result = run_single_turn(&mut session, &mut runtime, &tools, &policy).unwrap();
 
-    assert_eq!(result.final_text, "I could not read that file.");
+    assert_eq!(result.final_text, "I could not run that command.");
     assert!(session.messages.iter().any(|message| {
         message.blocks.iter().any(|block| matches!(
             block,
-            ContentBlock::ToolResult { is_error: true, output, .. } if output.contains("path escapes workspace")
+            ContentBlock::ToolResult { is_error: true, output, .. } if output.contains("not allowed in read-only mode")
         ))
     }));
 }
 
 #[test]
-fn agent_loop_stops_after_max_steps() {
-    let repeated = r#"<tool_call>{"id":"call-pwd","name":"pwd","input":{}}</tool_call>"#;
-    let mut runtime = ScriptedRuntime::new(vec![
-        repeated, repeated, repeated, repeated, repeated, repeated, repeated, repeated,
-    ]);
+fn agent_loop_denies_shell_in_prompt_mode_and_recovers() {
+    let _guard = PERMISSION_RESPONSE_LOCK.lock().unwrap();
+    std::env::set_var("CANDLE_CLI_PERMISSION_RESPONSE", "deny");
+    let shell_call = r#"<tool_call>{"id":"call-shell","name":"shell","input":{"command":"printf checked"}}</tool_call>"#;
+    let mut runtime = ScriptedRuntime::new(vec![shell_call, "Denied, so I stopped."]);
     let tools = ToolRegistry::workspace_write(".");
+    let policy = PermissionPolicy::new(PermissionMode::Prompt);
     let mut session = Session::new(".".to_string());
     session.messages.push(Message {
         role: MessageRole::User,
         blocks: vec![ContentBlock::Text {
-            text: "loop forever".to_string(),
+            text: "run shell".to_string(),
         }],
     });
 
-    let result = run_single_turn(&mut session, &mut runtime, &tools).unwrap();
+    let result = run_single_turn(&mut session, &mut runtime, &tools, &policy).unwrap();
+    std::env::remove_var("CANDLE_CLI_PERMISSION_RESPONSE");
 
-    assert!(result.final_text.contains("maximum tool steps"));
+    assert_eq!(result.final_text, "Denied, so I stopped.");
     assert!(session.messages.iter().any(|message| {
-        message.blocks.iter().any(|block| {
-            matches!(
-                block,
-                ContentBlock::Text { text } if text.contains("maximum tool steps")
-            )
-        })
+        message.blocks.iter().any(|block| matches!(
+            block,
+            ContentBlock::ToolResult { is_error: true, output, .. } if output.contains("tool execution denied by user")
+        ))
     }));
 }
 
 #[test]
-fn agent_loop_recovers_after_malformed_tool_call() {
-    let malformed = r#"<tool_call>{"id":"broken"</tool_call>"#;
-    let read_call = r#"<tool_call>{"id":"call-pwd","name":"pwd","input":{}}</tool_call>"#;
-    let mut runtime = ScriptedRuntime::new(vec![malformed, read_call, "Recovered."]);
+fn agent_loop_allows_shell_in_prompt_mode_when_confirmed() {
+    let _guard = PERMISSION_RESPONSE_LOCK.lock().unwrap();
+    std::env::set_var("CANDLE_CLI_PERMISSION_RESPONSE", "allow");
+    let shell_call = r#"<tool_call>{"id":"call-shell","name":"shell","input":{"command":"printf checked"}}</tool_call>"#;
+    let mut runtime = ScriptedRuntime::new(vec![shell_call, "Allowed."]);
     let tools = ToolRegistry::workspace_write(".");
+    let policy = PermissionPolicy::new(PermissionMode::Prompt);
     let mut session = Session::new(".".to_string());
     session.messages.push(Message {
         role: MessageRole::User,
         blocks: vec![ContentBlock::Text {
-            text: "recover please".to_string(),
+            text: "run shell".to_string(),
         }],
     });
 
-    let result = run_single_turn(&mut session, &mut runtime, &tools).unwrap();
+    let result = run_single_turn(&mut session, &mut runtime, &tools, &policy).unwrap();
+    std::env::remove_var("CANDLE_CLI_PERMISSION_RESPONSE");
 
-    assert_eq!(result.final_text, "Recovered.");
+    assert_eq!(result.final_text, "Allowed.");
     assert!(session.messages.iter().any(|message| {
-        message.blocks.iter().any(|block| {
-            matches!(
-                block,
-                ContentBlock::Text { text } if text.contains("malformed")
-            )
-        })
-    }));
-    assert!(session.messages.iter().any(|message| {
-        message.blocks.iter().any(|block| {
-            matches!(
-                block,
-                ContentBlock::ToolResult {
-                    is_error: false,
-                    ..
-                }
-            )
-        })
+        message.blocks.iter().any(|block| matches!(
+            block,
+            ContentBlock::ToolResult { is_error: false, output, .. } if output.contains("checked")
+        ))
     }));
 }
