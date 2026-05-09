@@ -1,9 +1,13 @@
 use candle_cli::tools::registry::ToolRegistry;
 use std::fs;
 
+#[cfg(unix)]
+use std::os::unix::fs::symlink;
+
 #[test]
 fn pwd_tool_runs() {
-    let registry = ToolRegistry::default_read_only();
+    let dir = tempfile::tempdir().unwrap();
+    let registry = ToolRegistry::read_only(dir.path());
     let out = registry.execute("pwd", "{}").unwrap();
     assert!(!out.is_empty());
 }
@@ -14,8 +18,8 @@ fn read_tool_returns_file_contents() {
     let file_path = dir.path().join("note.txt");
     fs::write(&file_path, "hello\nworld\n").unwrap();
 
-    let registry = ToolRegistry::default_read_only();
-    let input = serde_json::json!({ "file_path": file_path }).to_string();
+    let registry = ToolRegistry::read_only(dir.path());
+    let input = serde_json::json!({ "file_path": "note.txt" }).to_string();
     let out = registry.execute("read", &input).unwrap();
 
     assert_eq!(out, "hello\nworld\n");
@@ -28,9 +32,8 @@ fn glob_tool_returns_sorted_matches() {
     fs::write(dir.path().join("a.rs"), "fn a() {}\n").unwrap();
     fs::write(dir.path().join("note.txt"), "ignore\n").unwrap();
 
-    let registry = ToolRegistry::default_read_only();
-    let pattern = format!("{}/*.rs", dir.path().display());
-    let input = serde_json::json!({ "pattern": pattern }).to_string();
+    let registry = ToolRegistry::read_only(dir.path());
+    let input = serde_json::json!({ "pattern": "*.rs" }).to_string();
     let out = registry.execute("glob", &input).unwrap();
 
     let lines: Vec<&str> = out.lines().collect();
@@ -45,10 +48,10 @@ fn grep_tool_returns_path_line_and_text() {
     let file_path = dir.path().join("main.rs");
     fs::write(&file_path, "alpha\nneedle here\nomega\n").unwrap();
 
-    let registry = ToolRegistry::default_read_only();
+    let registry = ToolRegistry::read_only(dir.path());
     let input = serde_json::json!({
         "pattern": "needle",
-        "path": dir.path(),
+        "path": ".",
     })
     .to_string();
     let out = registry.execute("grep", &input).unwrap();
@@ -57,10 +60,47 @@ fn grep_tool_returns_path_line_and_text() {
 }
 
 #[test]
-fn read_tool_requires_file_path() {
-    let registry = ToolRegistry::default_read_only();
-    let err = registry
-        .execute("read", "{}")
-        .expect_err("missing path should fail");
-    assert_eq!(err, "missing file_path");
+fn read_tool_rejects_path_escape() {
+    let dir = tempfile::tempdir().unwrap();
+    let outside = tempfile::NamedTempFile::new().unwrap();
+    fs::write(outside.path(), "secret\n").unwrap();
+
+    let registry = ToolRegistry::read_only(dir.path());
+    let input = serde_json::json!({ "file_path": outside.path() }).to_string();
+    let err = registry.execute("read", &input).unwrap_err();
+
+    assert!(err.contains("path escapes workspace"));
+}
+
+#[test]
+fn grep_tool_rejects_search_root_outside_workspace() {
+    let dir = tempfile::tempdir().unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    fs::write(outside.path().join("main.rs"), "needle\n").unwrap();
+
+    let registry = ToolRegistry::read_only(dir.path());
+    let input = serde_json::json!({
+        "pattern": "needle",
+        "path": outside.path(),
+    })
+    .to_string();
+    let err = registry.execute("grep", &input).unwrap_err();
+
+    assert!(err.contains("path escapes workspace"));
+}
+
+#[cfg(unix)]
+#[test]
+fn read_tool_rejects_symlink_escape() {
+    let dir = tempfile::tempdir().unwrap();
+    let outside = tempfile::NamedTempFile::new().unwrap();
+    fs::write(outside.path(), "secret\n").unwrap();
+    let link_path = dir.path().join("escape.txt");
+    symlink(outside.path(), &link_path).unwrap();
+
+    let registry = ToolRegistry::read_only(dir.path());
+    let input = serde_json::json!({ "file_path": "escape.txt" }).to_string();
+    let err = registry.execute("read", &input).unwrap_err();
+
+    assert!(err.contains("path escapes workspace"));
 }
