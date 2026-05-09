@@ -86,11 +86,13 @@ pub fn run_prompt(session_dir: PathBuf, input: String) -> io::Result<()> {
     match std::env::var("CANDLE_CLI_RUNTIME").ok().as_deref() {
         Some("bridge") => {
             let mut runtime = LocalBridgeRuntime::new("python3 python/bridge_worker.py".into());
-            run_single_turn(&mut session, &mut runtime, &tools, &policy).map_err(io::Error::other)?;
+            run_single_turn(&mut session, &mut runtime, &tools, &policy)
+                .map_err(io::Error::other)?;
         }
         _ => {
             let mut runtime = MockRuntime;
-            run_single_turn(&mut session, &mut runtime, &tools, &policy).map_err(io::Error::other)?;
+            run_single_turn(&mut session, &mut runtime, &tools, &policy)
+                .map_err(io::Error::other)?;
         }
     }
 
@@ -102,7 +104,7 @@ pub fn run_prompt(session_dir: PathBuf, input: String) -> io::Result<()> {
 fn resolve_permission_mode() -> PermissionMode {
     std::env::var("CANDLE_CLI_PERMISSION")
         .ok()
-        .and_then(|value| PermissionMode::from_str(&value))
+        .and_then(|value| value.parse::<PermissionMode>().ok())
         .unwrap_or(PermissionMode::WorkspaceWrite)
 }
 

@@ -1,5 +1,6 @@
 use candle_cli::permissions::mode::PermissionMode;
 use candle_cli::permissions::policy::PermissionPolicy;
+use std::str::FromStr;
 
 #[test]
 fn read_only_allows_read_tools_and_blocks_write_tools() {
@@ -38,9 +39,21 @@ fn danger_full_access_allows_current_tools_without_prompt() {
 
 #[test]
 fn parses_permission_mode_from_string_values() {
-    assert_eq!(PermissionMode::from_str("read-only"), Some(PermissionMode::ReadOnly));
-    assert_eq!(PermissionMode::from_str("workspace-write"), Some(PermissionMode::WorkspaceWrite));
-    assert_eq!(PermissionMode::from_str("prompt"), Some(PermissionMode::Prompt));
-    assert_eq!(PermissionMode::from_str("danger-full-access"), Some(PermissionMode::DangerFullAccess));
-    assert_eq!(PermissionMode::from_str("unknown"), None);
+    assert_eq!(
+        PermissionMode::from_str("read-only").ok(),
+        Some(PermissionMode::ReadOnly)
+    );
+    assert_eq!(
+        PermissionMode::from_str("workspace-write").ok(),
+        Some(PermissionMode::WorkspaceWrite)
+    );
+    assert_eq!(
+        PermissionMode::from_str("prompt").ok(),
+        Some(PermissionMode::Prompt)
+    );
+    assert_eq!(
+        PermissionMode::from_str("danger-full-access").ok(),
+        Some(PermissionMode::DangerFullAccess)
+    );
+    assert_eq!(PermissionMode::from_str("unknown").ok(), None);
 }
