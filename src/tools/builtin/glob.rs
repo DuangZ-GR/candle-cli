@@ -31,12 +31,18 @@ fn collect_matches(pattern: &str, matches: &mut Vec<String>) -> Result<(), Strin
     Ok(())
 }
 
-fn collect_by_extension(dir: &Path, extension: &str, matches: &mut Vec<String>) -> Result<(), String> {
+fn collect_by_extension(
+    dir: &Path,
+    extension: &str,
+    matches: &mut Vec<String>,
+) -> Result<(), String> {
     if !dir.exists() {
         return Ok(());
     }
 
-    for entry in fs::read_dir(dir).map_err(|err| format!("failed to read dir {}: {err}", dir.display()))? {
+    for entry in
+        fs::read_dir(dir).map_err(|err| format!("failed to read dir {}: {err}", dir.display()))?
+    {
         let entry = entry.map_err(|err| err.to_string())?;
         let path = entry.path();
         if path.is_dir() {
@@ -48,12 +54,18 @@ fn collect_by_extension(dir: &Path, extension: &str, matches: &mut Vec<String>) 
     Ok(())
 }
 
-fn collect_direct_by_extension(dir: &Path, extension: &str, matches: &mut Vec<String>) -> Result<(), String> {
+fn collect_direct_by_extension(
+    dir: &Path,
+    extension: &str,
+    matches: &mut Vec<String>,
+) -> Result<(), String> {
     if !dir.exists() {
         return Ok(());
     }
 
-    for entry in fs::read_dir(dir).map_err(|err| format!("failed to read dir {}: {err}", dir.display()))? {
+    for entry in
+        fs::read_dir(dir).map_err(|err| format!("failed to read dir {}: {err}", dir.display()))?
+    {
         let entry = entry.map_err(|err| err.to_string())?;
         let path = entry.path();
         if path.is_file() && has_extension(&path, extension) {
@@ -63,12 +75,18 @@ fn collect_direct_by_extension(dir: &Path, extension: &str, matches: &mut Vec<St
     Ok(())
 }
 
-fn collect_direct_by_suffix(dir: &Path, suffix: &str, matches: &mut Vec<String>) -> Result<(), String> {
+fn collect_direct_by_suffix(
+    dir: &Path,
+    suffix: &str,
+    matches: &mut Vec<String>,
+) -> Result<(), String> {
     if !dir.exists() {
         return Ok(());
     }
 
-    for entry in fs::read_dir(dir).map_err(|err| format!("failed to read dir {}: {err}", dir.display()))? {
+    for entry in
+        fs::read_dir(dir).map_err(|err| format!("failed to read dir {}: {err}", dir.display()))?
+    {
         let entry = entry.map_err(|err| err.to_string())?;
         let path = entry.path();
         if path.is_file() && path.to_string_lossy().ends_with(suffix) {

@@ -59,6 +59,8 @@ fn grep_tool_returns_path_line_and_text() {
 #[test]
 fn read_tool_requires_file_path() {
     let registry = ToolRegistry::default_read_only();
-    let err = registry.execute("read", "{}").expect_err("missing path should fail");
+    let err = registry
+        .execute("read", "{}")
+        .expect_err("missing path should fail");
     assert_eq!(err, "missing file_path");
 }

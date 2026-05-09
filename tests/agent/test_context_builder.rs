@@ -13,7 +13,9 @@ fn build_turn_request_includes_messages() {
 
     let request = build_turn_request(&mut session, "[]").unwrap();
 
-    assert!(request.system_prompt.contains("terminal-based AI assistant"));
+    assert!(request
+        .system_prompt
+        .contains("terminal-based AI assistant"));
     assert!(request.messages_json.contains("hello"));
 }
 

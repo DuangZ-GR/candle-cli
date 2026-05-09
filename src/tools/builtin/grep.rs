@@ -32,7 +32,9 @@ fn collect_files(path: &Path, files: &mut Vec<PathBuf>) -> Result<(), String> {
         return Err(format!("path does not exist: {}", path.display()));
     }
 
-    for entry in fs::read_dir(path).map_err(|err| format!("failed to read dir {}: {err}", path.display()))? {
+    for entry in
+        fs::read_dir(path).map_err(|err| format!("failed to read dir {}: {err}", path.display()))?
+    {
         let entry = entry.map_err(|err| err.to_string())?;
         let child = entry.path();
         if child.is_dir() {

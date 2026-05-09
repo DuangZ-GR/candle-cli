@@ -84,10 +84,12 @@ fn agent_loop_runs_read_edit_shell_then_final_answer() {
         ))
     }));
     assert!(session.messages.iter().any(|message| {
-        message.blocks.iter().any(|block| matches!(
-            block,
-            ContentBlock::ToolCall { name, .. } if name == "read"
-        ))
+        message.blocks.iter().any(|block| {
+            matches!(
+                block,
+                ContentBlock::ToolCall { name, .. } if name == "read"
+            )
+        })
     }));
 }
 
@@ -134,9 +136,11 @@ fn agent_loop_stops_after_max_steps() {
 
     assert!(result.final_text.contains("maximum tool steps"));
     assert!(session.messages.iter().any(|message| {
-        message.blocks.iter().any(|block| matches!(
-            block,
-            ContentBlock::Text { text } if text.contains("maximum tool steps")
-        ))
+        message.blocks.iter().any(|block| {
+            matches!(
+                block,
+                ContentBlock::Text { text } if text.contains("maximum tool steps")
+            )
+        })
     }));
 }

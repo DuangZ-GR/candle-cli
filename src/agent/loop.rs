@@ -28,7 +28,8 @@ pub fn run_single_turn_with_limit<R: CandleTargetRuntime>(
         match parse_tool_call(&result.final_text) {
             Ok(Some(tool_call)) => {
                 append_tool_call(session, &tool_call);
-                let (output, is_error) = match tools.execute(&tool_call.name, &tool_call.input_json) {
+                let (output, is_error) = match tools.execute(&tool_call.name, &tool_call.input_json)
+                {
                     Ok(output) => (output, false),
                     Err(err) => (err, true),
                 };
