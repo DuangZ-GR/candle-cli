@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 pub fn run(pattern: &str, _root: Option<&str>) -> Result<String, String> {
     let mut matches = Vec::new();
@@ -96,7 +96,7 @@ fn collect_direct_by_suffix(
     Ok(())
 }
 
-fn has_extension(path: &PathBuf, extension: &str) -> bool {
+fn has_extension(path: &Path, extension: &str) -> bool {
     path.extension()
         .and_then(|value| value.to_str())
         .is_some_and(|value| value == extension)
