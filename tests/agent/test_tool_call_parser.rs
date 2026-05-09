@@ -14,6 +14,20 @@ fn parses_valid_tool_call_block() {
 }
 
 #[test]
+fn parses_tool_call_even_with_surrounding_text() {
+    let parsed = parse_tool_call(
+        r#"I will inspect the file now.
+<tool_call>{"id":"call-2","name":"read","input":{"file_path":"README.md"}}</tool_call>
+Thanks."#,
+    )
+    .expect("surrounding text should still parse")
+    .expect("tool call block should be present");
+
+    assert_eq!(parsed.id, "call-2");
+    assert_eq!(parsed.name, "read");
+}
+
+#[test]
 fn returns_none_when_no_tool_call_block_exists() {
     let parsed = parse_tool_call("final answer only").expect("plain text should not error");
     assert!(parsed.is_none());

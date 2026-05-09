@@ -1,14 +1,15 @@
-use candle_cli::session::model::{ContentBlock, Message, MessageRole, Session};
+use candle_cli::session::model::Session;
 
 #[test]
 fn session_holds_user_message() {
-    let msg = Message {
-        role: MessageRole::User,
-        blocks: vec![ContentBlock::Text {
-            text: "hello".into(),
-        }],
-    };
-    let session = Session::new("workspace".into());
-    assert_eq!(msg.role, MessageRole::User);
-    assert_eq!(session.workspace_root, "workspace");
+    let session = Session::new("/tmp/workspace".into());
+    assert_eq!(session.workspace_root, "/tmp/workspace");
+    assert!(session.messages.is_empty());
+}
+
+#[test]
+fn session_ids_are_unique_for_back_to_back_sessions() {
+    let first = Session::new("/tmp/workspace".into());
+    let second = Session::new("/tmp/workspace".into());
+    assert_ne!(first.session_id, second.session_id);
 }

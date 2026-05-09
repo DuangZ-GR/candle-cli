@@ -11,9 +11,10 @@ use std::path::PathBuf;
 // ── REPL main loop ──────────────────────────────────────────────────────
 
 pub fn run_repl(session_dir: PathBuf) -> io::Result<()> {
+    let workspace_root = std::env::current_dir()?;
     let store = SessionStore::new(session_dir);
-    let mut session = Session::new(std::env::current_dir()?.display().to_string());
-    let tools = ToolRegistry::default_workspace_write();
+    let mut session = Session::new(workspace_root.display().to_string());
+    let tools = ToolRegistry::workspace_write(workspace_root.clone());
 
     print_banner(&session);
 
@@ -68,9 +69,10 @@ pub fn run_repl(session_dir: PathBuf) -> io::Result<()> {
 // ── prompt mode ─────────────────────────────────────────────────────────
 
 pub fn run_prompt(session_dir: PathBuf, input: String) -> io::Result<()> {
+    let workspace_root = std::env::current_dir()?;
     let store = SessionStore::new(session_dir);
-    let mut session = Session::new(std::env::current_dir()?.display().to_string());
-    let tools = ToolRegistry::default_workspace_write();
+    let mut session = Session::new(workspace_root.display().to_string());
+    let tools = ToolRegistry::workspace_write(workspace_root.clone());
 
     session.messages.push(Message {
         role: MessageRole::User,
@@ -118,7 +120,9 @@ fn handle_slash_command(input: &str, session: &mut Session, store: &SessionStore
             let _ = writeln!(stdout, "{}", HELP_TEXT);
         }
         "clear" => {
+            let current_id = session.session_id.clone();
             *session = Session::new(session.workspace_root.clone());
+            session.session_id = current_id;
             store.save(session).ok();
             let _ = writeln!(stdout, "session cleared (id: {}).", session.session_id);
         }

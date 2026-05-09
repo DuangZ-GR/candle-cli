@@ -64,7 +64,7 @@ fn agent_loop_runs_read_edit_shell_then_final_answer() {
     let shell_call = r#"<tool_call>{"id":"call-shell","name":"shell","input":{"command":"printf checked"}}</tool_call>"#;
 
     let mut runtime = ScriptedRuntime::new(vec![&read_call, &edit_call, shell_call, "done"]);
-    let tools = ToolRegistry::default_workspace_write();
+    let tools = ToolRegistry::workspace_write(dir.path());
     let mut session = Session::new(dir.path().display().to_string());
     session.messages.push(Message {
         role: MessageRole::User,
@@ -95,10 +95,16 @@ fn agent_loop_runs_read_edit_shell_then_final_answer() {
 
 #[test]
 fn agent_loop_records_tool_errors_and_allows_recovery() {
-    let missing_read = r#"<tool_call>{"id":"call-read","name":"read","input":{"file_path":"/definitely/missing/file.txt"}}</tool_call>"#;
-    let mut runtime = ScriptedRuntime::new(vec![missing_read, "I could not read that file."]);
-    let tools = ToolRegistry::default_workspace_write();
-    let mut session = Session::new(".".to_string());
+    let dir = tempfile::tempdir().unwrap();
+    let outside = tempfile::NamedTempFile::new().unwrap();
+    fs::write(outside.path(), "secret\n").unwrap();
+    let missing_read = format!(
+        r#"<tool_call>{{"id":"call-read","name":"read","input":{{"file_path":"{}"}}}}</tool_call>"#,
+        outside.path().display()
+    );
+    let mut runtime = ScriptedRuntime::new(vec![&missing_read, "I could not read that file."]);
+    let tools = ToolRegistry::workspace_write(dir.path());
+    let mut session = Session::new(dir.path().display().to_string());
     session.messages.push(Message {
         role: MessageRole::User,
         blocks: vec![ContentBlock::Text {
@@ -112,7 +118,7 @@ fn agent_loop_records_tool_errors_and_allows_recovery() {
     assert!(session.messages.iter().any(|message| {
         message.blocks.iter().any(|block| matches!(
             block,
-            ContentBlock::ToolResult { is_error: true, output, .. } if output.contains("not a file")
+            ContentBlock::ToolResult { is_error: true, output, .. } if output.contains("path escapes workspace")
         ))
     }));
 }
@@ -123,7 +129,7 @@ fn agent_loop_stops_after_max_steps() {
     let mut runtime = ScriptedRuntime::new(vec![
         repeated, repeated, repeated, repeated, repeated, repeated, repeated, repeated,
     ]);
-    let tools = ToolRegistry::default_workspace_write();
+    let tools = ToolRegistry::workspace_write(".");
     let mut session = Session::new(".".to_string());
     session.messages.push(Message {
         role: MessageRole::User,
@@ -142,5 +148,36 @@ fn agent_loop_stops_after_max_steps() {
                 ContentBlock::Text { text } if text.contains("maximum tool steps")
             )
         })
+    }));
+}
+
+#[test]
+fn agent_loop_recovers_after_malformed_tool_call() {
+    let malformed = r#"<tool_call>{"id":"broken"</tool_call>"#;
+    let read_call = r#"<tool_call>{"id":"call-pwd","name":"pwd","input":{}}</tool_call>"#;
+    let mut runtime = ScriptedRuntime::new(vec![malformed, read_call, "Recovered."]);
+    let tools = ToolRegistry::workspace_write(".");
+    let mut session = Session::new(".".to_string());
+    session.messages.push(Message {
+        role: MessageRole::User,
+        blocks: vec![ContentBlock::Text {
+            text: "recover please".to_string(),
+        }],
+    });
+
+    let result = run_single_turn(&mut session, &mut runtime, &tools).unwrap();
+
+    assert_eq!(result.final_text, "Recovered.");
+    assert!(session.messages.iter().any(|message| {
+        message.blocks.iter().any(|block| matches!(
+            block,
+            ContentBlock::Text { text } if text.contains("malformed")
+        ))
+    }));
+    assert!(session.messages.iter().any(|message| {
+        message.blocks.iter().any(|block| matches!(
+            block,
+            ContentBlock::ToolResult { is_error: false, .. }
+        ))
     }));
 }

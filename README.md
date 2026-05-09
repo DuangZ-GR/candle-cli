@@ -228,6 +228,33 @@ CANDLE_CLI_RUNTIME=bridge cargo run -- prompt "读取 README.md，总结如何�
 
 当前版本先固定使用 workspace-write 工具集合。交互式权限确认、sandbox、streaming 和原生 OpenAI tools schema 会在后续版本加入。
 
+## v0.3.1 稳定化 Smoke Test
+
+在接好 Ollama 或其他 OpenAI 兼容后端后，可以用下面的方式做一次真实闭环验证：
+
+```bash
+export CANDLE_CLI_RUNTIME=bridge
+export CANDLE_CLI_API_BASE_URL="http://localhost:11434/v1"
+export CANDLE_CLI_API_KEY="ollama"
+export CANDLE_CLI_MODEL_ID="qwen2:0.5b"
+
+cargo run -- prompt "读取 README.md，总结如何运行项目"
+```
+
+预期行为：
+
+1. 模型输出一个 `read` 工具调用。
+2. Rust 在当前 workspace 内执行读取。
+3. 模型基于工具结果返回总结。
+
+如果要验证 shell 工具，也可以尝试：
+
+```bash
+cargo run -- prompt "读取当前项目 Cargo.toml，并用一句话总结 crate 的名字和用途"
+```
+
+当前版本已经限制文件工具只能访问 workspace 内路径，shell 命令也会从 workspace 根目录执行，并带有超时限制。
+
 ## 开发
 
 ```bash
