@@ -169,15 +169,22 @@ fn agent_loop_recovers_after_malformed_tool_call() {
 
     assert_eq!(result.final_text, "Recovered.");
     assert!(session.messages.iter().any(|message| {
-        message.blocks.iter().any(|block| matches!(
-            block,
-            ContentBlock::Text { text } if text.contains("malformed")
-        ))
+        message.blocks.iter().any(|block| {
+            matches!(
+                block,
+                ContentBlock::Text { text } if text.contains("malformed")
+            )
+        })
     }));
     assert!(session.messages.iter().any(|message| {
-        message.blocks.iter().any(|block| matches!(
-            block,
-            ContentBlock::ToolResult { is_error: false, .. }
-        ))
+        message.blocks.iter().any(|block| {
+            matches!(
+                block,
+                ContentBlock::ToolResult {
+                    is_error: false,
+                    ..
+                }
+            )
+        })
     }));
 }
