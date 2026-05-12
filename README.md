@@ -13,9 +13,28 @@ cd candle-cli
 cargo build
 ```
 
-## 推荐用法：API 模式（Ollama）
+## 推荐用法：DeepSeek API
 
-最简单的方式是通过 Ollama 运行本地模型：
+`candle-cli` 默认推荐通过 DeepSeek 的 OpenAI-compatible API 运行远程模型。这样不需要本地下载模型，也不依赖本机 GPU。
+
+```bash
+# 1. 配置 DeepSeek API
+export CANDLE_CLI_API_BASE_URL="https://api.deepseek.com/v1"
+export CANDLE_CLI_API_KEY="YOUR_DEEPSEEK_API_KEY"
+export CANDLE_CLI_MODEL_ID="deepseek-v4-flash"
+export CANDLE_CLI_RUNTIME="bridge"
+export CANDLE_CLI_VERBOSE="1"          # 可选：查看诊断信息
+
+# 2. 运行
+cargo run -- prompt "你好，介绍一下你自己"
+cargo run --                           # 交互式 REPL
+```
+
+如果 DeepSeek V4 Flash 的公开模型 ID 与示例不同，请以 DeepSeek 控制台或官方文档展示的模型 ID 为准。
+
+## 备选用法：Ollama 本地 API
+
+如果你想在本机验证 OpenAI-compatible API 流程，也可以使用 Ollama：
 
 ```bash
 # 1. 安装并启动 Ollama，下载一个小模型
@@ -82,19 +101,22 @@ cargo run -- doctor
 
 通过 OpenAI 兼容的 HTTP API 调用模型（Ollama / vLLM / OpenAI 等）。
 
-**最小配置：**
+**最小配置（DeepSeek API）：**
 
 ```bash
-export CANDLE_CLI_API_BASE_URL="http://localhost:11434/v1"
-export CANDLE_CLI_API_KEY="ollama"
-export CANDLE_CLI_MODEL_ID="qwen2:0.5b"
+export CANDLE_CLI_API_BASE_URL="https://api.deepseek.com/v1"
+export CANDLE_CLI_API_KEY="YOUR_DEEPSEEK_API_KEY"
+export CANDLE_CLI_MODEL_ID="deepseek-v4-flash"
 export CANDLE_CLI_RUNTIME="bridge"
 ```
+
+如果 DeepSeek V4 Flash 的公开模型 ID 与示例不同，请替换为 DeepSeek 控制台或官方文档展示的实际模型 ID。
 
 **常用后端：**
 
 | 后端 | CANDLE_CLI_API_BASE_URL | CANDLE_CLI_API_KEY | CANDLE_CLI_MODEL_ID |
 |------|--------------------------|---------------------|----------------------|
+| DeepSeek | `https://api.deepseek.com/v1` | `YOUR_DEEPSEEK_API_KEY` | `deepseek-v4-flash` |
 | Ollama | `http://localhost:11434/v1` | `ollama` | `qwen2:0.5b` |
 | vLLM | `http://localhost:8000/v1` | `not-needed` | `Qwen/Qwen2-0.5B-Instruct` |
 | OpenAI | `https://api.openai.com/v1` | `sk-xxx` | `gpt-4o-mini` |
@@ -230,7 +252,18 @@ CANDLE_CLI_RUNTIME=bridge cargo run -- prompt "读取 README.md，总结如何�
 
 ## v0.3.1 稳定化 Smoke Test
 
-在接好 Ollama 或其他 OpenAI 兼容后端后，可以用下面的方式做一次真实闭环验证：
+在接好 DeepSeek API 或其他 OpenAI 兼容后端后，可以用下面的方式做一次真实闭环验证：
+
+```bash
+export CANDLE_CLI_RUNTIME=bridge
+export CANDLE_CLI_API_BASE_URL="https://api.deepseek.com/v1"
+export CANDLE_CLI_API_KEY="YOUR_DEEPSEEK_API_KEY"
+export CANDLE_CLI_MODEL_ID="deepseek-v4-flash"
+
+cargo run -- prompt "读取 README.md，总结如何运行项目"
+```
+
+如果要改用 Ollama，本地启动 Ollama 后替换为：
 
 ```bash
 export CANDLE_CLI_RUNTIME=bridge
