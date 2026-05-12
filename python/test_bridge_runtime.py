@@ -209,6 +209,28 @@ def test_build_chat_messages_includes_system():
     ]
 
 
+def test_build_chat_messages_serializes_tool_blocks_as_text():
+    messages_json = json.dumps(
+        [
+            {"role": "Assistant", "blocks": [{"ToolCall": {"id": "call-1", "name": "read", "input": "{\"file_path\":\"README.md\"}"}}]},
+            {"role": "Tool", "blocks": [{"ToolResult": {"tool_call_id": "call-1", "output": "README contents", "is_error": False}}]},
+        ]
+    )
+
+    chat = build_chat_messages(messages_json)
+
+    assert chat == [
+        {
+            "role": "assistant",
+            "content": '<tool_call>{"id":"call-1","name":"read","input":{"file_path":"README.md"}}</tool_call>',
+        },
+        {
+            "role": "user",
+            "content": "Tool result for call-1:\nREADME contents",
+        },
+    ]
+
+
 # ── BridgeRuntime tests (local fallback) ─────────────────────────────────────
 
 

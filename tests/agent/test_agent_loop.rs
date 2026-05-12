@@ -86,6 +86,43 @@ fn agent_loop_runs_read_edit_shell_then_final_answer() {
 }
 
 #[test]
+fn agent_loop_accepts_function_style_read_tool_call() {
+    let dir = tempfile::tempdir().unwrap();
+    let file_path = dir.path().join("note.txt");
+    fs::write(&file_path, "hello from file\n").unwrap();
+
+    let read_call = format!(r#"read({{"file_path":"{}"}})"#, file_path.display());
+    let mut runtime = ScriptedRuntime::new(vec![&read_call, "I read the file."]);
+    let tools = ToolRegistry::workspace_write(dir.path());
+    let policy = PermissionPolicy::new(PermissionMode::WorkspaceWrite);
+    let mut session = Session::new(dir.path().display().to_string());
+    session.messages.push(Message {
+        role: MessageRole::User,
+        blocks: vec![ContentBlock::Text {
+            text: "read the file".to_string(),
+        }],
+    });
+
+    let result = run_single_turn(&mut session, &mut runtime, &tools, &policy).unwrap();
+
+    assert_eq!(result.final_text, "I read the file.");
+    assert!(session.messages.iter().any(|message| {
+        message.blocks.iter().any(|block| {
+            matches!(
+                block,
+                ContentBlock::ToolCall { name, .. } if name == "read"
+            )
+        })
+    }));
+    assert!(session.messages.iter().any(|message| {
+        message.blocks.iter().any(|block| matches!(
+            block,
+            ContentBlock::ToolResult { is_error: false, output, .. } if output.contains("hello from file")
+        ))
+    }));
+}
+
+#[test]
 fn agent_loop_blocks_shell_in_read_only_mode_and_recovers() {
     let shell_call = r#"<tool_call>{"id":"call-shell","name":"shell","input":{"command":"printf checked"}}</tool_call>"#;
     let mut runtime = ScriptedRuntime::new(vec![shell_call, "I could not run that command."]);

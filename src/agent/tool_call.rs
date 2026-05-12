@@ -4,6 +4,8 @@ use std::fmt;
 
 const OPEN_TAG: &str = "<tool_call>";
 const CLOSE_TAG: &str = "</tool_call>";
+const FALLBACK_ID: &str = "call-fallback";
+const KNOWN_TOOLS: &[&str] = &["pwd", "read", "glob", "grep", "edit", "shell"];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ToolCallParseError {
@@ -31,17 +33,20 @@ impl fmt::Display for ToolCallParseError {
 impl std::error::Error for ToolCallParseError {}
 
 pub fn parse_tool_call(text: &str) -> Result<Option<ToolCallIntent>, ToolCallParseError> {
-    let Some(start) = text.find(OPEN_TAG) else {
-        return Ok(None);
-    };
+    if let Some(start) = text.find(OPEN_TAG) {
+        let json_start = start + OPEN_TAG.len();
+        let Some(relative_end) = text[json_start..].find(CLOSE_TAG) else {
+            return Err(ToolCallParseError::MissingCloseTag);
+        };
+        let json_end = json_start + relative_end;
+        let raw_json = text[json_start..json_end].trim();
+        return parse_wrapped_json(raw_json);
+    }
 
-    let json_start = start + OPEN_TAG.len();
-    let Some(relative_end) = text[json_start..].find(CLOSE_TAG) else {
-        return Err(ToolCallParseError::MissingCloseTag);
-    };
-    let json_end = json_start + relative_end;
-    let raw_json = text[json_start..json_end].trim();
+    parse_fallback_function_call(text)
+}
 
+fn parse_wrapped_json(raw_json: &str) -> Result<Option<ToolCallIntent>, ToolCallParseError> {
     let value: Value = serde_json::from_str(raw_json)
         .map_err(|err| ToolCallParseError::InvalidJson(err.to_string()))?;
     let object = value
@@ -70,5 +75,33 @@ pub fn parse_tool_call(text: &str) -> Result<Option<ToolCallIntent>, ToolCallPar
         id,
         name,
         input_json: input.to_string(),
+    }))
+}
+
+fn parse_fallback_function_call(text: &str) -> Result<Option<ToolCallIntent>, ToolCallParseError> {
+    let trimmed = text.trim();
+    let Some(open_paren) = trimmed.find('(') else {
+        return Ok(None);
+    };
+    if !trimmed.ends_with(')') {
+        return Ok(None);
+    }
+
+    let tool_name = trimmed[..open_paren].trim();
+    if !KNOWN_TOOLS.contains(&tool_name) {
+        return Ok(None);
+    }
+
+    let raw_input = trimmed[open_paren + 1..trimmed.len() - 1].trim();
+    let value: Value = serde_json::from_str(raw_input)
+        .map_err(|err| ToolCallParseError::InvalidJson(err.to_string()))?;
+    if !value.is_object() {
+        return Err(ToolCallParseError::InputMustBeObject);
+    }
+
+    Ok(Some(ToolCallIntent {
+        id: FALLBACK_ID.to_string(),
+        name: tool_name.to_string(),
+        input_json: value.to_string(),
     }))
 }

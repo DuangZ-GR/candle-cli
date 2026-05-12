@@ -25,7 +25,7 @@ fn resolve_system_prompt_with_tools(tools_json: &str) -> String {
     }
 
     format!(
-        "{base}\n\nTool protocol:\n- Use tools when you need to inspect files, edit files, or run commands.\n- To call a tool, output exactly one <tool_call>{{\"id\":\"call-1\",\"name\":\"read\",\"input\":{{\"file_path\":\"README.md\"}}}}</tool_call> block.\n- Do not mix final answer text with a tool call.\n- After receiving tool results, either request another tool or provide the final answer.\n- Available tools JSON: {tools_json}"
+        "{base}\n\nTool protocol:\n- Use tools when you need to inspect files, edit files, or run commands.\n- To call a tool, output exactly one raw <tool_call>{{\"id\":\"call-1\",\"name\":\"read\",\"input\":{{\"file_path\":\"README.md\"}}}}</tool_call> block.\n- Do not output Markdown code fences.\n- Do not output read(...), shell(...), function calls, or pseudo-code.\n- Do not mix final answer text with a tool call.\n- If a tool is needed, the entire assistant response must be only the <tool_call> block.\n- After receiving a tool result, you must either request exactly one more tool or provide a non-empty final answer.\n- Do not return an empty response.\n- If the tool result already contains enough information, summarize it directly in natural language.\n\nExample 1:\nUser: 读取 README.md\nAssistant: <tool_call>{{\"id\":\"call-1\",\"name\":\"read\",\"input\":{{\"file_path\":\"README.md\"}}}}</tool_call>\n\nExample 2:\nTool result: README 说明可以通过 cargo run -- prompt \"你好\" 运行，也可以通过 cargo test 运行测试。\nAssistant: 这个项目可以通过 cargo run 或 cargo test 运行。\n\nAvailable tools JSON: {tools_json}"
     )
 }
 
