@@ -117,7 +117,7 @@ fn agent_loop_accepts_function_style_read_tool_call() {
     assert!(session.messages.iter().any(|message| {
         message.blocks.iter().any(|block| matches!(
             block,
-            ContentBlock::ToolResult { is_error: false, output, .. } if output.contains("hello from file")
+            ContentBlock::ToolResult { is_error: false, output, .. } if output.contains("status: ok") && output.contains("tool: read") && output.contains("hello from file")
         ))
     }));
 }
@@ -142,7 +142,7 @@ fn agent_loop_blocks_shell_in_read_only_mode_and_recovers() {
     assert!(session.messages.iter().any(|message| {
         message.blocks.iter().any(|block| matches!(
             block,
-            ContentBlock::ToolResult { is_error: true, output, .. } if output.contains("not allowed in read-only mode")
+            ContentBlock::ToolResult { is_error: true, output, .. } if output.contains("status: error") && output.contains("tool: shell") && output.contains("tool not allowed in read-only mode")
         ))
     }));
 }
@@ -170,7 +170,7 @@ fn agent_loop_denies_shell_in_prompt_mode_and_recovers() {
     assert!(session.messages.iter().any(|message| {
         message.blocks.iter().any(|block| matches!(
             block,
-            ContentBlock::ToolResult { is_error: true, output, .. } if output.contains("tool execution denied by user")
+            ContentBlock::ToolResult { is_error: true, output, .. } if output.contains("status: error") && output.contains("tool: shell") && output.contains("tool execution denied by user")
         ))
     }));
 }
@@ -198,7 +198,7 @@ fn agent_loop_allows_shell_in_prompt_mode_when_confirmed() {
     assert!(session.messages.iter().any(|message| {
         message.blocks.iter().any(|block| matches!(
             block,
-            ContentBlock::ToolResult { is_error: false, output, .. } if output.contains("checked")
+            ContentBlock::ToolResult { is_error: false, output, .. } if output.contains("status: ok") && output.contains("tool: shell") && output.contains("exit_code: 0") && output.contains("checked") && !output.contains("output:\\nstatus: ok")
         ))
     }));
 }

@@ -24,16 +24,22 @@ pub fn run_single_turn_with_limit<R: CandleTargetRuntime>(
     policy: &PermissionPolicy,
     max_steps: usize,
 ) -> Result<TurnResult, String> {
-    for _ in 0..max_steps {
+    let verbose = verbose_enabled();
+
+    for step in 0..max_steps {
         let request = crate::context::builder::build_turn_request(session, tools_json())?;
         let result = runtime.generate_turn(request)?;
 
         match parse_tool_call(&result.final_text) {
             Ok(Some(tool_call)) => {
+                trace_tool_step(verbose, step + 1, max_steps, &tool_call);
                 append_tool_call(session, &tool_call);
                 let (output, is_error) = if !policy.allows(&tool_call.name) {
                     (
-                        format!("tool not allowed in read-only mode: {}", tool_call.name),
+                        format_tool_error(
+                            &tool_call.name,
+                            &format!("tool not allowed in read-only mode: {}", tool_call.name),
+                        ),
                         true,
                     )
                 } else if policy.requires_prompt(&tool_call.name)
@@ -42,13 +48,17 @@ pub fn run_single_turn_with_limit<R: CandleTargetRuntime>(
                         &tool_call.input_json,
                     )
                 {
-                    ("tool execution denied by user".to_string(), true)
+                    (
+                        format_tool_error(&tool_call.name, "tool execution denied by user"),
+                        true,
+                    )
                 } else {
                     match tools.execute(&tool_call.name, &tool_call.input_json) {
-                        Ok(output) => (output, false),
-                        Err(err) => (err, true),
+                        Ok(output) => (format_tool_success(&tool_call.name, &output), false),
+                        Err(err) => (format_tool_error(&tool_call.name, &err), true),
                     }
                 };
+                trace_tool_result(verbose, &output, is_error);
                 append_tool_result(session, &tool_call.id, output, is_error);
             }
             Ok(None) => {
@@ -60,6 +70,7 @@ pub fn run_single_turn_with_limit<R: CandleTargetRuntime>(
                 });
             }
             Err(err) => {
+                trace_parse_error(verbose, &err);
                 let correction = malformed_tool_call_message(&err);
                 append_assistant_text(session, correction);
             }
@@ -105,8 +116,58 @@ fn append_assistant_text(session: &mut Session, text: String) {
 
 fn malformed_tool_call_message(err: &ToolCallParseError) -> String {
     format!(
-        "The previous tool call was malformed: {err}. Retry with exactly one <tool_call>{{...}}</tool_call> block or provide a final answer."
+        "The previous tool call was malformed: {err}. Expected exactly one raw tool call block like <tool_call>{{\"id\":\"call-1\",\"name\":\"read\",\"input\":{{\"file_path\":\"README.md\"}}}}</tool_call>. Retry with one valid tool call or provide a final answer."
     )
+}
+
+fn format_tool_success(tool_name: &str, output: &str) -> String {
+    if tool_name == "shell" && output.starts_with("status: ok") {
+        return output.to_string();
+    }
+    format!("status: ok\ntool: {tool_name}\noutput:\n{output}")
+}
+
+fn format_tool_error(tool_name: &str, message: &str) -> String {
+    if tool_name == "shell"
+        && (message.starts_with("status: error") || message.starts_with("status: ok"))
+    {
+        return message.to_string();
+    }
+    format!("status: error\ntool: {tool_name}\nmessage: {message}")
+}
+
+fn verbose_enabled() -> bool {
+    std::env::var("CANDLE_CLI_VERBOSE")
+        .map(|value| matches!(value.as_str(), "1" | "true" | "yes" | "on"))
+        .unwrap_or(false)
+}
+
+fn trace_tool_step(verbose: bool, step: usize, max_steps: usize, tool_call: &ToolCallIntent) {
+    if verbose {
+        eprintln!(
+            "[tool step {step}/{max_steps}] {} {}",
+            tool_call.name, tool_call.input_json
+        );
+    }
+}
+
+fn trace_tool_result(verbose: bool, output: &str, is_error: bool) {
+    if verbose {
+        let detail = output
+            .lines()
+            .find(|line| line.starts_with("exit_code:") || line.starts_with("message:"));
+        match (is_error, detail) {
+            (true, Some(detail)) => eprintln!("[tool result] error: {detail}"),
+            (true, None) => eprintln!("[tool result] error"),
+            (false, _) => eprintln!("[tool result] ok"),
+        }
+    }
+}
+
+fn trace_parse_error(verbose: bool, err: &ToolCallParseError) {
+    if verbose {
+        eprintln!("[tool parse error] {err}");
+    }
 }
 
 fn tools_json() -> &'static str {

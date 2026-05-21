@@ -6,7 +6,10 @@ fn shell_tool_executes_command_inside_workspace_root() {
     let dir = tempfile::tempdir().unwrap();
     let registry = ToolRegistry::workspace_write(dir.path());
     let result = registry.execute("shell", r#"{"command":"pwd"}"#).unwrap();
-    assert_eq!(result, dir.path().display().to_string());
+    assert!(result.contains("status: ok"));
+    assert!(result.contains("tool: shell"));
+    assert!(result.contains("exit_code: 0"));
+    assert!(result.contains(&dir.path().display().to_string()));
 }
 
 #[test]
@@ -19,6 +22,9 @@ fn shell_tool_times_out() {
         .unwrap_err();
     std::env::remove_var("CANDLE_CLI_SHELL_TIMEOUT_SECS");
 
+    assert!(err.contains("status: error"));
+    assert!(err.contains("tool: shell"));
+    assert!(err.contains("timeout: true"));
     assert!(err.contains("command timed out after 1s"));
 }
 
