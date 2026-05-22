@@ -95,3 +95,17 @@ fn rejects_non_object_input() {
 
     assert_eq!(err.to_string(), "tool call field 'input' must be an object");
 }
+
+#[test]
+fn canonical_tool_call_takes_precedence_over_fallback() {
+    let mixed = r#"read({"file_path":"unused"})
+<tool_call>{"id":"call-1","name":"glob","input":{"pattern":"src/*.rs"}}</tool_call>"#;
+
+    let parsed = parse_tool_call(mixed)
+        .expect("mixed output should parse without error")
+        .expect("canonical tool call should be selected");
+
+    assert_eq!(parsed.id, "call-1");
+    assert_eq!(parsed.name, "glob");
+    assert_eq!(parsed.input_json, "{\"pattern\":\"src/*.rs\"}");
+}
