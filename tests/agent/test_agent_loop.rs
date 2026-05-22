@@ -202,3 +202,99 @@ fn agent_loop_allows_shell_in_prompt_mode_when_confirmed() {
         ))
     }));
 }
+
+#[test]
+fn agent_loop_appends_explicit_correction_message_for_malformed_tool_call() {
+    let malformed = r#"<tool_call>{"id":"call-1"</tool_call>"#;
+    let mut runtime = ScriptedRuntime::new(vec![malformed, "ok, I will stop."]);
+    let tools = ToolRegistry::workspace_write(".");
+    let policy = PermissionPolicy::new(PermissionMode::WorkspaceWrite);
+    let mut session = Session::new(".".to_string());
+    session.messages.push(Message {
+        role: MessageRole::User,
+        blocks: vec![ContentBlock::Text {
+            text: "do something".to_string(),
+        }],
+    });
+
+    let result = run_single_turn(&mut session, &mut runtime, &tools, &policy).unwrap();
+
+    assert_eq!(result.final_text, "ok, I will stop.");
+    assert!(session.messages.iter().any(|message| {
+        message.blocks.iter().any(|block| matches!(
+            block,
+            ContentBlock::Text { text }
+                if text.contains("The previous tool call was malformed")
+                    && text.contains("<tool_call>")
+                    && text.contains("retry with one valid tool call or provide a final answer")
+        ))
+    }));
+}
+
+#[test]
+fn agent_loop_wraps_non_shell_tool_success_with_envelope() {
+    let dir = tempfile::tempdir().unwrap();
+    let file_path = dir.path().join("note.txt");
+    std::fs::write(&file_path, "hello loop\n").unwrap();
+
+    let read_call = format!(
+        r#"<tool_call>{{"id":"call-1","name":"read","input":{{"file_path":"{}"}}}}</tool_call>"#,
+        file_path.display()
+    );
+    let mut runtime = ScriptedRuntime::new(vec![&read_call, "done"]);
+    let tools = ToolRegistry::workspace_write(dir.path());
+    let policy = PermissionPolicy::new(PermissionMode::WorkspaceWrite);
+    let mut session = Session::new(dir.path().display().to_string());
+    session.messages.push(Message {
+        role: MessageRole::User,
+        blocks: vec![ContentBlock::Text {
+            text: "read the file".to_string(),
+        }],
+    });
+
+    let result = run_single_turn(&mut session, &mut runtime, &tools, &policy).unwrap();
+
+    assert_eq!(result.final_text, "done");
+    assert!(session.messages.iter().any(|message| {
+        message.blocks.iter().any(|block| matches!(
+            block,
+            ContentBlock::ToolResult { is_error: false, output, .. }
+                if output.starts_with("status: ok\ntool: read\noutput:\n")
+                    && output.contains("hello loop")
+        ))
+    }));
+}
+
+#[test]
+fn agent_loop_emits_verbose_trace_lines_to_stderr_only() {
+    let _guard = PERMISSION_RESPONSE_LOCK.lock().unwrap();
+    std::env::set_var("CANDLE_CLI_VERBOSE", "1");
+
+    let dir = tempfile::tempdir().unwrap();
+    let file_path = dir.path().join("note.txt");
+    std::fs::write(&file_path, "hi\n").unwrap();
+
+    let read_call = format!(
+        r#"<tool_call>{{"id":"call-1","name":"read","input":{{"file_path":"{}"}}}}</tool_call>"#,
+        file_path.display()
+    );
+    let mut runtime = ScriptedRuntime::new(vec![&read_call, "done"]);
+    let tools = ToolRegistry::workspace_write(dir.path());
+    let policy = PermissionPolicy::new(PermissionMode::WorkspaceWrite);
+    let mut session = Session::new(dir.path().display().to_string());
+    session.messages.push(Message {
+        role: MessageRole::User,
+        blocks: vec![ContentBlock::Text {
+            text: "read the file".to_string(),
+        }],
+    });
+
+    let result = run_single_turn(&mut session, &mut runtime, &tools, &policy).unwrap();
+    std::env::remove_var("CANDLE_CLI_VERBOSE");
+
+    assert_eq!(result.final_text, "done");
+    let session_dump = serde_json::to_string(&session.messages).unwrap();
+    assert!(!session_dump.contains("[tool step"));
+    assert!(!session_dump.contains("[tool result]"));
+    assert!(!session_dump.contains("[tool parse error]"));
+}

@@ -100,3 +100,16 @@ fn edit_tool_fails_when_old_string_matches_multiple_times() {
     let err = registry.execute("edit", &input).unwrap_err();
     assert!(err.contains("old_string matched 2 times"));
 }
+
+#[test]
+fn shell_tool_returns_error_envelope_for_non_zero_exit() {
+    let dir = tempfile::tempdir().unwrap();
+    let registry = ToolRegistry::workspace_write(dir.path());
+    let err = registry
+        .execute("shell", r#"{"command":"sh -lc 'exit 7'"}"#)
+        .unwrap_err();
+
+    assert!(err.contains("status: error"));
+    assert!(err.contains("tool: shell"));
+    assert!(err.contains("exit_code: 7"));
+}

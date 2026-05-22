@@ -116,7 +116,7 @@ fn append_assistant_text(session: &mut Session, text: String) {
 
 fn malformed_tool_call_message(err: &ToolCallParseError) -> String {
     format!(
-        "The previous tool call was malformed: {err}. Expected exactly one raw tool call block like <tool_call>{{\"id\":\"call-1\",\"name\":\"read\",\"input\":{{\"file_path\":\"README.md\"}}}}</tool_call>. Retry with one valid tool call or provide a final answer."
+        "The previous tool call was malformed: {err}. Expected exactly one raw tool call block like <tool_call>{{\"id\":\"call-1\",\"name\":\"read\",\"input\":{{\"file_path\":\"README.md\"}}}}</tool_call>. retry with one valid tool call or provide a final answer."
     )
 }
 
