@@ -221,13 +221,15 @@ fn agent_loop_appends_explicit_correction_message_for_malformed_tool_call() {
 
     assert_eq!(result.final_text, "ok, I will stop.");
     assert!(session.messages.iter().any(|message| {
-        message.blocks.iter().any(|block| matches!(
-            block,
-            ContentBlock::Text { text }
-                if text.contains("The previous tool call was malformed")
-                    && text.contains("<tool_call>")
-                    && text.contains("retry with one valid tool call or provide a final answer")
-        ))
+        message.blocks.iter().any(|block| {
+            matches!(
+                block,
+                ContentBlock::Text { text }
+                    if text.contains("The previous tool call was malformed")
+                        && text.contains("<tool_call>")
+                        && text.contains("retry with one valid tool call or provide a final answer")
+            )
+        })
     }));
 }
 
@@ -256,12 +258,14 @@ fn agent_loop_wraps_non_shell_tool_success_with_envelope() {
 
     assert_eq!(result.final_text, "done");
     assert!(session.messages.iter().any(|message| {
-        message.blocks.iter().any(|block| matches!(
-            block,
-            ContentBlock::ToolResult { is_error: false, output, .. }
-                if output.starts_with("status: ok\ntool: read\noutput:\n")
-                    && output.contains("hello loop")
-        ))
+        message.blocks.iter().any(|block| {
+            matches!(
+                block,
+                ContentBlock::ToolResult { is_error: false, output, .. }
+                    if output.starts_with("status: ok\ntool: read\noutput:\n")
+                        && output.contains("hello loop")
+            )
+        })
     }));
 }
 
