@@ -1,4 +1,5 @@
-use crate::agent::r#loop::run_single_turn;
+use crate::agent::r#loop::{run_single_turn, run_single_turn_with_trace};
+use crate::agent::trace::ExecutionTrace;
 use crate::context::builder::resolve_system_prompt;
 use crate::model::bridge::LocalBridgeRuntime;
 use crate::model::mock::MockRuntime;
@@ -18,6 +19,7 @@ pub fn run_repl(session_dir: PathBuf) -> io::Result<()> {
     let mut session = Session::new(workspace_root.display().to_string());
     let tools = ToolRegistry::workspace_write(workspace_root.clone());
     let policy = PermissionPolicy::new(resolve_permission_mode());
+    let mut last_trace: Option<ExecutionTrace> = None;
 
     print_banner(&session);
 
@@ -28,7 +30,7 @@ pub fn run_repl(session_dir: PathBuf) -> io::Result<()> {
 
         // slash command dispatch
         if input.starts_with('/') {
-            let handled = handle_slash_command(&input, &mut session, &store);
+            let handled = handle_slash_command(&input, &mut session, &store, &last_trace, &tools);
             if handled {
                 return Ok(());
             }
@@ -41,20 +43,35 @@ pub fn run_repl(session_dir: PathBuf) -> io::Result<()> {
             blocks: vec![ContentBlock::Text { text: input }],
         });
 
+        let mut current_trace = ExecutionTrace::new();
+
         // run turn
         let result = match std::env::var("CANDLE_CLI_RUNTIME").ok().as_deref() {
             Some("bridge") => {
                 let mut runtime = LocalBridgeRuntime::new("python3 python/bridge_worker.py".into());
-                run_single_turn(&mut session, &mut runtime, &tools, &policy)
+                run_single_turn_with_trace(
+                    &mut session,
+                    &mut runtime,
+                    &tools,
+                    &policy,
+                    &mut current_trace,
+                )
             }
             _ => {
                 let mut runtime = MockRuntime;
-                run_single_turn(&mut session, &mut runtime, &tools, &policy)
+                run_single_turn_with_trace(
+                    &mut session,
+                    &mut runtime,
+                    &tools,
+                    &policy,
+                    &mut current_trace,
+                )
             }
         };
 
         match result {
             Ok(_) => {
+                last_trace = Some(current_trace);
                 store.save(&session)?;
                 print_last_assistant(&session);
             }
@@ -109,7 +126,13 @@ fn resolve_permission_mode() -> PermissionMode {
 }
 
 /// Returns `true` if the REPL should exit.
-fn handle_slash_command(input: &str, session: &mut Session, store: &SessionStore) -> bool {
+fn handle_slash_command(
+    input: &str,
+    session: &mut Session,
+    store: &SessionStore,
+    last_trace: &Option<ExecutionTrace>,
+    tools: &ToolRegistry,
+) -> bool {
     use std::io::Write;
 
     let body = input.strip_prefix('/').unwrap_or(input).trim().to_string();
@@ -130,6 +153,28 @@ fn handle_slash_command(input: &str, session: &mut Session, store: &SessionStore
         "help" | "h" => {
             let _ = writeln!(stdout, "{}", HELP_TEXT);
         }
+        "tools" => {
+            let _ = writeln!(stdout, "Registered tools");
+            for name in tools.tool_names() {
+                let _ = writeln!(stdout, "- {name}");
+            }
+        }
+        "status" => {
+            let permission = resolve_permission_mode();
+            for line in render_status_lines(session, permission) {
+                let _ = writeln!(stdout, "{line}");
+            }
+        }
+        "trace" => match last_trace {
+            Some(trace) if !trace.is_empty() => {
+                for line in trace.render_lines() {
+                    let _ = writeln!(stdout, "{line}");
+                }
+            }
+            _ => {
+                let _ = writeln!(stdout, "no trace available");
+            }
+        },
         "clear" => {
             let current_id = session.session_id.clone();
             *session = Session::new(session.workspace_root.clone());
@@ -246,6 +291,24 @@ fn print_last_assistant(session: &Session) {
     }
 }
 
+fn render_status_lines(session: &Session, permission: PermissionMode) -> Vec<String> {
+    let runtime = std::env::var("CANDLE_CLI_RUNTIME").unwrap_or_else(|_| "mock".to_string());
+    let model = std::env::var("CANDLE_CLI_MODEL_ID")
+        .unwrap_or_else(|_| "Qwen/Qwen2-0.5B-Instruct".to_string());
+    let max_turns = std::env::var("CANDLE_CLI_MAX_TURNS").unwrap_or_else(|_| "20".to_string());
+
+    vec![
+        "Session".to_string(),
+        format!("- session_id: {}", session.session_id),
+        format!("- messages: {}", session.messages.len()),
+        format!("- workspace: {}", session.workspace_root),
+        format!("- permission: {:?}", permission),
+        format!("- runtime: {}", runtime),
+        format!("- model: {}", model),
+        format!("- max_turns: {}", max_turns),
+    ]
+}
+
 pub fn read_line(prompt: &str) -> io::Result<String> {
     use std::io::Write;
 
@@ -270,6 +333,9 @@ const HELP_TEXT: &str = r#"
   /system          查看当前系统提示词
   /clear           清空当前 session
   /session         查看当前 session 信息
+  /status          查看当前运行状态
+  /tools           查看当前可用工具列表
+  /trace           查看最近一次执行链路
   /list            列出所有已保存 session
   /resume <id>     恢复指定 session
   /save            保存当前 session

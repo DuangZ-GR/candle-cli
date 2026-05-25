@@ -31,6 +31,10 @@ impl ToolRegistry {
         }
     }
 
+    pub fn tool_names(&self) -> Vec<&'static str> {
+        vec!["pwd", "read", "glob", "grep", "edit", "shell"]
+    }
+
     pub fn execute(&self, name: &str, input_json: &str) -> ToolResult {
         match name {
             "pwd" => Ok(pwd::run()),

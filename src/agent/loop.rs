@@ -1,4 +1,5 @@
 use crate::agent::tool_call::{parse_tool_call, ToolCallParseError};
+use crate::agent::trace::{ExecutionTrace, TraceEvent};
 use crate::agent::turn::finish_turn;
 use crate::model::runtime::CandleTargetRuntime;
 use crate::model::types::{ToolCallIntent, TurnResult};
@@ -14,7 +15,25 @@ pub fn run_single_turn<R: CandleTargetRuntime>(
     tools: &ToolRegistry,
     policy: &PermissionPolicy,
 ) -> Result<TurnResult, String> {
-    run_single_turn_with_limit(session, runtime, tools, policy, DEFAULT_MAX_TOOL_STEPS)
+    let mut trace = ExecutionTrace::new();
+    run_single_turn_with_trace(session, runtime, tools, policy, &mut trace)
+}
+
+pub fn run_single_turn_with_trace<R: CandleTargetRuntime>(
+    session: &mut Session,
+    runtime: &mut R,
+    tools: &ToolRegistry,
+    policy: &PermissionPolicy,
+    trace: &mut ExecutionTrace,
+) -> Result<TurnResult, String> {
+    run_single_turn_with_limit_and_trace(
+        session,
+        runtime,
+        tools,
+        policy,
+        DEFAULT_MAX_TOOL_STEPS,
+        trace,
+    )
 }
 
 pub fn run_single_turn_with_limit<R: CandleTargetRuntime>(
@@ -24,14 +43,33 @@ pub fn run_single_turn_with_limit<R: CandleTargetRuntime>(
     policy: &PermissionPolicy,
     max_steps: usize,
 ) -> Result<TurnResult, String> {
+    let mut trace = ExecutionTrace::new();
+    run_single_turn_with_limit_and_trace(session, runtime, tools, policy, max_steps, &mut trace)
+}
+
+pub fn run_single_turn_with_limit_and_trace<R: CandleTargetRuntime>(
+    session: &mut Session,
+    runtime: &mut R,
+    tools: &ToolRegistry,
+    policy: &PermissionPolicy,
+    max_steps: usize,
+    trace: &mut ExecutionTrace,
+) -> Result<TurnResult, String> {
     let verbose = verbose_enabled();
 
     for step in 0..max_steps {
+        trace.push(TraceEvent::BuildTurnRequest);
         let request = crate::context::builder::build_turn_request(session, tools_json())?;
+
+        trace.push(TraceEvent::RuntimeGenerateTurn);
         let result = runtime.generate_turn(request)?;
 
+        trace.push(TraceEvent::ParseToolCall);
         match parse_tool_call(&result.final_text) {
             Ok(Some(tool_call)) => {
+                trace.push(TraceEvent::ToolCall {
+                    name: tool_call.name.clone(),
+                });
                 trace_tool_step(verbose, step + 1, max_steps, &tool_call);
                 append_tool_call(session, &tool_call);
                 let (output, is_error) = if !policy.allows(&tool_call.name) {
@@ -58,11 +96,16 @@ pub fn run_single_turn_with_limit<R: CandleTargetRuntime>(
                         Err(err) => (format_tool_error(&tool_call.name, &err), true),
                     }
                 };
+                trace.push(TraceEvent::ToolResult {
+                    tool: tool_call.name.clone(),
+                    status: if is_error { "error" } else { "ok" }.to_string(),
+                });
                 trace_tool_result(verbose, &output, is_error);
                 append_tool_result(session, &tool_call.id, output, is_error);
             }
             Ok(None) => {
                 let final_text = finish_turn(result.final_text.clone());
+                trace.push(TraceEvent::FinalAnswer);
                 append_assistant_text(session, final_text.clone());
                 return Ok(TurnResult {
                     final_text,
@@ -78,6 +121,7 @@ pub fn run_single_turn_with_limit<R: CandleTargetRuntime>(
     }
 
     let final_text = format!("stopped after reaching maximum tool steps ({max_steps})");
+    trace.push(TraceEvent::FinalAnswer);
     append_assistant_text(session, final_text.clone());
     Ok(TurnResult {
         final_text,
