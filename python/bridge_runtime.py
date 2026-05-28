@@ -171,6 +171,7 @@ class BridgeRuntime:
             "max_tokens": self._config.max_new_tokens,
             "temperature": self._config.temperature,
             "top_p": self._config.top_p,
+            "thinking": {"type": "disabled"},
         }
 
         url = self._config.api_base_url.rstrip("/") + "/chat/completions"

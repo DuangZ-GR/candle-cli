@@ -13,7 +13,7 @@ use std::path::PathBuf;
 pub fn run_repl(session_dir: PathBuf) -> io::Result<()> {
     let store = SessionStore::new(session_dir);
     let mut session = Session::new(std::env::current_dir()?.display().to_string());
-    let tools = ToolRegistry::default_read_only();
+    let tools = ToolRegistry::default_workspace_write();
 
     print_banner(&session);
 
@@ -70,7 +70,7 @@ pub fn run_repl(session_dir: PathBuf) -> io::Result<()> {
 pub fn run_prompt(session_dir: PathBuf, input: String) -> io::Result<()> {
     let store = SessionStore::new(session_dir);
     let mut session = Session::new(std::env::current_dir()?.display().to_string());
-    let tools = ToolRegistry::default_read_only();
+    let tools = ToolRegistry::default_workspace_write();
 
     session.messages.push(Message {
         role: MessageRole::User,
