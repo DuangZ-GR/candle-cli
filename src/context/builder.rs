@@ -49,30 +49,3 @@ pub fn build_turn_request(session: &mut Session, tools_json: &str) -> Result<Tur
         tools_json: tools_json.to_string(),
     })
 }
-
-fn resolve_system_prompt_with_tools(tools_json: &str) -> String {
-    let base = resolve_system_prompt();
-    if tools_json.trim().is_empty() || tools_json.trim() == "[]" {
-        return base;
-    }
-
-    format!(
-        "{base}\n\n\
-TOOL USE PROTOCOL (MUST FOLLOW EXACTLY):\n\
-\n\
-When you need to inspect files, edit code, or run commands, output a JSON tool call \
-wrapped in <tool_call> and </tool_call> tags. Format:\n\
-\n\
-<tool_call>{{\"id\":\"<unique-id>\",\"name\":\"<tool-name>\",\"input\":{{...}}}}</tool_call>\n\
-\n\
-RULES:\n\
-1. The content between <tool_call> and </tool_call> MUST be valid JSON.\n\
-2. The JSON MUST have exactly 3 fields: \"id\" (string), \"name\" (string), \"input\" (object).\n\
-3. Do NOT use XML inside the <tool_call> block. Use only JSON.\n\
-4. Do NOT mix tool calls with final answer text in the same message.\n\
-5. After receiving tool results, either request another tool OR give the final answer.\n\
-6. When done, output your final answer as normal text without any <tool_call> tags.\n\
-\n\
-Available tools: {tools_json}"
-    )
-}

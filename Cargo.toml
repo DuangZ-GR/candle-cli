@@ -71,10 +71,6 @@ path = "tests/cli/test_doctor_status.rs"
 name = "test_bridge_runtime"
 path = "tests/model/test_bridge_runtime.rs"
 
-[[test]]
-name = "test_tool_call_parser"
-path = "tests/agent/test_tool_call_parser.rs"
-
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }

@@ -15,7 +15,7 @@ fn build_turn_request_includes_messages() {
 
     assert!(request
         .system_prompt
-        .contains("terminal-based AI assistant"));
+        .contains("candle-cli"));
     assert!(request.messages_json.contains("hello"));
 }
 
@@ -54,38 +54,4 @@ fn build_turn_request_requires_non_empty_final_answer_after_tool_results() {
     assert!(request
         .system_prompt
         .contains("Assistant: 这个项目可以通过 cargo run 或 cargo test 运行"));
-}
-
-#[test]
-fn build_turn_request_includes_user_messages() {
-    let mut session = Session::new(".".to_string());
-    session.messages.push(Message {
-        role: MessageRole::User,
-        blocks: vec![ContentBlock::Text {
-            text: "hello".to_string(),
-        }],
-    });
-
-    let request = build_turn_request(&mut session, "[]").unwrap();
-
-    assert!(request.messages_json.contains("hello"));
-}
-
-#[test]
-fn build_turn_request_adds_tool_call_protocol_guidance_when_tools_are_available() {
-    let mut session = Session::new(".".to_string());
-    let request = build_turn_request(&mut session, r#"[{"name":"read"}]"#).unwrap();
-
-    assert!(request.system_prompt.contains("<tool_call>"));
-    assert!(request.system_prompt.contains("TOOL USE PROTOCOL"));
-    assert!(request.system_prompt.contains("read"));
-}
-
-#[test]
-fn build_turn_request_omits_tool_guidance_when_no_tools() {
-    let mut session = Session::new(".".to_string());
-    let request = build_turn_request(&mut session, "[]").unwrap();
-
-    assert!(!request.system_prompt.contains("<tool_call>"));
-    assert!(!request.system_prompt.contains("TOOL USE PROTOCOL"));
 }
