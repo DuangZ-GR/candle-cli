@@ -12,55 +12,51 @@ def extract_latest_user_text(request: dict) -> str:
     return ""
 
 
-def build_chat_messages(messages_json: str) -> list[dict]:
-    """Convert Rust session messages into chat messages for the API.
-
-    Uses a plain-text format for tool calls and results (not native OpenAI
-    tool_calls) so that the conversation format stays consistent with
-    the <tool_call> text protocol described in the system prompt.
-
-    - ToolCall blocks are rendered as assistant text showing the JSON.
-    - ToolResult blocks are rendered as user text showing the output.
-    """
+def build_chat_messages(messages_json: str) -> list[dict[str, str]]:
     messages = json.loads(messages_json)
-    chat_messages: list[dict] = []
+    chat_messages: list[dict[str, str]] = []
     for msg in messages:
         role = msg.get("role", "").lower()
-        blocks = msg.get("blocks", [])
+        text_parts = []
+        for block in msg.get("blocks", []):
+            text_block = block.get("Text")
+            if text_block and text_block.get("text"):
+                text_parts.append(text_block["text"])
 
-        # Build text representation from all blocks
-        parts: list[str] = []
-        for block in blocks:
-            if "Text" in block:
-                text = block["Text"].get("text", "")
-                if text:
-                    parts.append(text)
-            elif "ToolCall" in block:
-                tc = block["ToolCall"]
-                parts.append(
-                    '<tool_call>{"id":%s,"name":%s,"input":%s}</tool_call>'
-                    % (
-                        json.dumps(tc.get("id", "")),
-                        json.dumps(tc.get("name", "")),
-                        tc.get("input", "{}"),
-                    )
-                )
-            elif "ToolResult" in block:
-                tr = block["ToolResult"]
-                label = "error" if tr.get("is_error") else "result"
-                parts.append(
-                    "Tool %s (call %s): %s"
-                    % (
-                        label,
-                        tr.get("tool_call_id", ""),
-                        tr.get("output", ""),
-                    )
-                )
+            tool_call = block.get("ToolCall")
+            if tool_call:
+                text_parts.append(_format_tool_call(tool_call))
 
-        # Map Tool role messages to user role for the API
-        api_role = "user" if role == "tool" else role
-        chat_messages.append(
-            {"role": api_role, "content": "\n".join(parts)}
-        )
+            tool_result = block.get("ToolResult")
+            if tool_result:
+                text_parts.append(_format_tool_result(tool_result))
 
+        content = "\n".join(text_parts)
+        if role == "tool":
+            role = "user"
+        chat_messages.append({"role": role, "content": content})
     return chat_messages
+
+
+def _format_tool_call(tool_call: dict) -> str:
+    input_value = tool_call.get("input", "{}")
+    try:
+        input_json = json.loads(input_value) if isinstance(input_value, str) else input_value
+    except json.JSONDecodeError:
+        input_json = {}
+
+    payload = {
+        "id": tool_call.get("id", "call-unknown"),
+        "name": tool_call.get("name", "unknown"),
+        "input": input_json,
+    }
+    compact = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    return f"<tool_call>{compact}</tool_call>"
+
+
+def _format_tool_result(tool_result: dict) -> str:
+    tool_call_id = tool_result.get("tool_call_id", "call-unknown")
+    output = tool_result.get("output", "")
+    is_error = bool(tool_result.get("is_error", False))
+    prefix = "Tool error" if is_error else "Tool result"
+    return f"{prefix} for {tool_call_id}:\n{output}"

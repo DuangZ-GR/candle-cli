@@ -11,14 +11,15 @@ impl PermissionPolicy {
 
     pub fn allows(&self, tool_name: &str) -> bool {
         match self.mode {
-            PermissionMode::ReadOnly => matches!(tool_name, "read" | "glob" | "grep" | "pwd"),
-            PermissionMode::WorkspaceWrite | PermissionMode::DangerFullAccess => true,
-            PermissionMode::Prompt => matches!(tool_name, "read" | "glob" | "grep" | "pwd"),
+            PermissionMode::ReadOnly => matches!(tool_name, "pwd" | "read" | "glob" | "grep"),
+            PermissionMode::WorkspaceWrite => true,
+            PermissionMode::DangerFullAccess => true,
+            PermissionMode::Prompt => true,
         }
     }
 
     pub fn requires_prompt(&self, tool_name: &str) -> bool {
         matches!(self.mode, PermissionMode::Prompt)
-            && matches!(tool_name, "write" | "edit" | "shell")
+            && matches!(tool_name, "shell" | "edit" | "write")
     }
 }

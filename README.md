@@ -3,9 +3,18 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 ![Rust Edition](https://img.shields.io/badge/Rust-2021-orange.svg)
 
-Rust-first terminal AI assistant with multi-turn conversation, session persistence, and flexible model backends.
+Rust-first terminal AI assistant for DeepSeek API, local model backends, persistent sessions, and agent-style tool use.
 
-## 快速开始
+## Highlights
+
+- **Terminal-native AI chat**: one-shot prompts and multi-turn REPL.
+- **DeepSeek-first API mode**: works with OpenAI-compatible chat completion APIs.
+- **Local fallback**: run through Ollama, vLLM, or local `transformers` models.
+- **Persistent sessions**: save, list, resume, and clear conversations.
+- **Agent tool loop**: read, search, edit, and shell tools with configurable permissions.
+- **Rust core + Python bridge**: small CLI surface with flexible model execution.
+
+## Quickstart
 
 ```bash
 git clone https://github.com/DuangZ-GR/candle-cli.git
@@ -13,202 +22,152 @@ cd candle-cli
 cargo build
 ```
 
-## 推荐用法：API 模式（Ollama）
-
-最简单的方式是通过 Ollama 运行本地模型：
+### Recommended: DeepSeek API
 
 ```bash
-# 1. 安装并启动 Ollama，下载一个小模型
-ollama pull qwen2:0.5b
-
-# 2. 配置环境变量
-export CANDLE_CLI_API_BASE_URL="http://localhost:11434/v1"
-export CANDLE_CLI_API_KEY="ollama"
-export CANDLE_CLI_MODEL_ID="qwen2:0.5b"
 export CANDLE_CLI_RUNTIME="bridge"
-export CANDLE_CLI_VERBOSE="1"          # 可选：查看诊断信息
+export CANDLE_CLI_API_BASE_URL="https://api.deepseek.com/v1"
+export CANDLE_CLI_API_KEY="YOUR_DEEPSEEK_API_KEY"
+export CANDLE_CLI_MODEL_ID="deepseek-v4-flash"
 
-# 3. 运行
 cargo run -- prompt "你好，介绍一下你自己"
-cargo run --                           # 交互式 REPL
-```
-
----
-
-## 运行模式
-
-### Prompt 模式（单轮）
-
-```bash
-cargo run -- prompt "你的问题"
-```
-
-单轮对话，输出回复后退出，结果保存到 session。
-
-### REPL 模式（多轮交互）
-
-```bash
 cargo run --
 ```
 
-进入交互式 REPL，支持多轮对话、slash 命令、session 管理。
+If DeepSeek publishes a different model ID, replace `deepseek-v4-flash` with the ID shown in the DeepSeek console or official docs.
 
-### Doctor 模式（状态查看）
-
-```bash
-cargo run -- doctor
-```
-
----
-
-## REPL Slash 命令
-
-| 命令 | 说明 |
-|------|------|
-| `/exit`, `/quit`, `/q` | 退出 REPL（自动保存 session） |
-| `/help`, `/h` | 显示所有命令 |
-| `/session`, `/info` | 查看当前 session 信息 |
-| `/system` | 查看当前系统提示词 |
-| `/clear` | 清空当前 session |
-| `/list`, `/ls` | 列出所有已保存的 session |
-| `/resume <id>` | 恢复指定 session |
-| `/save` | 显式保存当前 session |
-
----
-
-## 两种模型后端
-
-### API 模式（推荐）
-
-通过 OpenAI 兼容的 HTTP API 调用模型（Ollama / vLLM / OpenAI 等）。
-
-**最小配置：**
+### Local fallback: Ollama
 
 ```bash
+ollama pull qwen2:0.5b
+
+export CANDLE_CLI_RUNTIME="bridge"
 export CANDLE_CLI_API_BASE_URL="http://localhost:11434/v1"
 export CANDLE_CLI_API_KEY="ollama"
 export CANDLE_CLI_MODEL_ID="qwen2:0.5b"
-export CANDLE_CLI_RUNTIME="bridge"
+
+cargo run -- prompt "你好，介绍一下你自己"
 ```
 
-**常用后端：**
+## Usage
 
-| 后端 | CANDLE_CLI_API_BASE_URL | CANDLE_CLI_API_KEY | CANDLE_CLI_MODEL_ID |
-|------|--------------------------|---------------------|----------------------|
+| Command | Purpose |
+|---------|---------|
+| `cargo run -- prompt "your question"` | Run one prompt and exit. |
+| `cargo run --` | Start the interactive REPL. |
+| `cargo run -- doctor` | Print runtime and configuration status. |
+
+### REPL commands
+
+| Command | Purpose |
+|---------|---------|
+| `/help`, `/h` | Show available commands. |
+| `/exit`, `/quit`, `/q` | Exit and save the session. |
+| `/session`, `/info` | Show current session metadata. |
+| `/system` | Show the active system prompt. |
+| `/clear` | Clear the current session. |
+| `/list`, `/ls` | List saved sessions. |
+| `/resume <id>` | Resume a saved session. |
+| `/save` | Save the current session now. |
+
+## Model backends
+
+`candle-cli` uses the Python bridge runtime for real model calls. Set `CANDLE_CLI_RUNTIME=bridge`, then choose either an OpenAI-compatible API or a local model path.
+
+### OpenAI-compatible APIs
+
+| Backend | `CANDLE_CLI_API_BASE_URL` | `CANDLE_CLI_API_KEY` | `CANDLE_CLI_MODEL_ID` |
+|---------|---------------------------|----------------------|-----------------------|
+| DeepSeek | `https://api.deepseek.com/v1` | `YOUR_DEEPSEEK_API_KEY` | `deepseek-v4-flash` |
 | Ollama | `http://localhost:11434/v1` | `ollama` | `qwen2:0.5b` |
 | vLLM | `http://localhost:8000/v1` | `not-needed` | `Qwen/Qwen2-0.5B-Instruct` |
 | OpenAI | `https://api.openai.com/v1` | `sk-xxx` | `gpt-4o-mini` |
 
-### 本地模型
-
-直接通过 `transformers` 加载本地模型文件推理，无需网络。
-
-```bash
-export CANDLE_CLI_MODEL_ID="Qwen/Qwen2-0.5B-Instruct"
-export CANDLE_CLI_MODEL_DEVICE="cpu"
-export CANDLE_CLI_RUNTIME="bridge"
-export CANDLE_CLI_LOCAL_FILES_ONLY="false"   # 首次需设置为 false 以下载模型
-cargo run -- prompt "你好"
-```
-
----
-
-## 诊断输出
-
-设置 `CANDLE_CLI_VERBOSE=1` 后，worker 通过 stderr 输出详细信息：
-
-```
-[candle-cli] API mode active, skipping local model load
-[candle-cli]   api_base_url: http://localhost:11434/v1
-[candle-cli] API call: POST http://localhost:11434/v1/chat/completions
-[candle-cli]   messages: 2 (system=True)
-[candle-cli]   model: qwen2:0.5b
-[candle-cli]   max_tokens: 512
-[candle-cli]   response in 1.4s
-[candle-cli]   tokens: prompt=87 completion=66 total=153
-[candle-cli]   response length: 24 chars
-```
-
----
-
-## 环境变量完整列表
-
-### 模型与后端
-
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `CANDLE_CLI_MODEL_ID` | `Qwen/Qwen2-0.5B-Instruct` | 模型 ID 或本地路径 |
-| `CANDLE_CLI_MODEL_DEVICE` | auto | 设备：`cpu` / `cuda` / `auto` |
-| `CANDLE_CLI_LOCAL_FILES_ONLY` | `true` | 仅本地文件，不联网下载 |
-| `CANDLE_CLI_API_BASE_URL` | (空) | API 地址，设置后自动切换 API 模式 |
-| `CANDLE_CLI_API_KEY` | (空) | API Key |
-| `CANDLE_CLI_RUNTIME` | `mock` | runtime 类型：`mock` / `bridge` |
-
-### 生成参数
-
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `CANDLE_CLI_MAX_NEW_TOKENS` | `512` | 最大生成 token 数 |
-| `CANDLE_CLI_TEMPERATURE` | `0.7` | 采样温度 |
-| `CANDLE_CLI_TOP_P` | `0.9` | top-p 采样 |
-
-### 对话控制
-
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `CANDLE_CLI_SYSTEM_PROMPT` | (内置默认) | 系统提示词 |
-| `CANDLE_CLI_MAX_TURNS` | `20` | 最大保留对话轮数（超出自动裁剪旧消息） |
-
-### 其他
-
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `CANDLE_CLI_VERBOSE` | `false` | 开启 stderr 诊断输出 |
-| `CANDLE_CLI_MODEL_CONFIG` | (空) | JSON 配置文件路径（可选） |
-| `CANDLE_CLI_SESSION_DIR` | 系统临时目录 | session 持久化目录 |
-
----
-
-## 当前功能
-
-- 多轮对话 REPL + 单轮 prompt 模式
-- Session 持久化：保存、恢复、列表、清空
-- 上下文窗口管理：自动裁剪旧消息，保持对话在 token 预算内
-- 系统提示词可配置
-- 两种模型后端：本地 transformers / 远程 OpenAI 兼容 API
-- 纯环境变量驱动，零配置文件
-- Verbose 诊断：token 用量、API 请求详情、显存状态
-
-## Python 依赖
-
-Bridge runtime 和示例脚本需要 Python 依赖：
+### Local `transformers` model
 
 ```bash
 python3 -m pip install -r requirements.txt
+
+export CANDLE_CLI_RUNTIME="bridge"
+export CANDLE_CLI_MODEL_ID="Qwen/Qwen2-0.5B-Instruct"
+export CANDLE_CLI_MODEL_DEVICE="cpu"
+export CANDLE_CLI_LOCAL_FILES_ONLY="false"
+
+cargo run -- prompt "你好"
 ```
 
-如果只使用 API 模式，通常不需要本地 GPU；如果使用本地 transformers 推理，请根据你的 CUDA/CPU 环境安装合适的 PyTorch wheel。
+## Agent tools and permissions
 
-## 示例脚本
+Models can request tools by emitting text JSON tool calls:
 
-仓库包含两个独立示例，方便在不启动 Rust CLI 的情况下验证模型路径：
+```text
+<tool_call>{"id":"call-1","name":"read","input":{"file_path":"README.md"}}</tool_call>
+```
+
+Available tools:
+
+| Tool | Purpose |
+|------|---------|
+| `pwd` | Show the workspace directory. |
+| `read` | Read UTF-8 files inside the workspace. |
+| `glob` | Match files by glob pattern. |
+| `grep` | Search file contents. |
+| `edit` | Replace one exact text match in a file. |
+| `shell` | Run a shell command from the workspace root. |
+
+Control tool execution with `CANDLE_CLI_PERMISSION`:
+
+| Mode | Behavior |
+|------|----------|
+| `read-only` | Allow only `pwd`, `read`, `glob`, and `grep`. |
+| `workspace-write` | Allow all current tools without asking. |
+| `prompt` | Auto-allow read tools; confirm `edit`, `write`, and `shell`. |
+| `danger-full-access` | Allow all current tools without asking. |
+
+```bash
+CANDLE_CLI_PERMISSION=read-only cargo run -- prompt "读取 README.md 并总结"
+CANDLE_CLI_PERMISSION=prompt cargo run -- prompt "运行 cargo test 并总结失败原因"
+```
+
+## Configuration
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `CANDLE_CLI_RUNTIME` | `mock` | Runtime type: `mock` or `bridge`. |
+| `CANDLE_CLI_MODEL_ID` | `Qwen/Qwen2-0.5B-Instruct` | Model ID or local model path. |
+| `CANDLE_CLI_MODEL_DEVICE` | auto | Device: `cpu`, `cuda`, or `auto`. |
+| `CANDLE_CLI_LOCAL_FILES_ONLY` | `true` | Use only local model files. |
+| `CANDLE_CLI_API_BASE_URL` | empty | OpenAI-compatible API base URL. |
+| `CANDLE_CLI_API_KEY` | empty | API key for remote backends. |
+| `CANDLE_CLI_MAX_NEW_TOKENS` | `512` | Maximum generated tokens. |
+| `CANDLE_CLI_TEMPERATURE` | `0.7` | Sampling temperature. |
+| `CANDLE_CLI_TOP_P` | `0.9` | Top-p sampling. |
+| `CANDLE_CLI_SYSTEM_PROMPT` | built-in | Override the system prompt. |
+| `CANDLE_CLI_MAX_TURNS` | `20` | Maximum retained conversation turns. |
+| `CANDLE_CLI_PERMISSION` | `workspace-write` | Tool permission mode. |
+| `CANDLE_CLI_VERBOSE` | `false` | Print bridge diagnostics to stderr. |
+| `CANDLE_CLI_MODEL_CONFIG` | empty | Optional JSON config file path. |
+| `CANDLE_CLI_SESSION_DIR` | system temp dir | Session storage directory. |
+
+## Examples
 
 ```bash
 python3 examples/api_inference.py
 python3 examples/qwen3_local_inference.py
 ```
 
-- `examples/api_inference.py`：调用 OpenAI 兼容 API，例如 Ollama 或 vLLM。
-- `examples/qwen3_local_inference.py`：直接通过 transformers 加载本地模型。
+- `examples/api_inference.py`: test an OpenAI-compatible API backend.
+- `examples/qwen3_local_inference.py`: test a local `transformers` model.
 
-## 开发
+## Development
 
 ```bash
-# 运行所有测试
-cargo test
-python3 -m pytest python/test_bridge_runtime.py -q
-
-# 代码检查
 cargo fmt --check
 cargo clippy --all-targets --all-features -- -D warnings
+cargo test
+python3 -m pytest python/test_bridge_runtime.py -q
 ```
+
+## License
+
+MIT

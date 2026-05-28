@@ -248,3 +248,82 @@ fn repl_can_save_list_and_resume_session() {
     assert!(resumed_body.contains("hello from session one"));
     assert!(resumed_body.contains("more text"));
 }
+
+#[test]
+fn repl_trace_reports_last_execution_chain() {
+    let session_dir = tempdir().unwrap();
+    let mut cmd = Command::cargo_bin("candle-cli").unwrap();
+    let output = cmd
+        .current_dir(".")
+        .env("CANDLE_CLI_SESSION_DIR", session_dir.path())
+        .env("CANDLE_CLI_RUNTIME", "bridge")
+        .write_stdin("读取 README.md，总结如何运行项目\n/trace\n")
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Last trace"));
+    assert!(stdout.contains("build_turn_request"));
+    assert!(stdout.contains("runtime.generate_turn"));
+}
+
+#[test]
+fn repl_tools_lists_registered_tools() {
+    let session_dir = tempdir().unwrap();
+    let mut cmd = Command::cargo_bin("candle-cli").unwrap();
+    let output = cmd
+        .env("CANDLE_CLI_SESSION_DIR", session_dir.path())
+        .write_stdin("/tools\n")
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Registered tools"));
+    assert!(stdout.contains("- pwd"));
+    assert!(stdout.contains("- read"));
+    assert!(stdout.contains("- glob"));
+    assert!(stdout.contains("- grep"));
+    assert!(stdout.contains("- edit"));
+    assert!(stdout.contains("- shell"));
+}
+
+#[test]
+fn repl_trace_reports_empty_state_before_any_turn() {
+    let session_dir = tempdir().unwrap();
+    let mut cmd = Command::cargo_bin("candle-cli").unwrap();
+    let output = cmd
+        .env("CANDLE_CLI_SESSION_DIR", session_dir.path())
+        .write_stdin("/trace\n")
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("no trace available"));
+}
+
+#[test]
+fn repl_status_reports_runtime_snapshot() {
+    let session_dir = tempdir().unwrap();
+    let mut cmd = Command::cargo_bin("candle-cli").unwrap();
+    let output = cmd
+        .env("CANDLE_CLI_SESSION_DIR", session_dir.path())
+        .env("CANDLE_CLI_RUNTIME", "bridge")
+        .env("CANDLE_CLI_MODEL_ID", "deepseek-v4-flash")
+        .env("CANDLE_CLI_PERMISSION", "read-only")
+        .write_stdin("hello\n/status\n")
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Session"));
+    assert!(stdout.contains("session_id:"));
+    assert!(stdout.contains("messages:"));
+    assert!(stdout.contains("workspace:"));
+    assert!(stdout.contains("permission: ReadOnly"));
+    assert!(stdout.contains("runtime: bridge"));
+    assert!(stdout.contains("model: deepseek-v4-flash"));
+}

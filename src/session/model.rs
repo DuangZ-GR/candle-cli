@@ -1,4 +1,7 @@
 use serde::{Deserialize, Serialize};
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static SESSION_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MessageRole {
@@ -49,10 +52,13 @@ impl Session {
 }
 
 fn new_session_id() -> String {
+    use std::process;
     use std::time::{SystemTime, UNIX_EPOCH};
+
     let ts = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs())
+        .map(|d| d.as_millis())
         .unwrap_or(0);
-    format!("session-{ts}")
+    let counter = SESSION_COUNTER.fetch_add(1, Ordering::Relaxed);
+    format!("session-{ts}-{}-{counter}", process::id())
 }
