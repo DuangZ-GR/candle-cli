@@ -39,6 +39,8 @@ pub struct Session {
     pub session_id: String,
     pub workspace_root: String,
     pub messages: Vec<Message>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
 }
 
 impl Session {
@@ -47,6 +49,7 @@ impl Session {
             session_id: new_session_id(),
             workspace_root,
             messages: Vec::new(),
+            label: None,
         }
     }
 }

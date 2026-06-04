@@ -157,6 +157,20 @@ fn handle_slash_command(
         "help" | "h" => {
             let _ = writeln!(stdout, "{}", HELP_TEXT);
         }
+        "name" => {
+            if arg.is_empty() {
+                let _ = writeln!(stdout, "usage: /name <label>");
+                if let Some(ref label) = session.label {
+                    let _ = writeln!(stdout, "current name: {label}");
+                } else {
+                    let _ = writeln!(stdout, "current name: (none)");
+                }
+            } else {
+                session.label = Some(arg.clone());
+                store.save(session).ok();
+                let _ = writeln!(stdout, "session named: {arg}");
+            }
+        }
         "tools" => {
             let _ = writeln!(stdout, "Registered tools");
             for name in tools.tool_names() {
@@ -191,9 +205,13 @@ fn handle_slash_command(
             let _ = writeln!(stdout, "system prompt:\n{prompt}");
         }
         "session" | "info" => {
+            let name = session
+                .label
+                .as_deref()
+                .unwrap_or("(unnamed)");
             let _ = writeln!(
                 stdout,
-                "session: {} | messages: {} | workspace: {}",
+                "session: {} | name: {name} | messages: {} | workspace: {}",
                 session.session_id,
                 session.messages.len(),
                 session.workspace_root,
@@ -206,10 +224,13 @@ fn handle_slash_command(
                 } else {
                     let _ = writeln!(stdout, "saved sessions:");
                     for id in ids {
-                        let meta = store.load(&id).map(|s| s.messages.len());
+                        let meta = store.load(&id).map(|s| {
+                            let label = s.label.as_deref().unwrap_or("-");
+                            (s.messages.len(), label.to_string())
+                        });
                         match meta {
-                            Ok(n) => {
-                                let _ = writeln!(stdout, "  {id}  ({n} messages)");
+                            Ok((n, label)) => {
+                                let _ = writeln!(stdout, "  {id}  [{label}]  ({n} messages)");
                             }
                             Err(_) => {
                                 let _ = writeln!(stdout, "  {id}");
@@ -316,6 +337,7 @@ fn render_status_lines(session: &Session, permission: PermissionMode) -> Vec<Str
 const HELP_TEXT: &str = r#"
   /exit, /quit     退出 REPL
   /help            显示帮助
+  /name <label>    为当前会话命名
   /system          查看当前系统提示词
   /clear           清空当前 session
   /session         查看当前 session 信息
