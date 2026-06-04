@@ -21,12 +21,16 @@ pub fn run_repl(session_dir: PathBuf) -> io::Result<()> {
     let policy = PermissionPolicy::new(resolve_permission_mode());
     let mut last_trace: Option<ExecutionTrace> = None;
 
+    let mut rl = rustyline::DefaultEditor::new().map_err(io::Error::other)?;
+
     print_banner(&session);
 
-    while let Ok(input) = read_line("> ") {
+    while let Ok(input) = rl.readline("> ") {
         if input.is_empty() {
             continue;
         }
+
+        let _ = rl.add_history_entry(&input);
 
         // slash command dispatch
         if input.starts_with('/') {
@@ -307,24 +311,6 @@ fn render_status_lines(session: &Session, permission: PermissionMode) -> Vec<Str
         format!("- model: {}", model),
         format!("- max_turns: {}", max_turns),
     ]
-}
-
-pub fn read_line(prompt: &str) -> io::Result<String> {
-    use std::io::Write;
-
-    let mut stdout = io::stdout();
-    write!(stdout, "{}", prompt)?;
-    stdout.flush()?;
-
-    let mut buffer = String::new();
-    let n = io::stdin().read_line(&mut buffer)?;
-    if n == 0 {
-        return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "EOF"));
-    }
-    while matches!(buffer.chars().last(), Some('\n' | '\r')) {
-        buffer.pop();
-    }
-    Ok(buffer)
 }
 
 const HELP_TEXT: &str = r#"
