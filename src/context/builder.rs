@@ -1,7 +1,7 @@
 use crate::context::budget::estimate_tokens_json;
 use crate::context::compact::compact_session;
 use crate::model::types::TurnRequest;
-use crate::session::model::Session;
+use crate::session::model::{ContentBlock, MessageRole, Session};
 
 /// Default system prompt for the CLI assistant.
 pub const DEFAULT_SYSTEM_PROMPT: &str = "\
@@ -13,6 +13,9 @@ without unnecessary refactoring. When you don't know something, say so.";
 
 /// Maximum user-assistant turns to keep in context. Configurable via env var.
 pub const DEFAULT_MAX_TURNS: usize = 20;
+
+/// Maximum lines of grep-RAG results to inject.
+const RAG_MAX_LINES: usize = 10;
 
 pub fn resolve_system_prompt() -> String {
     std::env::var("CANDLE_CLI_SYSTEM_PROMPT").unwrap_or_else(|_| DEFAULT_SYSTEM_PROMPT.to_string())
@@ -36,9 +39,15 @@ pub fn resolve_max_turns() -> usize {
         .unwrap_or(DEFAULT_MAX_TURNS)
 }
 
-pub fn build_turn_request(session: &mut Session, tools_json: &str) -> Result<TurnRequest, String> {
+pub fn build_turn_request(
+    session: &mut Session,
+    tools_json: &str,
+) -> Result<TurnRequest, String> {
     let max_turns = resolve_max_turns();
     compact_session(session, max_turns);
+
+    // Pre-search: inject grep results into the last user message if applicable.
+    inject_rag_context(session);
 
     let messages_json = serde_json::to_string(&session.messages).map_err(|e| e.to_string())?;
     let _token_est = estimate_tokens_json(&messages_json);
@@ -48,4 +57,116 @@ pub fn build_turn_request(session: &mut Session, tools_json: &str) -> Result<Tur
         messages_json,
         tools_json: tools_json.to_string(),
     })
+}
+
+// ── grep-RAG ────────────────────────────────────────────────────────────
+
+fn inject_rag_context(session: &mut Session) {
+    let question = match last_user_text(session) {
+        Some(text) => text,
+        None => return,
+    };
+
+    if !is_code_related(&question) {
+        return;
+    }
+
+    let keywords = extract_keywords(&question);
+    if keywords.is_empty() {
+        return;
+    }
+
+    // Run grep for each keyword against src/ only, take first RAG_MAX_LINES.
+    let mut hits: Vec<String> = Vec::new();
+    for kw in &keywords {
+        if hits.len() >= RAG_MAX_LINES {
+            break;
+        }
+        if let Ok(output) = crate::tools::builtin::grep::run(kw, Some("src")) {
+            for line in output.lines().take(RAG_MAX_LINES - hits.len()) {
+                hits.push(line.to_string());
+            }
+        }
+    }
+
+    if hits.is_empty() {
+        return;
+    }
+
+    let rag_block = format!(
+        "The following code may be relevant to the question:\n{}\n\nQuestion: {}",
+        hits.join("\n"),
+        question
+    );
+
+    // Replace the last user message text with the augmented version.
+    if let Some(msg) = session.messages.iter_mut().rev().find(|m| m.role == MessageRole::User) {
+        if let Some(block) = msg.blocks.first_mut() {
+            if let ContentBlock::Text { text } = block {
+                *text = rag_block;
+            }
+        }
+    }
+}
+
+fn last_user_text(session: &Session) -> Option<String> {
+    for msg in session.messages.iter().rev() {
+        if msg.role == MessageRole::User {
+            for block in &msg.blocks {
+                if let ContentBlock::Text { text } = block {
+                    return Some(text.clone());
+                }
+            }
+        }
+    }
+    None
+}
+
+fn is_code_related(text: &str) -> bool {
+    let lowered = text.to_lowercase();
+
+    let chat_patterns = [
+        "你好", "hi", "hello", "hey", "谢谢", "thanks", "thank you",
+        "再见", "bye", "goodbye", "早上好", "晚上好", "good morning",
+        "good evening", "ok", "好的", "嗯", "哦",
+    ];
+    let trimmed = lowered.trim();
+    for pat in &chat_patterns {
+        if trimmed == *pat || trimmed.starts_with(pat) && trimmed.len() <= pat.len() + 3 {
+            return false;
+        }
+    }
+
+    // Must have at least some substance
+    trimmed.len() > 10
+}
+
+fn extract_keywords(text: &str) -> Vec<String> {
+    let mut seen = std::collections::HashSet::new();
+    let mut keywords: Vec<String> = Vec::new();
+
+    // Split by common delimiters and take meaningful words
+    for raw in text.split(|c: char| !c.is_alphanumeric() && c != '_' && c != '-') {
+        let word = raw.trim().to_lowercase();
+        if word.len() < 3 || word.len() > 40 {
+            continue;
+        }
+        // Skip very common words
+        if matches!(
+            word.as_str(),
+            "the" | "and" | "for" | "with" | "that" | "this" | "from"
+                | "what" | "when" | "where" | "which" | "how" | "does" | "can"
+                | "你" | "我" | "他" | "她" | "它" | "是" | "的" | "了"
+                | "在" | "有" | "不" | "这" | "那" | "什么" | "怎么" | "为什么"
+                | "一个" | "一下" | "帮我" | "请" | "可以"
+        ) {
+            continue;
+        }
+        if seen.insert(word.clone()) {
+            keywords.push(word);
+        }
+    }
+
+    keywords.truncate(4);
+    keywords
 }
