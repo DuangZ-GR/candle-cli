@@ -4,4 +4,5 @@ pub mod grep;
 pub mod pwd;
 pub mod read;
 pub mod shell;
+pub mod web_search;
 pub mod write;

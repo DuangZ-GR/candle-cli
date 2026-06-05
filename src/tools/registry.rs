@@ -1,4 +1,4 @@
-use crate::tools::builtin::{edit, glob, grep, pwd, read, shell, write};
+use crate::tools::builtin::{edit, glob, grep, pwd, read, shell, web_search, write};
 use crate::tools::types::ToolResult;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -32,7 +32,7 @@ impl ToolRegistry {
     }
 
     pub fn tool_names(&self) -> Vec<&'static str> {
-        vec!["pwd", "read", "glob", "grep", "edit", "shell"]
+        vec!["pwd", "read", "glob", "grep", "web_search", "edit", "shell"]
     }
 
     pub fn execute(&self, name: &str, input_json: &str) -> ToolResult {
@@ -79,6 +79,15 @@ impl ToolRegistry {
                         .to_str()
                         .ok_or_else(|| "non-utf8 path".to_string())?,
                 )
+            }
+            "web_search" => {
+                let value: serde_json::Value =
+                    serde_json::from_str(input_json).map_err(|e| e.to_string())?;
+                let query = value
+                    .get("query")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| "missing query".to_string())?;
+                web_search::run(query)
             }
             "shell" if self.allow_mutation => {
                 let value: serde_json::Value =

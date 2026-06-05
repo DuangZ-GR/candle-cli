@@ -224,6 +224,7 @@ fn tools_json() -> &'static str {
   {"name":"read","description":"Read a UTF-8 file","input_schema":{"type":"object","properties":{"file_path":{"type":"string"}},"required":["file_path"]}},
   {"name":"glob","description":"Find files matching a simple glob pattern","input_schema":{"type":"object","properties":{"pattern":{"type":"string"}},"required":["pattern"]}},
   {"name":"grep","description":"Search files for a substring","input_schema":{"type":"object","properties":{"pattern":{"type":"string"},"path":{"type":"string"}},"required":["pattern"]}},
+  {"name":"web_search","description":"Search the web via DuckDuckGo and return text results","input_schema":{"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}},
   {"name":"edit","description":"Replace exactly one string occurrence in an existing file","input_schema":{"type":"object","properties":{"file_path":{"type":"string"},"old_string":{"type":"string"},"new_string":{"type":"string"}},"required":["file_path","old_string","new_string"]}},
   {"name":"shell","description":"Run a shell command and return its output","input_schema":{"type":"object","properties":{"command":{"type":"string"}},"required":["command"]}}
 ]"#
