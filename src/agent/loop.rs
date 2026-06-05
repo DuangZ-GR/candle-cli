@@ -6,6 +6,7 @@ use crate::model::types::{ToolCallIntent, TurnResult};
 use crate::permissions::policy::PermissionPolicy;
 use crate::session::model::{ContentBlock, Message, MessageRole, Session};
 use crate::tools::registry::ToolRegistry;
+use crate::ui::spinner::Spinner;
 
 const DEFAULT_MAX_TOOL_STEPS: usize = 8;
 
@@ -62,7 +63,10 @@ pub fn run_single_turn_with_limit_and_trace<R: CandleTargetRuntime>(
         let request = crate::context::builder::build_turn_request(session, tools_json())?;
 
         trace.push(TraceEvent::RuntimeGenerateTurn);
-        let result = runtime.generate_turn(request)?;
+        let mut spinner = Spinner::start();
+        let result = runtime.generate_turn(request);
+        spinner.stop();
+        let result = result?;
 
         trace.push(TraceEvent::ParseToolCall);
         match parse_tool_call(&result.final_text) {
