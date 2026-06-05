@@ -3,27 +3,47 @@ use std::process::Command;
 pub fn run(query: &str) -> Result<String, String> {
     let encoded = query.replace(' ', "+");
 
-    // Try DuckDuckGo Lite first (works outside China), then Sogou (works inside China).
-    for (name, url) in [
+    // DuckDuckGo Lite first (simple HTML), then Sogou (works inside China).
+    let urls: &[(&str, &str)] = &[
         (
-            "DuckDuckGo",
-            format!("https://lite.duckduckgo.com/lite/?q={encoded}"),
+            "https://lite.duckduckgo.com/lite/?q={query}",
+            &encoded,
         ),
         (
-            "Sogou",
-            format!("https://www.sogou.com/web?query={encoded}"),
+            "https://www.sogou.com/web?query={query}",
+            &encoded,
         ),
-    ] {
+    ];
+
+    for (template, q) in urls {
+        let url = template.replace("{query}", q);
+
+        // Use Python for proper multiline HTML cleaning.
         let script = format!(
-            "curl -sL --connect-timeout 5 --max-time 10 '{url}' \
-             -H 'User-Agent: Mozilla/5.0' 2>/dev/null | \
-             sed 's/<script[^>]*>.*<\\/script>//g' | \
-             sed 's/<style[^>]*>.*<\\/style>//g' | \
-             sed 's/<[^>]*>//g' | \
-             sed 's/&amp;/&/g; s/&lt;/</g; s/&gt;/>/g; s/&quot;/\"/g' | \
-             sed 's/&[a-zA-Z]\\+;//g' | \
-             sed '/^$/d' | \
-             head -60"
+            "python3 -c \"
+import re, urllib.request, sys
+try:
+    req = urllib.request.Request('{url}', headers={{'User-Agent': 'Mozilla/5.0'}})
+    html = urllib.request.urlopen(req, timeout=8).read().decode('utf-8', errors='ignore')
+    # Remove script and style blocks (DOTALL makes . match newlines)
+    html = re.sub(r'<script[^>]*>.*?</script>', '', html, flags=re.DOTALL|re.IGNORECASE)
+    html = re.sub(r'<style[^>]*>.*?</style>', '', html, flags=re.DOTALL|re.IGNORECASE)
+    # Remove HTML tags
+    html = re.sub(r'<[^>]+>', '', html)
+    # Decode common entities
+    html = html.replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>')
+    html = html.replace('&quot;', '\\\"').replace('&#x27;', \\\"'\\\")
+    html = re.sub(r'&[a-zA-Z]+;', '', html)
+    # Collapse whitespace
+    html = re.sub(r'[ \\t\\r]+', ' ', html)
+    lines = [l.strip() for l in html.split('\\n') if l.strip()]
+    # Skip short noise lines and JS fragments
+    lines = [l for l in lines if len(l) > 15 and not l.startswith('{{') and l.count(';') < 2]
+    print('\\n'.join(lines[:50]))
+except Exception as e:
+    print('', file=sys.stderr)
+    sys.exit(1)
+\" 2>/dev/null"
         );
 
         let output = Command::new("sh")
@@ -37,12 +57,11 @@ pub fn run(query: &str) -> Result<String, String> {
         }
 
         let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        if !text.is_empty() && text.len() > 10 {
+        // Require at least some meaningful content
+        if text.lines().count() >= 2 {
             return Ok(text);
         }
-        // Fall through to next backend
-        let _ = name;
     }
 
-    Err("web_search: all backends unreachable".to_string())
+    Err("web_search: all backends returned empty or unreachable".to_string())
 }
