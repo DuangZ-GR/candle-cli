@@ -223,8 +223,16 @@ fn handle_slash_command(
         }
         "trace" => match last_trace {
             Some(trace) if !trace.is_empty() => {
-                for line in trace.render_lines() {
-                    let _ = writeln!(stdout, "{line}");
+                if arg == "json" || arg == "--json" {
+                    let _ = writeln!(
+                        stdout,
+                        "{}",
+                        serde_json::to_string_pretty(&trace.to_json()).unwrap_or_default()
+                    );
+                } else {
+                    for line in trace.render_lines() {
+                        let _ = writeln!(stdout, "{line}");
+                    }
                 }
             }
             _ => {
