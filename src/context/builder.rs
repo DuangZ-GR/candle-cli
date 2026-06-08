@@ -52,8 +52,16 @@ pub fn build_turn_request(
     let messages_json = serde_json::to_string(&session.messages).map_err(|e| e.to_string())?;
     let _token_est = estimate_tokens_json(&messages_json);
 
+    let memory_ctx = crate::session::memory::ProjectMemory::load(&session.workspace_root)
+        .to_context_string();
+    let system_prompt = if memory_ctx.lines().count() > 1 {
+        format!("{}\n\n{}", resolve_system_prompt_with_tools(tools_json), memory_ctx)
+    } else {
+        resolve_system_prompt_with_tools(tools_json)
+    };
+
     Ok(TurnRequest {
-        system_prompt: resolve_system_prompt_with_tools(tools_json),
+        system_prompt,
         messages_json,
         tools_json: tools_json.to_string(),
     })

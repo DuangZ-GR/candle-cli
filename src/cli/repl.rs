@@ -5,6 +5,7 @@ use crate::model::bridge::LocalBridgeRuntime;
 use crate::model::mock::MockRuntime;
 use crate::permissions::mode::PermissionMode;
 use crate::permissions::policy::PermissionPolicy;
+use crate::session::memory::ProjectMemory;
 use crate::session::model::{ContentBlock, Message, MessageRole, Session};
 use crate::session::store::SessionStore;
 use crate::tools::registry::ToolRegistry;
@@ -20,6 +21,7 @@ pub fn run_repl(session_dir: PathBuf) -> io::Result<()> {
     let tools = ToolRegistry::workspace_write(workspace_root.clone());
     let policy = PermissionPolicy::new(resolve_permission_mode());
     let mut last_trace: Option<ExecutionTrace> = None;
+    let mut project_memory = ProjectMemory::load(&session.workspace_root);
 
     let mut rl = rustyline::DefaultEditor::new().map_err(io::Error::other)?;
 
@@ -34,7 +36,7 @@ pub fn run_repl(session_dir: PathBuf) -> io::Result<()> {
 
         // slash command dispatch
         if input.starts_with('/') {
-            let handled = handle_slash_command(&input, &mut session, &store, &last_trace, &tools);
+            let handled = handle_slash_command(&input, &mut session, &store, &last_trace, &tools, &mut project_memory);
             if handled {
                 return Ok(());
             }
@@ -136,6 +138,7 @@ fn handle_slash_command(
     store: &SessionStore,
     last_trace: &Option<ExecutionTrace>,
     tools: &ToolRegistry,
+    project_memory: &mut ProjectMemory,
 ) -> bool {
     use std::io::Write;
 
@@ -169,6 +172,41 @@ fn handle_slash_command(
                 session.label = Some(arg.clone());
                 store.save(session).ok();
                 let _ = writeln!(stdout, "session named: {arg}");
+            }
+        }
+        "memory" => {
+            if arg.is_empty() {
+                let ctx = project_memory.to_context_string();
+                if ctx.lines().count() > 1 {
+                    let _ = writeln!(stdout, "{ctx}");
+                } else {
+                    let _ = writeln!(stdout, "project memory is empty.");
+                }
+            } else {
+                let (sub, val) = arg
+                    .split_once(char::is_whitespace)
+                    .map(|(k, v)| (k, v.trim()))
+                    .unwrap_or((arg.as_str(), ""));
+                match sub {
+                    "file" if !val.is_empty() => {
+                        project_memory.add_key_file(val);
+                        let _ = writeln!(stdout, "added key file: {val}");
+                    }
+                    "cmd" if !val.is_empty() => {
+                        project_memory.add_command(val);
+                        let _ = writeln!(stdout, "added command: {val}");
+                    }
+                    "note" if !val.is_empty() => {
+                        if let Some((k, v)) = val.split_once('=') {
+                            project_memory.set_note(k.trim(), v.trim());
+                            let _ = writeln!(stdout, "note saved: {} = {}", k.trim(), v.trim());
+                        }
+                    }
+                    _ => {
+                        let _ = writeln!(stdout, "usage: /memory file <path> | cmd <cmd> | note <key>=<val>");
+                    }
+                }
+                project_memory.save(&session.workspace_root).ok();
             }
         }
         "tools" => {
@@ -338,6 +376,7 @@ const HELP_TEXT: &str = r#"
   /exit, /quit     退出 REPL
   /help            显示帮助
   /name <label>    为当前会话命名
+  /memory          查看/管理项目记忆（file/cmd/note）
   /system          查看当前系统提示词
   /clear           清空当前 session
   /session         查看当前 session 信息
