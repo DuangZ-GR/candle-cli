@@ -185,37 +185,57 @@ class BridgeRuntime:
         self._log(f"  model: {self._config.model_id}")
         self._log(f"  max_tokens: {self._config.max_new_tokens}")
 
-        t0 = time.time()
-        try:
-            req = urllib.request.Request(
-                url,
-                data=json.dumps(body).encode("utf-8"),
-                headers=headers,
-                method="POST",
-            )
-            with urllib.request.urlopen(req, timeout=120) as resp:
-                raw = resp.read().decode("utf-8")
-                self._log(f"  response in {time.time() - t0:.1f}s")
-                self._log(f"  response size: {len(raw)} bytes")
-        except urllib.error.HTTPError as exc:
-            err_body = exc.read().decode("utf-8", errors="replace")
-            self._log(f"  HTTP {exc.code}: {err_body[:500]}")
-            traceback.print_exc(file=sys.stderr)
-            return {
-                "result": {
-                    "final_text": f"generated: {extract_latest_user_text(request)}",
-                    "tool_calls": [],
-                }
-            }
-        except Exception:
-            traceback.print_exc(file=sys.stderr)
-            self._log(f"  API request failed")
-            return {
-                "result": {
-                    "final_text": f"generated: {extract_latest_user_text(request)}",
-                    "tool_calls": [],
-                }
-            }
+        max_retries = 3
+        raw = None
+        for attempt in range(1, max_retries + 1):
+            t0 = time.time()
+            try:
+                req = urllib.request.Request(
+                    url,
+                    data=json.dumps(body).encode("utf-8"),
+                    headers=headers,
+                    method="POST",
+                )
+                with urllib.request.urlopen(req, timeout=120) as resp:
+                    raw = resp.read().decode("utf-8")
+                    self._log(f"  response in {time.time() - t0:.1f}s")
+                    self._log(f"  response size: {len(raw)} bytes")
+                break
+            except urllib.error.HTTPError as exc:
+                err_body = exc.read().decode("utf-8", errors="replace")
+                self._log(f"  HTTP {exc.code}: {err_body[:200]}")
+                if exc.code and 400 <= exc.code < 500:
+                    # Client error — don't retry
+                    return {
+                        "result": {
+                            "final_text": f"generated: {extract_latest_user_text(request)}",
+                            "tool_calls": [],
+                        }
+                    }
+                if attempt < max_retries:
+                    wait = 2 ** (attempt - 1)
+                    self._log(f"  retrying in {wait}s (attempt {attempt}/{max_retries})")
+                    time.sleep(wait)
+                else:
+                    return {
+                        "result": {
+                            "final_text": f"generated: {extract_latest_user_text(request)}",
+                            "tool_calls": [],
+                        }
+                    }
+            except Exception:
+                if attempt < max_retries:
+                    wait = 2 ** (attempt - 1)
+                    self._log(f"  network error, retrying in {wait}s (attempt {attempt}/{max_retries})")
+                    time.sleep(wait)
+                else:
+                    self._log("  API request failed after all retries")
+                    return {
+                        "result": {
+                            "final_text": f"generated: {extract_latest_user_text(request)}",
+                            "tool_calls": [],
+                        }
+                    }
 
         try:
             data = json.loads(raw)
