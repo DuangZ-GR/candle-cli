@@ -2,13 +2,14 @@ use crate::agent::r#loop::run_single_turn_with_limit;
 use crate::model::runtime::CandleTargetRuntime;
 use crate::permissions::policy::PermissionPolicy;
 use crate::session::model::{ContentBlock, Message, MessageRole, Session};
+use crate::tools::registry::ToolRegistry;
 
 /// Dispatch a subtask to a sub-agent with limited context.
 /// The sub-agent runs a short bounded loop and returns a plain-text result.
 pub fn run<R: CandleTargetRuntime>(
     description: &str,
     runtime: &mut R,
-    _parent_tools: &crate::tools::registry::ToolRegistry,
+    _parent_tools: &ToolRegistry,
     _parent_policy: &PermissionPolicy,
 ) -> Result<String, String> {
     // Sub-agent uses read-only tools only (safe by default)
