@@ -12,5 +12,6 @@ pub struct Cli {
 #[derive(Subcommand, Debug)]
 pub enum CommandMode {
     Prompt { input: String },
+    Harness,
     Doctor,
 }

@@ -1,4 +1,5 @@
 use candle_cli::cli::args::{Cli, CommandMode};
+use candle_cli::cli::harness::run_harness;
 use candle_cli::cli::repl::{run_prompt, run_repl};
 use candle_cli::ui::format::format_status_line;
 use candle_cli::ui::render::render_line;
@@ -20,6 +21,9 @@ fn main() {
     match cli.command {
         Some(CommandMode::Prompt { input }) => {
             let _ = run_prompt(session_dir, input);
+        }
+        Some(CommandMode::Harness) => {
+            let _ = run_harness(session_dir);
         }
         Some(CommandMode::Doctor) => {
             render_line(&format_status_line("runtime", "mock"));
