@@ -4,14 +4,32 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 pub fn run(command: &str, workspace_root: &Path, timeout: Duration) -> Result<String, String> {
-    let mut child = Command::new("sh")
-        .arg("-lc")
-        .arg(command)
-        .current_dir(workspace_root)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| e.to_string())?;
+    let sandbox = std::env::var("CANDLE_CLI_SANDBOX").unwrap_or_default();
+
+    let mut child = match sandbox.as_str() {
+        "docker" => {
+            let ws = workspace_root.display().to_string();
+            Command::new("docker")
+                .args([
+                    "run", "--rm", "--network=none",
+                    "-v", &format!("{ws}:{ws}:ro"),
+                    "-w", &ws,
+                    "alpine:latest", "sh", "-lc", command,
+                ])
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+                .map_err(|e| e.to_string())?
+        }
+        _ => Command::new("sh")
+            .arg("-lc")
+            .arg(command)
+            .current_dir(workspace_root)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| e.to_string())?,
+    };
 
     let started = Instant::now();
     loop {
