@@ -4,5 +4,6 @@ pub mod grep;
 pub mod pwd;
 pub mod read;
 pub mod shell;
+pub mod task;
 pub mod web_search;
 pub mod write;

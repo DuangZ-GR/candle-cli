@@ -94,6 +94,14 @@ pub fn run_single_turn_with_limit_and_trace<R: CandleTargetRuntime>(
                         format_tool_error(&tool_call.name, "tool execution denied by user"),
                         true,
                     )
+                } else if tool_call.name == "task" {
+                    let desc: serde_json::Value = serde_json::from_str(&tool_call.input_json)
+                        .unwrap_or_default();
+                    let desc = desc.get("description").and_then(|v| v.as_str()).unwrap_or("");
+                    match crate::tools::builtin::task::run(desc, runtime, tools, policy) {
+                        Ok(output) => (format_tool_success("task", &output), false),
+                        Err(err) => (format_tool_error("task", &err), true),
+                    }
                 } else {
                     match tools.execute(&tool_call.name, &tool_call.input_json) {
                         Ok(output) => (format_tool_success(&tool_call.name, &output), false),
@@ -225,6 +233,7 @@ fn tools_json() -> &'static str {
   {"name":"glob","description":"Find files matching a simple glob pattern","input_schema":{"type":"object","properties":{"pattern":{"type":"string"}},"required":["pattern"]}},
   {"name":"grep","description":"Search files for a substring","input_schema":{"type":"object","properties":{"pattern":{"type":"string"},"path":{"type":"string"}},"required":["pattern"]}},
   {"name":"web_search","description":"Search the web via DuckDuckGo and return text results","input_schema":{"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}},
+  {"name":"task","description":"Delegate a read-only subtask to a sub-agent","input_schema":{"type":"object","properties":{"description":{"type":"string"}},"required":["description"]}},
   {"name":"edit","description":"Replace exactly one string occurrence in an existing file","input_schema":{"type":"object","properties":{"file_path":{"type":"string"},"old_string":{"type":"string"},"new_string":{"type":"string"}},"required":["file_path","old_string","new_string"]}},
   {"name":"shell","description":"Run a shell command and return its output","input_schema":{"type":"object","properties":{"command":{"type":"string"}},"required":["command"]}}
 ]"#

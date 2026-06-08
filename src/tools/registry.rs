@@ -32,7 +32,7 @@ impl ToolRegistry {
     }
 
     pub fn tool_names(&self) -> Vec<&'static str> {
-        vec!["pwd", "read", "glob", "grep", "web_search", "edit", "shell"]
+        vec!["pwd", "read", "glob", "grep", "web_search", "task", "edit", "shell"]
     }
 
     pub fn execute(&self, name: &str, input_json: &str) -> ToolResult {
