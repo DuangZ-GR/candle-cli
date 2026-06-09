@@ -220,8 +220,11 @@ class BridgeRuntime:
                     print(file=sys.stderr, flush=True)
                 break
             except urllib.error.HTTPError as exc:
-                err_body = exc.read().decode("utf-8", errors="replace")
-                self._log(f"  HTTP {exc.code}: {err_body[:200]}")
+                try:
+                    err_body = exc.read().decode("utf-8", errors="replace")[:200]
+                except Exception:
+                    err_body = "(unable to read error body)"
+                self._log(f"  HTTP {exc.code}: {err_body}")
                 if exc.code and 400 <= exc.code < 500:
                     # Client error — don't retry
                     return {

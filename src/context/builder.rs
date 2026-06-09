@@ -150,31 +150,42 @@ fn is_code_related(text: &str) -> bool {
 }
 
 fn extract_keywords(text: &str) -> Vec<String> {
-    let mut seen = std::collections::HashSet::new();
-    let mut keywords: Vec<String> = Vec::new();
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return Vec::new();
+    }
 
-    // Split by common delimiters and take meaningful words
-    for raw in text.split(|c: char| !c.is_alphanumeric() && c != '_' && c != '-') {
+    // Use the full question as the primary search phrase (substring grep).
+    // Also split on common Chinese/English delimiters for component phrases.
+    let mut phrases: Vec<String> = Vec::new();
+    if trimmed.len() <= 40 {
+        phrases.push(trimmed.to_lowercase());
+    }
+
+    let mut seen = std::collections::HashSet::new();
+    for raw in trimmed.split(|c: char| {
+        c.is_whitespace()
+            || matches!(c, '，' | '。' | '？' | '！' | '、' | '：' | '；' | '的')
+    }) {
         let word = raw.trim().to_lowercase();
         if word.len() < 3 || word.len() > 40 {
             continue;
         }
-        // Skip very common words
         if matches!(
             word.as_str(),
             "the" | "and" | "for" | "with" | "that" | "this" | "from"
                 | "what" | "when" | "where" | "which" | "how" | "does" | "can"
-                | "你" | "我" | "他" | "她" | "它" | "是" | "的" | "了"
-                | "在" | "有" | "不" | "这" | "那" | "什么" | "怎么" | "为什么"
-                | "一个" | "一下" | "帮我" | "请" | "可以"
+                | "你" | "我" | "他" | "是" | "了" | "在" | "有" | "不"
+                | "这" | "那" | "什么" | "怎么" | "为什么" | "一个" | "一下"
+                | "帮我" | "请" | "可以" | "哪个" | "哪些" | "多少"
         ) {
             continue;
         }
         if seen.insert(word.clone()) {
-            keywords.push(word);
+            phrases.push(word);
         }
     }
 
-    keywords.truncate(4);
-    keywords
+    phrases.truncate(4);
+    phrases
 }

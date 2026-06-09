@@ -13,7 +13,9 @@ pub struct ScenarioResult {
     pub name: String,
     pub passed: bool,
     pub elapsed_ms: u64,
-    pub steps: usize,
+    pub tool_steps: usize,
+    pub api_rounds: usize,
+    pub token_est: usize,
     pub final_text: String,
 }
 
@@ -60,15 +62,22 @@ pub fn run_harness(session_dir: PathBuf) -> io::Result<()> {
             Ok(r) => (true, String::new(), r.final_text.clone()),
             Err(e) => (false, e.clone(), String::new()),
         };
-        let steps = session
+        let tool_steps = session
             .messages
             .iter()
             .filter(|m| m.role == MessageRole::Tool)
             .count();
+        let api_rounds = session
+            .messages
+            .iter()
+            .filter(|m| m.role == MessageRole::Assistant)
+            .count();
+        let msg_json = serde_json::to_string(&session.messages).unwrap_or_default();
+        let token_est = crate::context::budget::estimate_tokens_json(&msg_json);
 
         let status = if passed { "PASS" } else { "FAIL" };
         println!(
-            "  [{status}] {name}  ({:.1}s, {steps} tool steps)",
+            "  [{status}] {name}  ({:.1}s, {tool_steps} tools, {api_rounds} API calls, ~{token_est} tokens)",
             elapsed as f64 / 1000.0
         );
         if !passed {
@@ -79,7 +88,9 @@ pub fn run_harness(session_dir: PathBuf) -> io::Result<()> {
             name: name.to_string(),
             passed,
             elapsed_ms: elapsed,
-            steps,
+            tool_steps,
+            api_rounds,
+            token_est,
             final_text,
         });
 

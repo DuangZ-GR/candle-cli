@@ -1,3 +1,4 @@
+import io
 import json
 import os
 import tempfile
@@ -366,11 +367,27 @@ def test_generate_turn_with_mocked_model():
 
 
 def _mock_api_response(content: str) -> mock.MagicMock:
+    """Return a streaming-compatible mock that iterates SSE chunks."""
+    chunks = []
+    for i, ch in enumerate(content):
+        chunks.append(
+            f'data: {{"choices":[{{"delta":{{"content":"{ch}"}}}}]}}'.encode("utf-8")
+        )
+    chunks.append(b"data: [DONE]")
     resp = mock.MagicMock()
-    resp.read.return_value = json.dumps(
-        {"choices": [{"message": {"content": content}}]}
-    ).encode("utf-8")
     resp.__enter__.return_value = resp
+    resp.__iter__.return_value = iter(chunks)
+    return resp
+
+
+def _mock_api_response_from_chunks(*chunks: str) -> mock.MagicMock:
+    lines = []
+    for c in chunks:
+        lines.append(f'data: {{"choices":[{{"delta":{{"content":"{c}"}}}}]}}'.encode("utf-8"))
+    lines.append(b"data: [DONE]")
+    resp = mock.MagicMock()
+    resp.__enter__.return_value = resp
+    resp.__iter__.return_value = iter(lines)
     return resp
 
 
@@ -465,3 +482,103 @@ def test_generate_turn_via_api_empty_messages():
     result = runtime.generate_turn({"messages_json": "[]"})
     assert result["result"]["final_text"] == ""
     assert result["result"]["tool_calls"] == []
+
+
+# ── Streaming tests ───────────────────────────────────────────────────────────
+
+
+def test_generate_turn_via_api_streaming_handles_empty_delta():
+    config = ModelConfig()
+    config.api_base_url = "http://localhost:8080/v1"
+    config.api_key = "sk-test"
+    config.model_id = "test-model"
+    runtime = BridgeRuntime(config=config)
+
+    lines = [
+        b'data: {"choices":[{"delta":{}}]}',
+        b'data: {"choices":[{"delta":{"content":"ok"}}]}',
+        b"data: [DONE]",
+    ]
+    resp = mock.MagicMock()
+    resp.__enter__.return_value = resp
+    resp.__iter__.return_value = iter(lines)
+
+    with mock.patch("urllib.request.urlopen", return_value=resp):
+        result = runtime.generate_turn(
+            {
+                "messages_json": json.dumps(
+                    [{"role": "User", "blocks": [{"Text": {"text": "hello"}}]}]
+                )
+            }
+        )
+
+    assert result["result"]["final_text"] == "ok"
+
+
+# ── Retry behaviour tests ────────────────────────────────────────────────────
+
+
+def test_generate_turn_retries_on_5xx_and_succeeds():
+    config = ModelConfig()
+    config.api_base_url = "http://localhost:8080/v1"
+    config.api_key = "sk-test"
+    config.model_id = "test-model"
+    runtime = BridgeRuntime(config=config)
+
+    call_count = [0]
+
+    def side_effect(req, timeout=None):
+        call_count[0] += 1
+        if call_count[0] < 3:
+            raise urllib.error.HTTPError(
+                url="http://localhost:8080/v1/chat/completions",
+                code=503,
+                msg="Service Unavailable",
+                hdrs=mock.Mock(),
+                fp=io.BytesIO(b"{}"),
+            )
+        return _mock_api_response_from_chunks("recovered")
+
+    with mock.patch("urllib.request.urlopen", side_effect=side_effect):
+        result = runtime.generate_turn(
+            {
+                "messages_json": json.dumps(
+                    [{"role": "User", "blocks": [{"Text": {"text": "hello"}}]}]
+                )
+            }
+        )
+
+    assert call_count[0] == 3
+    assert result["result"]["final_text"] == "recovered"
+
+
+def test_generate_turn_does_not_retry_on_4xx():
+    config = ModelConfig()
+    config.api_base_url = "http://localhost:8080/v1"
+    config.api_key = "sk-test"
+    config.model_id = "test-model"
+    runtime = BridgeRuntime(config=config)
+
+    call_count = [0]
+
+    def side_effect(req, timeout=None):
+        call_count[0] += 1
+        raise urllib.error.HTTPError(
+            url="http://localhost:8080/v1/chat/completions",
+            code=400,
+            msg="Bad Request",
+            hdrs=mock.Mock(),
+            fp=io.BytesIO(b"{}"),
+        )
+
+    with mock.patch("urllib.request.urlopen", side_effect=side_effect):
+        result = runtime.generate_turn(
+            {
+                "messages_json": json.dumps(
+                    [{"role": "User", "blocks": [{"Text": {"text": "hello"}}]}]
+                )
+            }
+        )
+
+    assert call_count[0] == 1
+    assert result["result"]["final_text"] == "generated: hello"
