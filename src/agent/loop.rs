@@ -63,9 +63,11 @@ pub fn run_single_turn_with_limit_and_trace<R: CandleTargetRuntime>(
         let request = crate::context::builder::build_turn_request(session, tools_json())?;
 
         trace.push(TraceEvent::RuntimeGenerateTurn);
-        let mut spinner = Spinner::start();
+        let streaming = runtime.capabilities().supports_streaming
+            && std::env::var("CANDLE_CLI_RUNTIME").ok().as_deref() == Some("bridge");
+        let mut spinner = if streaming { None } else { Some(Spinner::start()) };
         let result = runtime.generate_turn(request);
-        spinner.stop();
+        if let Some(mut s) = spinner { s.stop(); }
         let result = result?;
 
         trace.push(TraceEvent::ParseToolCall);
