@@ -10,13 +10,14 @@ Rust-first agentic CLI with multi-agent coordination, layered memory, sandboxed 
 ## Highlights
 
 - **Agentic tool loop** — bounded multi-step execution with sub-agent task delegation
+- **Streaming output** — real-time token-by-token display as the model generates
 - **Layered memory** — session memory + project-level persistent memory
 - **Sandboxed shell** — optional Docker container isolation with network cutoff
-- **Multi-model** — DeepSeek, Ollama, vLLM, OpenAI via Python bridge
-- **Permission control** — four modes with path boundary enforcement
-- **Observability** — `/tools`, `/status`, `/trace` with millisecond timing and JSON export
-- **Fault tolerance** — API retry with exponential backoff, shell timeout with kill
-- **Rust core + Python bridge** — Rust owns CLI, agent loop, tools, permissions; Python bridges model backends
+- **Multi-model** — DeepSeek, Ollama, vLLM, OpenAI via persistent Python bridge
+- **Permission control** — four modes with path boundary enforcement and interactive confirmation
+- **Observability** — `/tools`, `/status` (with token estimation), `/trace` (with millisecond timing and JSON export)
+- **Fault tolerance** — API retry with exponential backoff (4xx not retried), shell timeout with kill
+- **Rust core + Python bridge** — Rust owns CLI, agent loop, tools, permissions; Python bridges model backends with persistent worker
 
 ## Quickstart
 
