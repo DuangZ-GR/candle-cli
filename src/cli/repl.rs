@@ -209,6 +209,17 @@ fn handle_slash_command(
                 project_memory.save(&session.workspace_root).ok();
             }
         }
+        "model" => {
+            if arg.is_empty() {
+                let current = std::env::var("CANDLE_CLI_MODEL_ID")
+                    .unwrap_or_else(|_| "Qwen/Qwen2-0.5B-Instruct".to_string());
+                let _ = writeln!(stdout, "current model: {current}");
+            } else {
+                std::env::set_var("CANDLE_CLI_MODEL_ID", arg.as_str());
+                let _ = writeln!(stdout, "model set to: {arg}");
+                let _ = writeln!(stdout, "note: bridge worker will pick up the change on next turn");
+            }
+        }
         "tools" => {
             let _ = writeln!(stdout, "Registered tools");
             for name in tools.tool_names() {
@@ -367,11 +378,14 @@ fn render_status_lines(session: &Session, permission: PermissionMode) -> Vec<Str
     let model = std::env::var("CANDLE_CLI_MODEL_ID")
         .unwrap_or_else(|_| "Qwen/Qwen2-0.5B-Instruct".to_string());
     let max_turns = std::env::var("CANDLE_CLI_MAX_TURNS").unwrap_or_else(|_| "20".to_string());
+    let msg_json = serde_json::to_string(&session.messages).unwrap_or_default();
+    let token_est = crate::context::budget::estimate_tokens_json(&msg_json);
 
     vec![
         "Session".to_string(),
         format!("- session_id: {}", session.session_id),
         format!("- messages: {}", session.messages.len()),
+        format!("- estimated tokens: {}", token_est),
         format!("- workspace: {}", session.workspace_root),
         format!("- permission: {:?}", permission),
         format!("- runtime: {}", runtime),
@@ -384,6 +398,7 @@ const HELP_TEXT: &str = r#"
   /exit, /quit     退出 REPL
   /help            显示帮助
   /name <label>    为当前会话命名
+  /model [id]      查看或切换模型
   /memory          查看/管理项目记忆（file/cmd/note）
   /system          查看当前系统提示词
   /clear           清空当前 session

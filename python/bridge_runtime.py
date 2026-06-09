@@ -172,6 +172,7 @@ class BridgeRuntime:
             "temperature": self._config.temperature,
             "top_p": self._config.top_p,
             "thinking": {"type": "disabled"},
+            "stream": True,
         }
 
         url = self._config.api_base_url.rstrip("/") + "/chat/completions"
@@ -197,9 +198,26 @@ class BridgeRuntime:
                     method="POST",
                 )
                 with urllib.request.urlopen(req, timeout=120) as resp:
-                    raw = resp.read().decode("utf-8")
+                    content_chunks: list[str] = []
+                    for line_bytes in resp:
+                        line = line_bytes.decode("utf-8", errors="ignore").strip()
+                        if not line or not line.startswith("data:"):
+                            continue
+                        data_str = line[5:].strip()
+                        if data_str == "[DONE]":
+                            break
+                        try:
+                            chunk = json.loads(data_str)
+                            delta = chunk.get("choices", [{}])[0].get("delta", {})
+                            token = delta.get("content", "")
+                            if token:
+                                content_chunks.append(token)
+                                print(token, end="", file=sys.stderr, flush=True)
+                        except json.JSONDecodeError:
+                            continue
+                    raw = None
                     self._log(f"  response in {time.time() - t0:.1f}s")
-                    self._log(f"  response size: {len(raw)} bytes")
+                    print(file=sys.stderr, flush=True)
                 break
             except urllib.error.HTTPError as exc:
                 err_body = exc.read().decode("utf-8", errors="replace")
@@ -238,24 +256,23 @@ class BridgeRuntime:
                     }
 
         try:
-            data = json.loads(raw)
-            content = data["choices"][0]["message"]["content"]
-
-            # log token usage if available
+            if content_chunks:
+                content = "".join(content_chunks)
+                self._log(f"  response length: {len(content)} chars")
+                return {"result": {"final_text": content.strip(), "tool_calls": []}}
+            data = json.loads(raw or "{}")
+            content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+            if not content:
+                raise KeyError("content missing")
             usage = data.get("usage", {})
             if usage:
-                prompt_tokens = usage.get("prompt_tokens", 0)
-                completion_tokens = usage.get("completion_tokens", 0)
-                total_tokens = usage.get("total_tokens", 0)
                 self._log(
-                    f"  tokens: prompt={prompt_tokens} completion={completion_tokens} total={total_tokens}"
+                    f"  tokens: prompt={usage.get('prompt_tokens', 0)} completion={usage.get('completion_tokens', 0)} total={usage.get('total_tokens', 0)}"
                 )
-
             self._log(f"  response length: {len(content)} chars")
             return {"result": {"final_text": content.strip(), "tool_calls": []}}
         except (KeyError, IndexError, json.JSONDecodeError) as exc:
             self._log(f"  failed to parse API response: {exc}")
-            self._log(f"  raw: {raw[:300]}")
             return {
                 "result": {
                     "final_text": f"generated: {extract_latest_user_text(request)}",
