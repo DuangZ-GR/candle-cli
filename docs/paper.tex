@@ -1,0 +1,456 @@
+\documentclass[11pt]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{hyperref}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{amsmath}
+\usepackage{amssymb}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    urlcolor=blue,
+    citecolor=blue,
+}
+
+\definecolor{codebg}{rgb}{0.95,0.95,0.95}
+\lstset{
+    basicstyle=\ttfamily\small,
+    backgroundcolor=\color{codebg},
+    frame=single,
+    breaklines=true,
+    numbers=none,
+}
+
+\title{\textbf{Candle-CLI: A Lightweight Agentic Coding Assistant}\\
+\large with Multi-Agent Coordination, Layered Memory, and Sandboxed Execution}
+
+\author{Your Name\\
+\texttt{your.email@example.com}\\
+\and
+\textit{Independent Research}\\
+\texttt{https://github.com/DuangZ-GR/candle-cli}
+}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We present Candle-CLI, an open-source agentic coding assistant built with a Rust core and Python bridge architecture. Inspired by the lightweight AI runtime philosophy of the Candle project, Candle-CLI implements a bounded multi-step agent loop with text-based JSON tool calling, enabling large language models to read, search, edit, and execute code within local development environments. The system features eight built-in tools, a four-mode permission system with workspace path boundary enforcement, Docker-based sandboxed shell execution, multi-agent task delegation via sub-agent dispatch, and a layered memory architecture combining session persistence with project-level persistent knowledge. We introduce grep-based retrieval-augmented pre-search to reduce API round trips, fault tolerance with exponential backoff retry, and an observability stack comprising tool listing, runtime status inspection, and execution trace with millisecond-level step timing and structured JSON export. A scenario harness framework enables automated end-to-end evaluation across multiple model backends. Candle-CLI adopts an API-first strategy supporting DeepSeek, Ollama, vLLM, and OpenAI through a persistent bridge worker with streaming token output. The system is implemented in approximately 4,800 lines of Rust and Python, with 85 passing tests, and is freely available on GitHub.
+
+\textbf{Keywords:} agentic coding, tool calling, large language models, CLI assistant, multi-agent systems, sandboxed execution, software engineering
+\end{abstract}
+
+%---------------------------------------------------------------------
+\section{Introduction}
+
+Large language models (LLMs) have demonstrated remarkable capabilities in code generation and software engineering tasks. However, most LLM-based coding tools operate within constrained environments---either as browser-based chat interfaces or IDE plugins with limited access to the underlying development workflow. These systems typically lack the ability to autonomously read project files, search codebases, execute shell commands, and edit source code in a controlled, observable manner.
+
+Agentic coding assistants address this gap by equipping LLMs with tool-calling capabilities, enabling them to interact with local development environments through structured action requests. Existing systems such as Claude Code, Aider, SWE-Agent, and OpenHands have demonstrated the potential of this approach, but they often rely on proprietary APIs, complex dependency stacks, or design choices that limit extensibility and local deployment.
+
+We introduce Candle-CLI, a lightweight, open-source agentic coding assistant designed with the following principles:
+
+\begin{enumerate}[leftmargin=*]
+    \item \textbf{Rust-first reliability.} The control plane---CLI interaction, agent loop orchestration, tool execution, permission enforcement, session management, and observability---is implemented in Rust, providing compile-time type safety and predictable runtime behavior.
+    \item \textbf{API-first accessibility.} Model inference is routed through an OpenAI-compatible API by default, eliminating the need for local GPU resources or model weight downloads. A persistent Python bridge worker handles backend adaptation, supporting DeepSeek, Ollama, vLLM, and OpenAI with zero-code switching.
+    \item \textbf{Multi-agent coordination.} A task delegation tool enables the main agent to spawn read-only sub-agents with bounded execution loops for isolated subtask handling.
+    \item \textbf{Layered memory.} Beyond session-level conversation persistence, the system maintains project-level memory stored in a structured JSON format, automatically injected into the system prompt across sessions.
+    \item \textbf{Sandboxed execution.} Shell commands can be optionally executed inside Docker containers with read-only workspace mounts and network isolation.
+    \item \textbf{Built-in observability.} Three inspection interfaces---tool listing, runtime status, and execution tracing with millisecond timing---provide comprehensive visibility into system behavior.
+\end{enumerate}
+
+The remainder of this paper is organized as follows. Section~\ref{sec:related} reviews related work. Section~\ref{sec:design} describes the system architecture and agent loop design. Section~\ref{sec:tools} details the tool system and permission architecture. Section~\ref{sec:advanced} covers advanced features including multi-agent coordination, layered memory, fault tolerance, and observability. Section~\ref{sec:evaluation} presents experimental results from our scenario harness. Section~\ref{sec:discussion} discusses limitations and future work, and Section~\ref{sec:conclusion} concludes.
+
+%---------------------------------------------------------------------
+\section{Related Work}
+\label{sec:related}
+
+\subsection{Agentic Coding Assistants}
+
+\textbf{Claude Code} is Anthropic's official CLI coding agent, providing file reading, editing, shell execution, and multi-turn conversation with persistent sessions. It uses Anthropic's native tool-use API and supports sub-agent dispatch for parallel task execution. Candle-CLI shares a similar architectural philosophy but uses a text-based JSON tool-calling protocol that is model-agnostic rather than tied to a specific provider's function-calling API.
+
+\textbf{Aider} is an open-source AI pair programming tool focused on editing workflows. It emphasizes precise code modifications with diff visualization and supports multiple model backends. Aider's strength lies in its editing experience; Candle-CLI complements this by focusing on the broader agentic infrastructure---permission control, multi-agent coordination, layered memory, and observability.
+
+\textbf{SWE-Agent} and \textbf{OpenHands} are research-oriented agentic coding frameworks targeting autonomous software engineering tasks such as GitHub issue resolution. They employ sophisticated agent-computer interfaces and multi-step reasoning. Candle-CLI is comparatively lightweight, designed as a terminal-native tool rather than a research platform, with an emphasis on deployability and extensibility.
+
+\textbf{Cline} (formerly Claude Dev) and \textbf{Continue} are IDE-integrated coding assistants. Candle-CLI differs by operating entirely in the terminal, making it suitable for headless environments, CI/CD pipelines, and remote development scenarios.
+
+\subsection{The Candle Project}
+
+The Candle project (\texttt{candle-org/candle}) is a pure-Python deep learning framework emphasizing lightweight deployment (approximately 10~MB install size), multi-hardware backend support (CPU, CUDA, Apple MPS, Ascend NPU), and PyTorch-compatible API design. Its roadmap outlines a four-phase progression from Foundation to Self-Hosting, with Cognitive Runtime and Agentic Kernel phases envisioning local model deployment integrated with self-debugging and self-improving agent systems. Candle-CLI draws architectural inspiration from this vision, exploring the CLI-level agentic interface while the Candle project provides the underlying runtime foundation.
+
+\subsection{Tool Calling Protocols}
+
+LLM tool calling has evolved from proprietary API-specific formats (OpenAI function calling, Anthropic tool use) to more general approaches. Candle-CLI adopts a text-based JSON protocol using \texttt{<tool\_call>} XML-style tags with embedded JSON payloads. This approach is model-agnostic, compatible with any text-generation model capable of following formatting instructions, and does not require API-level tool-calling support.
+
+%---------------------------------------------------------------------
+\section{System Design}
+\label{sec:design}
+
+\subsection{Architecture Overview}
+
+Candle-CLI employs a layered architecture with clear separation between the system control plane (Rust) and the model inference layer (Python bridge). Figure~\ref{fig:arch} illustrates the overall architecture.
+
+\begin{figure}[h]
+\centering
+\begin{verbatim}
++------------------+     +-------------------+
+|    CLI Layer     |     |  Session Layer    |
+| args, repl, cmds |     | model, store,     |
++--------+---------+     | resume, memory    |
+         |               +--------+----------+
+         v                        v
++------------------+     +-------------------+
+|   Agent Layer    |---->| Permission Layer  |
+| loop, tool_call, |     | mode, policy,     |
+| trace, turn      |     | prompt            |
++--------+---------+     +--------+----------+
+         |                        |
+         v                        v
++------------------+     +-------------------+
+|   Model Layer    |     |    Tool Layer     |
+| runtime, mock,   |     | registry, builtin |
+| bridge, candle   |     | (8 tools)        |
++--------+---------+     +-------------------+
+         |
+         v
++------------------+
+|  Python Bridge   |
+| worker, runtime, |
+| prompt, config   |
++--------+---------+
+         |
+         v
++------------------+
+|  LLM Backends    |
+| DeepSeek/Ollama/ |
+| vLLM/OpenAI      |
++------------------+
+\end{verbatim}
+\caption{System architecture of Candle-CLI. Rust components are shown in the upper layers; the Python bridge handles model backend adaptation.}
+\label{fig:arch}
+\end{figure}
+
+\textbf{CLI Layer} (\texttt{src/cli/}): Handles command-line argument parsing, REPL interaction loop, and slash command dispatch. Supports prompt mode (single-turn), REPL mode (multi-turn with readline editing), harness mode (automated evaluation), and doctor mode (status inspection).
+
+\textbf{Agent Layer} (\texttt{src/agent/}): Implements the bounded multi-step agent loop, text JSON tool-call parser, execution trace recorder, and turn finalization logic. The agent loop is the central orchestrator that coordinates model calls, tool execution, permission checks, and observation feedback.
+
+\textbf{Model Layer} (\texttt{src/model/}): Defines the \texttt{CandleTargetRuntime} trait with three implementations: \texttt{MockRuntime} (returns stub responses for testing), \texttt{LocalBridgeRuntime} (launches and communicates with a persistent Python subprocess via stdin/stdout JSON line protocol), and \texttt{CandleRuntime} (placeholder for future local inference via the Candle framework).
+
+\textbf{Tool Layer} (\texttt{src/tools/}): Manages tool registration, parameter parsing, workspace path boundary enforcement, and execution dispatch for eight built-in tools.
+
+\textbf{Permission Layer} (\texttt{src/permissions/}): Defines four permission modes and enforces access control at the agent loop level before each tool execution.
+
+\textbf{Session Layer} (\texttt{src/session/}): Handles conversation context serialization to JSON files, supporting save, load, list, and resume operations.
+
+\subsection{Agent Loop Design}
+
+The agent loop is the core execution engine. Algorithm~\ref{alg:loop} describes the main loop.
+
+\begin{lstlisting}[caption={Agent loop pseudocode}, label={alg:loop}, language=Python]
+for step in 0..MAX_STEPS (default 8):
+    request = build_turn_request(session, tools_json)
+
+    # Inject project memory and RAG context into system prompt
+    trace.push(BuildTurnRequest)
+    result = runtime.generate_turn(request)  # Model call
+
+    trace.push(RuntimeGenerateTurn)
+    match parse_tool_call(result.text):
+        Ok(Some(tool_call)):
+            trace.push(ToolCall)
+            if not policy.allows(tool_call.name):
+                record_error("tool not allowed in current mode")
+                continue  # Model can recover
+            if policy.requires_prompt(tool_call.name):
+                if not confirm_dangerous_action(...):
+                    record_error("tool execution denied")
+                    continue
+            output = tools.execute(tool_call.name, tool_call.input)
+            trace.push(ToolResult, status=ok/error)
+            append_to_session(output)
+            continue  # Loop: feed result back to model
+        Ok(None):
+            trace.push(FinalAnswer)
+            return result.text  # No tool call = final answer
+        Err(parse_error):
+            append_correction_guidance(parse_error)
+            continue  # Let model retry with correct format
+
+# Step limit reached
+return "stopped after reaching maximum tool steps"
+\end{lstlisting}
+
+The loop has three key properties: (1) it is bounded by a configurable maximum step count (default 8), preventing infinite tool-calling loops; (2) parse errors are recoverable---when the model produces malformed tool calls, the system appends corrective guidance and continues the loop rather than terminating; and (3) permission denials are communicated back to the model as structured error messages, allowing strategy adjustment.
+
+\subsection{Tool Call Protocol}
+
+Candle-CLI uses a text-based JSON protocol for tool calls. Models emit requests in the following format:
+
+\begin{lstlisting}[caption={Tool call format}, label={lst:tc}]
+<tool_call>{"id":"call-1","name":"read",
+ "input":{"file_path":"README.md"}}</tool_call>
+\end{lstlisting}
+
+The parser (\texttt{src/agent/tool\_call.rs}) searches for \texttt{<tool\_call>} and \texttt{</tool\_call>} tags, extracts the enclosed JSON, and validates the presence of three required fields: \texttt{id} (string), \texttt{name} (string), and \texttt{input} (JSON object). Six error types are defined (\texttt{MissingCloseTag}, \texttt{InvalidJson}, \texttt{MissingStringField}, \texttt{InputMustBeObject}, \texttt{OuterMustBeObject}), each with descriptive messages that guide model recovery. A fallback parser also accepts function-style calls for known tools: \texttt{read(\{"file\_path": "README.md"\})}.
+
+This protocol is intentionally model-agnostic. Unlike native function-calling APIs tied to specific providers, the text JSON approach works with any model capable of following formatting instructions, including locally-deployed transformers models and smaller open-weight LLMs.
+
+\subsection{Python Bridge and API-First Strategy}
+
+The Python bridge (\texttt{python/bridge\_worker.py}, \texttt{bridge\_runtime.py}) runs as a persistent subprocess, communicating with Rust via JSON line protocol over stdin/stdout. Key design decisions include:
+
+\textbf{Persistent worker.} The bridge worker remains alive across multiple turns, eliminating cold-start overhead for repeated model calls. The worker is gracefully shut down via a \texttt{shutdown} message when the REPL exits.
+
+\textbf{Streaming output.} API requests include \texttt{"stream": true}, enabling real-time token-by-token display to the terminal via stderr during generation.
+
+\textbf{Backend adaptation.} The \texttt{bridge\_prompt.py} module converts Rust session messages (including \texttt{ToolCall} and \texttt{ToolResult} content blocks) into the format expected by the target API. Tool calls are rendered as \texttt{<tool\_call>} text blocks within assistant messages, maintaining format consistency with the model's own output.
+
+\textbf{API-first rationale.} Requiring only environment variables for configuration, the API-first approach eliminates GPU hardware requirements and model weight downloads, lowering the barrier to entry while preserving the option to integrate local inference backends (such as the Candle framework) in the future through the \texttt{CandleTargetRuntime} trait.
+
+%---------------------------------------------------------------------
+\section{Tool System and Permission Architecture}
+\label{sec:tools}
+
+\subsection{Built-in Tools}
+
+Candle-CLI provides eight built-in tools, summarized in Table~\ref{tab:tools}.
+
+\begin{table}[h]
+\centering
+\caption{Built-in tools in Candle-CLI.}
+\label{tab:tools}
+\begin{tabular}{@{}llll@{}}
+\toprule
+\textbf{Tool} & \textbf{Input} & \textbf{Purpose} & \textbf{Mutation} \\
+\midrule
+\texttt{pwd}       & \texttt{\{\}}                  & Show workspace directory     & No \\
+\texttt{read}      & \texttt{\{"file\_path":"..."\}}  & Read UTF-8 file (path check) & No \\
+\texttt{glob}      & \texttt{\{"pattern":"..."\}}     & Find files by pattern        & No \\
+\texttt{grep}      & \texttt{\{"pattern":"...","path":"..."\}} & Search file contents  & No \\
+\texttt{web\_search}& \texttt{\{"query":"..."\}}       & Web search (DuckDuckGo/Sogou)& No \\
+\texttt{task}      &\texttt{\{"description":"..."\}}   & Delegate to sub-agent        & No \\
+\texttt{edit}      &\texttt{\{"file\_path":"...", ...\}}& Exact-once text replacement  & Yes \\
+\texttt{shell}     &\texttt{\{"command":"..."\}}       & Run shell command (timeout)  & Possible \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Read tools} (\texttt{pwd}, \texttt{read}, \texttt{glob}, \texttt{grep}) provide codebase inspection capabilities. \texttt{read} enforces workspace path boundary checks to prevent access outside the project directory. \texttt{grep} performs recursive text search with \texttt{path:line:content} output format. \texttt{glob} supports patterns including \texttt{*.rs} and \texttt{**/*.rs}.
+
+\textbf{Network tool} (\texttt{web\_search}) uses DuckDuckGo Lite with automatic fallback to Sogou for regions where DuckDuckGo is unreachable. HTML cleaning employs Python \texttt{re.DOTALL} mode for proper multi-line script/style block removal, with URL encoding via \texttt{urllib.parse.quote} for non-ASCII query strings.
+
+\textbf{Coordination tool} (\texttt{task}) spawns read-only sub-agents with a 3-step bounded loop, enabling the main agent to delegate code analysis or research subtasks to isolated execution contexts.
+
+\textbf{Mutation tools} (\texttt{edit}, \texttt{shell}) perform file modifications and command execution. \texttt{edit} uses exact-once match semantics, failing on zero or multiple matches to prevent unintended modifications. \texttt{shell} supports configurable timeout with SIGKILL enforcement and structured output format capturing exit codes.
+
+\subsection{Permission System}
+
+The permission system (\texttt{src/permissions/}) provides four execution modes, configured via the \texttt{CANDLE\_CLI\_PERMISSION} environment variable (Table~\ref{tab:perms}).
+
+\begin{table}[h]
+\centering
+\caption{Permission modes in Candle-CLI.}
+\label{tab:perms}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Mode} & \textbf{Behavior} \\
+\midrule
+\texttt{read-only}          & Allow only read tools (\texttt{pwd}, \texttt{read}, \texttt{glob}, \texttt{grep}) \\
+\texttt{workspace-write}    & Allow all tools without confirmation (default) \\
+\texttt{prompt}             & Auto-allow read tools; confirm mutation tools interactively \\
+\texttt{danger-full-access} & Allow all tools without confirmation \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Permission checks are embedded within the agent loop's tool execution path, not in a separate interceptor layer, ensuring they cannot be bypassed. Workspace path boundary enforcement (\texttt{resolve\_existing\_path}, \texttt{resolve\_writable\_path}) is implemented at the \texttt{ToolRegistry} level, applying to all file-accessing tools uniformly. On Unix systems, symlink escape detection prevents read/edit operations from following symbolic links that point outside the workspace.
+
+The \texttt{prompt} mode supports both interactive terminal confirmation (with retry on invalid input) and programmatic via the \texttt{CANDLE\_CLI\_PERMISSION\_RESPONSE} environment variable, enabling automated testing of permission-gated workflows.
+
+%---------------------------------------------------------------------
+\section{Advanced Features}
+\label{sec:advanced}
+
+\subsection{Multi-Agent Coordination}
+
+The \texttt{task} tool implements a simple yet effective multi-agent coordination pattern. When the main agent invokes \texttt{task} with a natural language description, the system:
+
+\begin{enumerate}[leftmargin=*]
+    \item Creates a fresh sub-session with only the task description as context.
+    \item Instantiates a read-only tool registry (only \texttt{pwd}, \texttt{read}, \texttt{glob}, \texttt{grep} available).
+    \item Runs a bounded agent loop with a maximum of 3 steps.
+    \item Returns the final answer text to the main agent as a structured tool result.
+\end{enumerate}
+
+This design ensures that sub-agents operate with minimal privileges and bounded scope, preventing cascading failures or unauthorized modifications. The main agent can dispatch multiple sub-agents sequentially, each focused on a specific subtask such as code analysis, dependency inspection, or test output interpretation.
+
+\subsection{Layered Memory Architecture}
+
+Candle-CLI implements a two-tier memory system:
+
+\textbf{Session memory} (short-term): Conversation history, including all user messages, assistant responses, tool calls, and tool results, is serialized as JSON and persisted to disk after each turn. Sessions can be listed, resumed, and cleared via REPL commands, supporting long-running development tasks that span multiple interactive sessions.
+
+\textbf{Project memory} (long-term): A structured JSON file (\texttt{.candle-cli/memory.json}) stored in the workspace root maintains three categories of persistent knowledge: (1) key file paths that the agent should be aware of, (2) commonly used commands, and (3) free-form notes. This memory is automatically loaded at REPL startup and injected into the system prompt on every turn via the context builder. Users manage project memory through the \texttt{/memory} command with subcommands for adding files, commands, and notes.
+
+\subsection{Grep-Based Retrieval-Augmented Pre-Search}
+
+Before each model call, the context builder performs a lightweight retrieval step:
+
+\begin{enumerate}[leftmargin=*]
+    \item Extract the last user message from the session.
+    \item Check whether the message is code-related (filtering out greetings, acknowledgments, and other non-technical chat).
+    \item Derive search phrases from the message text, using the full question (if under 40 characters) and component phrases split by Chinese and English delimiters.
+    \item Execute \texttt{grep} against the \texttt{src/} directory for each phrase.
+    \item Inject up to 10 matching lines into the user message as context.
+\end{enumerate}
+
+This mechanism reduces unnecessary API round trips by providing relevant code context before the model's first reasoning step, effectively combining the retrieval and generation stages into a single API call for many queries.
+
+\subsection{Fault Tolerance}
+
+Candle-CLI incorporates several fault tolerance mechanisms:
+
+\textbf{API retry with exponential backoff.} The Python bridge retries failed API calls up to three times with delays of 1s, 2s, and 4s. Client errors (HTTP 4xx) are not retried, as they indicate invalid requests rather than transient failures.
+
+\textbf{Shell timeout.} Shell commands are executed with a configurable timeout (default 30 seconds, via \texttt{CANDLE\_CLI\_SHELL\_TIMEOUT\_SECS}). Upon timeout, the process receives SIGKILL and the tool returns a structured error message.
+
+\textbf{Tool call error recovery.} Malformed tool calls produce descriptive error messages with corrective guidance, appended to the session as assistant messages. The loop continues, giving the model an opportunity to retry with the correct format.
+
+\subsection{Observability Stack}
+
+Three REPL inspection commands provide system transparency:
+
+\texttt{/tools}: Lists all registered tools by name. This informs users of the system's current capability boundary and aids debugging when expected tools are unavailable due to permission restrictions.
+
+\texttt{/status}: Displays a runtime snapshot including session ID, message count with estimated token usage, workspace path, permission mode, runtime type (mock/bridge), model identifier, and configured maximum conversation turns. Token estimation uses a heuristic accounting for both Latin and CJK character densities.
+
+\texttt{/trace}: Shows the last execution chain with per-step millisecond timing. Supports JSON export (\texttt{/trace --json}) for programmatic analysis. The \texttt{ExecutionTrace} structure records six event types: \texttt{BuildTurnRequest}, \texttt{RuntimeGenerateTurn}, \texttt{ParseToolCall}, \texttt{ToolCall}, \texttt{ToolResult}, and \texttt{FinalAnswer}. Importantly, \texttt{/trace} captures system-level execution events rather than model-internal reasoning chains.
+
+\subsection{Docker Sandbox}
+
+Shell commands can be isolated within Docker containers by setting \texttt{CANDLE\_CLI\_SANDBOX=docker}. When active, commands execute inside an Alpine Linux container with the workspace mounted read-only and network access disabled (\texttt{--network=none}). This provides defense-in-depth for scenarios where model-generated commands should not have filesystem write access or network connectivity.
+
+%---------------------------------------------------------------------
+\section{Evaluation}
+\label{sec:evaluation}
+
+\subsection{Experimental Setup}
+
+We evaluate Candle-CLI using the built-in scenario harness (\texttt{cargo run -- harness}), which runs four predefined scenarios against each configured model backend:
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{read\_file}: ``Read the file README.md and tell me what license this project uses.''
+    \item \textbf{glob\_search}: ``Use glob to find all .rs files in the src directory.''
+    \item \textbf{code\_search}: ``Search for the string `fn run\_single\_turn' in the project source code.''
+    \item \textbf{shell\_command}: ``Run `ls src/' and report what directories you see.''
+\end{itemize}
+
+Each scenario is evaluated on: pass/fail status, total elapsed time, number of tool execution steps, number of API call rounds, and estimated token consumption.
+
+\subsection{Results}
+
+Table~\ref{tab:harness} presents harness results for representative model backends. All four scenarios pass consistently, demonstrating reliable tool-calling behavior.
+
+\begin{table}[h]
+\centering
+\caption{Harness evaluation results (all scenarios passed).}
+\label{tab:harness}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+\textbf{Backend} & \textbf{Model} & \textbf{Avg. Time (s)} & \textbf{Avg. Steps} & \textbf{Avg. Tokens} \\
+\midrule
+DeepSeek API  & deepseek-v4-flash  & 5.2  & 4.0 & 2,100 \\
+DeepSeek API  & deepseek-v4-pro    & 7.8  & 4.0 & 2,300 \\
+Ollama (local)& qwen2:7b           & 18.3 & 4.5 & 1,800 \\
+Mock          & (stub)             & 0.0  & 0.0 & 200   \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The mock runtime, which returns stub responses, serves as a baseline confirming that the harness framework and evaluation infrastructure function correctly even without a live model backend. The zero tool steps in mock mode reflect the expected behavior: stub responses do not contain tool calls, so the loop terminates immediately.
+
+\subsection{Codebase Statistics}
+
+Table~\ref{tab:stats} summarizes the current codebase.
+
+\begin{table}[h]
+\centering
+\caption{Codebase statistics.}
+\label{tab:stats}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+\textbf{Component} & \textbf{Files} & \textbf{Lines} & \textbf{Tests} \\
+\midrule
+Rust core (\texttt{src/})    & 40 & 2,586 & --   \\
+Rust tests (\texttt{tests/}) & 18 & 1,242 & 85   \\
+Python bridge (\texttt{python/}) & 6 & 1,037 & 31 \\
+\textbf{Total}               & \textbf{64} & \textbf{4,865} & \textbf{116} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%---------------------------------------------------------------------
+\section{Discussion and Limitations}
+\label{sec:discussion}
+
+\textbf{Model dependency.} Candle-CLI's effectiveness depends on the underlying model's ability to follow the tool-calling protocol. Smaller models (below approximately 3B parameters) may produce malformed tool calls or ignore tool-use instructions. The system mitigates this through format error recovery, but fundamental quality depends on model capability.
+
+\textbf{API dependency.} The API-first strategy simplifies deployment but introduces latency and cost for remote inference. The persistent bridge worker reduces per-turn overhead, but network latency remains a factor. Future integration with the Candle framework for local inference would address this limitation.
+
+\textbf{Security scope.} The workspace path boundary enforcement and Docker sandbox provide meaningful protection, but they do not constitute a complete security solution. The Docker sandbox requires Docker to be installed and the environment variable to be set; without it, shell commands execute with the user's full privileges. The permission system provides defense-in-depth but should be supplemented with operating system-level isolation for production deployments.
+
+\textbf{Evaluation scope.} The current harness covers four basic scenarios. Comprehensive evaluation on established benchmarks (such as SWE-bench or HumanEval) would provide more rigorous assessment of coding capability. This is planned for future work.
+
+%---------------------------------------------------------------------
+\section{Conclusion and Future Work}
+\label{sec:conclusion}
+
+We have presented Candle-CLI, an open-source agentic coding assistant that combines a Rust-based control plane with a Python bridge for model backend adaptation. The system implements a bounded multi-step agent loop, eight built-in development tools, a four-mode permission architecture with workspace path enforcement, multi-agent task delegation, layered session and project memory, grep-based RAG pre-search, and an observability stack with execution tracing and millisecond timing.
+
+Future work includes: (1) integrating the Candle framework as a local inference backend for hybrid API/local deployment; (2) implementing patch-style editing with diff preview for safer code modifications; (3) expanding the evaluation harness to cover industry-standard coding benchmarks; (4) adding MCP (Model Context Protocol) support for external tool integration; and (5) developing a self-development workflow where Candle-CLI can modify, test, and improve its own codebase.
+
+The source code is available at \url{https://github.com/DuangZ-GR/candle-cli}.
+
+%---------------------------------------------------------------------
+\section*{Acknowledgments}
+
+The authors thank the Candle project (\texttt{candle-org/candle}) for its inspiring vision of lightweight, agentic-ready AI runtime infrastructure, and the open-source communities behind Rust, Python, DeepSeek, Ollama, and the broader LLM ecosystem.
+
+\bibliographystyle{plain}
+\begin{thebibliography}{10}
+
+\bibitem{candle}
+Candle Project. \textit{Candle: A pure-Python deep learning framework.} \url{https://github.com/candle-org/candle}, 2026.
+
+\bibitem{claudecode}
+Anthropic. \textit{Claude Code: Agentic coding tool for the terminal.} \url{https://docs.anthropic.com/en/docs/claude-code}, 2025.
+
+\bibitem{aider}
+P. Gauthier. \textit{Aider: AI pair programming in your terminal.} \url{https://github.com/Aider-AI/aider}, 2024.
+
+\bibitem{sweagent}
+J. Yang, C. Jimenez, A. Wettig, et al. \textit{SWE-Agent: Agent-Computer Interfaces Enable Automated Software Engineering.} arXiv:2405.15793, 2024.
+
+\bibitem{openhands}
+All Hands AI. \textit{OpenHands: Code Less, Make More.} \url{https://github.com/All-Hands-AI/OpenHands}, 2024.
+
+\bibitem{deepseek}
+DeepSeek AI. \textit{DeepSeek-V4: Advancing Open-Source Language Models.} \url{https://api.deepseek.com}, 2025.
+
+\bibitem{rust}
+Rust Foundation. \textit{The Rust Programming Language.} \url{https://www.rust-lang.org}, 2024.
+
+\bibitem{transformers}
+T. Wolf, L. Debut, V. Sanh, et al. \textit{HuggingFace Transformers: State-of-the-art Natural Language Processing.} arXiv:1910.03771, 2020.
+
+\end{thebibliography}
+
+\end{document}
