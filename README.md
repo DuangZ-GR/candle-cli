@@ -21,6 +21,10 @@ Rust-first agentic CLI with multi-agent coordination, layered memory, sandboxed 
 
 ## Quickstart
 
+Requirements: Rust stable and Python 3.10 or newer. Install Python bridge
+dependencies with `python -m pip install -r requirements.txt` when using the
+bridge runtime.
+
 ```bash
 git clone https://github.com/DuangZ-GR/candle-cli.git
 cd candle-cli
@@ -103,6 +107,7 @@ Rust parses the block, executes the tool, records the result in session, and fee
 | `grep` | `{"pattern":"fn main","path":"src"}` | Search file contents recursively | No |
 | `web_search` | `{"query":"today weather"}` | Web search via DuckDuckGo/Sogou fallback | No |
 | `task` | `{"description":"analyze this code"}` | Delegate to read-only sub-agent (3-step loop) | No |
+| `write` | `{"file_path":"report.txt","content":"..."}` | Write a UTF-8 file inside the workspace | **Yes** |
 | `edit` | `{"file_path":"Cargo.toml","old_string":"0.1.0","new_string":"0.3.0"}` | Replace exactly one text occurrence | **Yes** |
 | `shell` | `{"command":"cargo test"}` | Run shell command with timeout | **Possible** |
 
@@ -111,9 +116,9 @@ Rust parses the block, executes the tool, records the result in session, and fee
 | Mode | Behavior |
 |------|----------|
 | `read-only` | Allow `pwd`, `read`, `glob`, `grep` only |
-| `workspace-write` (default) | Allow all tools without confirmation |
+| `workspace-write` (default) | Allow workspace file edits; require confirmation for host shell commands |
 | `prompt` | Auto-allow read tools; confirm `edit`, `write`, `shell` interactively |
-| `danger-full-access` | Allow all tools without confirmation |
+| `danger-full-access` | Allow all tools, including host shell commands, without confirmation |
 
 ### Multi-agent coordination
 
@@ -203,6 +208,8 @@ Set `CANDLE_CLI_VERBOSE=1` for API request details, token usage, timing, and GPU
 | `CANDLE_CLI_PERMISSION` | `workspace-write` | Permission mode |
 | `CANDLE_CLI_PERMISSION_RESPONSE` | (empty) | Pre-set prompt responses (`y`/`allow`/`deny`) |
 | `CANDLE_CLI_SHELL_TIMEOUT_SECS` | `30` | Shell command timeout (seconds) |
+| `CANDLE_CLI_MAX_TOOL_OUTPUT_CHARS` | `65536` | Maximum tool-result characters retained in model/session context |
+| `CANDLE_CLI_ALLOW_STUB_FALLBACK` | `false` | Enable echo-only bridge stub for demos/tests; never enable for real agent tasks |
 | `CANDLE_CLI_SANDBOX` | (empty) | Set to `docker` for container isolation |
 | `CANDLE_CLI_VERBOSE` | `false` | Print diagnostics to stderr |
 | `CANDLE_CLI_MODEL_CONFIG` | (empty) | Optional JSON config file path |

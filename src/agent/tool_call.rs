@@ -5,7 +5,17 @@ use std::fmt;
 const OPEN_TAG: &str = "<tool_call>";
 const CLOSE_TAG: &str = "</tool_call>";
 const FALLBACK_ID: &str = "call-fallback";
-const KNOWN_TOOLS: &[&str] = &["pwd", "read", "glob", "grep", "edit", "shell"];
+const KNOWN_TOOLS: &[&str] = &[
+    "pwd",
+    "read",
+    "glob",
+    "grep",
+    "web_search",
+    "task",
+    "write",
+    "edit",
+    "shell",
+];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ToolCallParseError {

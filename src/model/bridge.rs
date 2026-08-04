@@ -36,14 +36,20 @@ impl LocalBridgeRuntime {
         let (program, args) = self.command_parts()?;
         let mut child = Command::new(program)
             .args(args)
+            .env("PYTHONUTF8", "1")
+            .env("PYTHONIOENCODING", "utf-8")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .spawn()
             .map_err(|e| e.to_string())?;
         let stdin: Box<dyn Write + Send> =
             Box::new(child.stdin.take().ok_or("stdin unavailable".to_string())?);
-        let stdout: Box<dyn BufRead + Send> =
-            Box::new(BufReader::new(child.stdout.take().ok_or("stdout unavailable".to_string())?));
+        let stdout: Box<dyn BufRead + Send> = Box::new(BufReader::new(
+            child
+                .stdout
+                .take()
+                .ok_or("stdout unavailable".to_string())?,
+        ));
         self.child = Some((child, stdin, stdout));
         Ok(())
     }
@@ -131,33 +137,56 @@ impl CandleTargetRuntime for LocalBridgeRuntime {
         };
         let mut child = match Command::new(program)
             .args(args)
+            .env("PYTHONUTF8", "1")
+            .env("PYTHONIOENCODING", "utf-8")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .spawn()
         {
             Ok(child) => child,
-            Err(error) => return RuntimeHealth { ok: false, message: error.to_string() },
+            Err(error) => {
+                return RuntimeHealth {
+                    ok: false,
+                    message: error.to_string(),
+                }
+            }
         };
         let Some(mut stdin) = child.stdin.take() else {
-            return RuntimeHealth { ok: false, message: "stdin unavailable".into() };
+            return RuntimeHealth {
+                ok: false,
+                message: "stdin unavailable".into(),
+            };
         };
         let Some(stdout) = child.stdout.take() else {
-            return RuntimeHealth { ok: false, message: "stdout unavailable".into() };
+            return RuntimeHealth {
+                ok: false,
+                message: "stdout unavailable".into(),
+            };
         };
         let _ = writeln!(stdin, "{}", serde_json::json!({ "type": "healthcheck" }));
         let _ = writeln!(stdin, "{}", serde_json::json!({ "type": "shutdown" }));
         let mut line = String::new();
         let mut reader = BufReader::new(stdout);
         if reader.read_line(&mut line).is_err() {
-            return RuntimeHealth { ok: false, message: "failed to read healthcheck".into() };
+            return RuntimeHealth {
+                ok: false,
+                message: "failed to read healthcheck".into(),
+            };
         }
         let _ = child.wait();
         match serde_json::from_str::<Value>(line.trim()) {
             Ok(value) => RuntimeHealth {
                 ok: value.get("ok").and_then(|v| v.as_bool()).unwrap_or(false),
-                message: value.get("message").and_then(|v| v.as_str()).unwrap_or("invalid").to_string(),
+                message: value
+                    .get("message")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("invalid")
+                    .to_string(),
             },
-            Err(error) => RuntimeHealth { ok: false, message: error.to_string() },
+            Err(error) => RuntimeHealth {
+                ok: false,
+                message: error.to_string(),
+            },
         }
     }
 

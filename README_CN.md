@@ -21,6 +21,9 @@
 
 ## 快速开始
 
+环境要求：Rust stable 与 Python 3.10 或更高版本。使用 Bridge 运行时时，
+通过 `python -m pip install -r requirements.txt` 安装 Python 依赖。
+
 ```bash
 git clone https://github.com/DuangZ-GR/candle-cli.git
 cd candle-cli
@@ -98,6 +101,7 @@ cargo run -- prompt "你好，介绍一下你自己"
 | `grep` | `{"pattern":"fn main","path":"src"}` | 递归搜索文件内容 | 否 |
 | `web_search` | `{"query":"今天天气"}` | 网络搜索（DuckDuckGo/Sogou 双后端） | 否 |
 | `task` | `{"description":"分析这段代码"}` | 委派只读子 Agent（3 步循环） | 否 |
+| `write` | `{"file_path":"report.txt","content":"..."}` | 在工作区内写入 UTF-8 文件 | **是** |
 | `edit` | `{"file_path":"Cargo.toml","old_string":"0.1.0","new_string":"0.3.0"}` | 精确替换一处文本 | **是** |
 | `shell` | `{"command":"cargo test"}` | 运行 shell 命令（含超时和沙盒） | **可能** |
 
@@ -106,9 +110,9 @@ cargo run -- prompt "你好，介绍一下你自己"
 | 模式 | 行为 |
 |------|------|
 | `read-only` | 仅允许 `pwd`、`read`、`glob`、`grep` |
-| `workspace-write`（默认） | 允许所有工具，无需确认 |
+| `workspace-write`（默认） | 工作区文件修改无需确认；宿主机 Shell 命令必须确认 |
 | `prompt` | 只读工具自动允许；修改工具交互式确认 |
-| `danger-full-access` | 允许所有工具，无需确认 |
+| `danger-full-access` | 所有工具（包括宿主机 Shell）均无需确认 |
 
 ### 多 Agent 协同
 
@@ -176,6 +180,8 @@ cargo run -- harness
 | `CANDLE_CLI_PERMISSION` | `workspace-write` | 权限模式 |
 | `CANDLE_CLI_PERMISSION_RESPONSE` | 空 | 预设交互确认响应 |
 | `CANDLE_CLI_SHELL_TIMEOUT_SECS` | `30` | Shell 超时（秒） |
+| `CANDLE_CLI_MAX_TOOL_OUTPUT_CHARS` | `65536` | 模型和会话上下文中保留的工具结果最大字符数 |
+| `CANDLE_CLI_ALLOW_STUB_FALLBACK` | `false` | 仅为演示/测试启用回显桩；真实 Agent 任务禁止开启 |
 | `CANDLE_CLI_SANDBOX` | 空 | `docker` 启用容器隔离 |
 | `CANDLE_CLI_VERBOSE` | `false` | 诊断信息输出到 stderr |
 | `CANDLE_CLI_MODEL_CONFIG` | 空 | 可选 JSON 配置文件 |

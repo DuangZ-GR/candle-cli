@@ -45,6 +45,7 @@ ENV_VERBOSE = "CANDLE_CLI_VERBOSE"
 ENV_MODEL_CONFIG = "CANDLE_CLI_MODEL_CONFIG"
 ENV_API_BASE_URL = "CANDLE_CLI_API_BASE_URL"
 ENV_API_KEY = "CANDLE_CLI_API_KEY"
+ENV_ALLOW_STUB_FALLBACK = "CANDLE_CLI_ALLOW_STUB_FALLBACK"
 
 # ── defaults ──────────────────────────────────────────────────────────────────
 
@@ -67,6 +68,7 @@ class ModelConfig:
         self.verbose: bool = False
         self.api_base_url: str = ""
         self.api_key: str = ""
+        self.allow_stub_fallback: bool = False
 
         if config_path:
             self._load_from_file(config_path)
@@ -111,6 +113,9 @@ class ModelConfig:
         self.verbose = _env_bool(ENV_VERBOSE, self.verbose)
         self.api_base_url = _env_str(ENV_API_BASE_URL, self.api_base_url)
         self.api_key = _env_str(ENV_API_KEY, self.api_key)
+        self.allow_stub_fallback = _env_bool(
+            ENV_ALLOW_STUB_FALLBACK, self.allow_stub_fallback
+        )
 
     @property
     def use_api(self) -> bool:

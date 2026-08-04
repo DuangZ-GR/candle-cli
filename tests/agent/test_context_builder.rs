@@ -13,9 +13,7 @@ fn build_turn_request_includes_messages() {
 
     let request = build_turn_request(&mut session, "[]").unwrap();
 
-    assert!(request
-        .system_prompt
-        .contains("candle-cli"));
+    assert!(request.system_prompt.contains("candle-cli"));
     assert!(request.messages_json.contains("hello"));
 }
 
@@ -54,4 +52,33 @@ fn build_turn_request_requires_non_empty_final_answer_after_tool_results() {
     assert!(request
         .system_prompt
         .contains("Assistant: 这个项目可以通过 cargo run 或 cargo test 运行"));
+}
+
+#[test]
+fn rag_enrichment_does_not_mutate_or_recursively_expand_the_session() {
+    let question = "Explain how compact_session removes complete conversation turns";
+    let mut session = Session::new(".".to_string());
+    session.messages.push(Message {
+        role: MessageRole::User,
+        blocks: vec![ContentBlock::Text {
+            text: question.to_string(),
+        }],
+    });
+
+    let first = build_turn_request(&mut session, "[]").unwrap();
+    let second = build_turn_request(&mut session, "[]").unwrap();
+
+    assert_eq!(user_text(&session), question);
+    assert_eq!(first.messages_json, second.messages_json);
+    assert!(first
+        .messages_json
+        .contains("The following code may be relevant to the question"));
+    assert_eq!(first.messages_json.matches("Question:").count(), 1);
+}
+
+fn user_text(session: &Session) -> &str {
+    match &session.messages[0].blocks[0] {
+        ContentBlock::Text { text } => text,
+        _ => panic!("expected a text block"),
+    }
 }

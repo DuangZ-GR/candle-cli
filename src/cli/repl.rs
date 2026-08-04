@@ -1,8 +1,7 @@
 use crate::agent::r#loop::{run_single_turn, run_single_turn_with_trace};
 use crate::agent::trace::ExecutionTrace;
 use crate::context::builder::resolve_system_prompt;
-use crate::model::bridge::LocalBridgeRuntime;
-use crate::model::mock::MockRuntime;
+use crate::model::configured::ConfiguredRuntime;
 use crate::permissions::mode::PermissionMode;
 use crate::permissions::policy::PermissionPolicy;
 use crate::session::memory::ProjectMemory;
@@ -22,6 +21,7 @@ pub fn run_repl(session_dir: PathBuf) -> io::Result<()> {
     let policy = PermissionPolicy::new(resolve_permission_mode());
     let mut last_trace: Option<ExecutionTrace> = None;
     let mut project_memory = ProjectMemory::load(&session.workspace_root);
+    let mut runtime = ConfiguredRuntime::from_environment();
 
     let mut rl = rustyline::DefaultEditor::new().map_err(io::Error::other)?;
 
@@ -36,7 +36,14 @@ pub fn run_repl(session_dir: PathBuf) -> io::Result<()> {
 
         // slash command dispatch
         if input.starts_with('/') {
-            let handled = handle_slash_command(&input, &mut session, &store, &last_trace, &tools, &mut project_memory);
+            let handled = handle_slash_command(
+                &input,
+                &mut session,
+                &store,
+                &last_trace,
+                &tools,
+                &mut project_memory,
+            );
             if handled {
                 return Ok(());
             }
@@ -51,29 +58,13 @@ pub fn run_repl(session_dir: PathBuf) -> io::Result<()> {
 
         let mut current_trace = ExecutionTrace::new();
 
-        // run turn
-        let result = match std::env::var("CANDLE_CLI_RUNTIME").ok().as_deref() {
-            Some("bridge") => {
-                let mut runtime = LocalBridgeRuntime::new("python3 python/bridge_worker.py".into());
-                run_single_turn_with_trace(
-                    &mut session,
-                    &mut runtime,
-                    &tools,
-                    &policy,
-                    &mut current_trace,
-                )
-            }
-            _ => {
-                let mut runtime = MockRuntime;
-                run_single_turn_with_trace(
-                    &mut session,
-                    &mut runtime,
-                    &tools,
-                    &policy,
-                    &mut current_trace,
-                )
-            }
-        };
+        let result = run_single_turn_with_trace(
+            &mut session,
+            &mut runtime,
+            &tools,
+            &policy,
+            &mut current_trace,
+        );
 
         match result {
             Ok(_) => {
@@ -100,24 +91,14 @@ pub fn run_prompt(session_dir: PathBuf, input: String) -> io::Result<()> {
     let mut session = Session::new(workspace_root.display().to_string());
     let tools = ToolRegistry::workspace_write(workspace_root.clone());
     let policy = PermissionPolicy::new(resolve_permission_mode());
+    let mut runtime = ConfiguredRuntime::from_environment();
 
     session.messages.push(Message {
         role: MessageRole::User,
         blocks: vec![ContentBlock::Text { text: input }],
     });
 
-    match std::env::var("CANDLE_CLI_RUNTIME").ok().as_deref() {
-        Some("bridge") => {
-            let mut runtime = LocalBridgeRuntime::new("python3 python/bridge_worker.py".into());
-            run_single_turn(&mut session, &mut runtime, &tools, &policy)
-                .map_err(io::Error::other)?;
-        }
-        _ => {
-            let mut runtime = MockRuntime;
-            run_single_turn(&mut session, &mut runtime, &tools, &policy)
-                .map_err(io::Error::other)?;
-        }
-    }
+    run_single_turn(&mut session, &mut runtime, &tools, &policy).map_err(io::Error::other)?;
 
     store.save(&session)?;
     print_last_assistant(&session);
@@ -203,7 +184,10 @@ fn handle_slash_command(
                         }
                     }
                     _ => {
-                        let _ = writeln!(stdout, "usage: /memory file <path> | cmd <cmd> | note <key>=<val>");
+                        let _ = writeln!(
+                            stdout,
+                            "usage: /memory file <path> | cmd <cmd> | note <key>=<val>"
+                        );
                     }
                 }
                 project_memory.save(&session.workspace_root).ok();
@@ -217,7 +201,10 @@ fn handle_slash_command(
             } else {
                 std::env::set_var("CANDLE_CLI_MODEL_ID", arg.as_str());
                 let _ = writeln!(stdout, "model set to: {arg}");
-                let _ = writeln!(stdout, "note: bridge worker will pick up the change on next turn");
+                let _ = writeln!(
+                    stdout,
+                    "note: bridge worker will restart before the next turn"
+                );
             }
         }
         "tools" => {
@@ -262,10 +249,7 @@ fn handle_slash_command(
             let _ = writeln!(stdout, "system prompt:\n{prompt}");
         }
         "session" | "info" => {
-            let name = session
-                .label
-                .as_deref()
-                .unwrap_or("(unnamed)");
+            let name = session.label.as_deref().unwrap_or("(unnamed)");
             let _ = writeln!(
                 stdout,
                 "session: {} | name: {name} | messages: {} | workspace: {}",

@@ -14,26 +14,21 @@ fn session_dir() -> PathBuf {
     std::env::temp_dir().join("candle-cli-sessions")
 }
 
-fn main() {
+fn main() -> std::io::Result<()> {
     let cli = Cli::parse();
     let session_dir = session_dir();
 
     match cli.command {
-        Some(CommandMode::Prompt { input }) => {
-            let _ = run_prompt(session_dir, input);
-        }
-        Some(CommandMode::Harness) => {
-            let _ = run_harness(session_dir);
-        }
+        Some(CommandMode::Prompt { input }) => run_prompt(session_dir, input),
+        Some(CommandMode::Harness) => run_harness(session_dir),
         Some(CommandMode::Doctor) => {
             render_line(&format_status_line("runtime", "mock"));
             render_line(&format_status_line(
                 "session_dir",
                 &session_dir.display().to_string(),
             ));
+            Ok(())
         }
-        None => {
-            let _ = run_repl(session_dir);
-        }
+        None => run_repl(session_dir),
     }
 }

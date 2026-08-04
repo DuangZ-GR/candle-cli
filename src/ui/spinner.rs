@@ -19,11 +19,7 @@ impl Spinner {
             loop {
                 let elapsed = started.elapsed().as_secs();
                 let frame = frames[idx % frames.len()];
-                let _ = write!(
-                    stderr,
-                    "\r  {}  thinking... {}s ",
-                    frame, elapsed
-                );
+                let _ = write!(stderr, "\r  {}  thinking... {}s ", frame, elapsed);
                 let _ = stderr.flush();
                 idx += 1;
 

@@ -32,7 +32,9 @@ impl ProjectMemory {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
-        let body = serde_json::to_string_pretty(self).map_err(io::Error::other)?.into_bytes();
+        let body = serde_json::to_string_pretty(self)
+            .map_err(io::Error::other)?
+            .into_bytes();
         fs::write(path, body)
     }
 

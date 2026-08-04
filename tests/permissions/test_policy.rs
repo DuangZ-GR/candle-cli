@@ -22,17 +22,19 @@ fn prompt_mode_requires_confirmation_for_dangerous_tools() {
 }
 
 #[test]
-fn workspace_write_allows_current_tools_without_prompt() {
+fn workspace_write_prompts_for_host_shell_but_not_file_edits() {
     let policy = PermissionPolicy::new(PermissionMode::WorkspaceWrite);
     assert!(policy.allows("shell"));
     assert!(policy.allows("edit"));
-    assert!(!policy.requires_prompt("shell"));
+    assert!(policy.requires_prompt("shell"));
+    assert!(!policy.requires_prompt("edit"));
 }
 
 #[test]
 fn danger_full_access_allows_current_tools_without_prompt() {
     let policy = PermissionPolicy::new(PermissionMode::DangerFullAccess);
     assert!(policy.allows("shell"));
+    assert!(!policy.requires_prompt("shell"));
     assert!(policy.allows("write"));
     assert!(!policy.requires_prompt("edit"));
 }

@@ -52,25 +52,38 @@ impl CandleTargetRuntime for ScriptedRuntime {
     }
 }
 
+fn wrapped_tool_call(id: &str, name: &str, input: serde_json::Value) -> String {
+    format!(
+        "<tool_call>{}</tool_call>",
+        serde_json::json!({"id": id, "name": name, "input": input})
+    )
+}
+
 #[test]
 fn agent_loop_runs_read_edit_shell_then_final_answer() {
     let dir = tempfile::tempdir().unwrap();
     let file_path = dir.path().join("note.txt");
     fs::write(&file_path, "old text\n").unwrap();
 
-    let read_call = format!(
-        r#"<tool_call>{{"id":"call-read","name":"read","input":{{"file_path":"{}"}}}}</tool_call>"#,
-        file_path.display()
+    let read_call = wrapped_tool_call(
+        "call-read",
+        "read",
+        serde_json::json!({"file_path": file_path.to_string_lossy()}),
     );
-    let edit_call = format!(
-        r#"<tool_call>{{"id":"call-edit","name":"edit","input":{{"file_path":"{}","old_string":"old text","new_string":"new text"}}}}</tool_call>"#,
-        file_path.display()
+    let edit_call = wrapped_tool_call(
+        "call-edit",
+        "edit",
+        serde_json::json!({
+            "file_path": file_path.to_string_lossy(),
+            "old_string": "old text",
+            "new_string": "new text"
+        }),
     );
     let shell_call = r#"<tool_call>{"id":"call-shell","name":"shell","input":{"command":"printf checked"}}</tool_call>"#;
 
     let mut runtime = ScriptedRuntime::new(vec![&read_call, &edit_call, shell_call, "done"]);
     let tools = ToolRegistry::workspace_write(dir.path());
-    let policy = PermissionPolicy::new(PermissionMode::WorkspaceWrite);
+    let policy = PermissionPolicy::new(PermissionMode::DangerFullAccess);
     let mut session = Session::new(dir.path().display().to_string());
     session.messages.push(Message {
         role: MessageRole::User,
@@ -91,7 +104,10 @@ fn agent_loop_accepts_function_style_read_tool_call() {
     let file_path = dir.path().join("note.txt");
     fs::write(&file_path, "hello from file\n").unwrap();
 
-    let read_call = format!(r#"read({{"file_path":"{}"}})"#, file_path.display());
+    let read_call = format!(
+        "read({})",
+        serde_json::json!({"file_path": file_path.to_string_lossy()})
+    );
     let mut runtime = ScriptedRuntime::new(vec![&read_call, "I read the file."]);
     let tools = ToolRegistry::workspace_write(dir.path());
     let policy = PermissionPolicy::new(PermissionMode::WorkspaceWrite);
@@ -239,9 +255,10 @@ fn agent_loop_wraps_non_shell_tool_success_with_envelope() {
     let file_path = dir.path().join("note.txt");
     std::fs::write(&file_path, "hello loop\n").unwrap();
 
-    let read_call = format!(
-        r#"<tool_call>{{"id":"call-1","name":"read","input":{{"file_path":"{}"}}}}</tool_call>"#,
-        file_path.display()
+    let read_call = wrapped_tool_call(
+        "call-1",
+        "read",
+        serde_json::json!({"file_path": file_path.to_string_lossy()}),
     );
     let mut runtime = ScriptedRuntime::new(vec![&read_call, "done"]);
     let tools = ToolRegistry::workspace_write(dir.path());
@@ -278,9 +295,10 @@ fn agent_loop_emits_verbose_trace_lines_to_stderr_only() {
     let file_path = dir.path().join("note.txt");
     std::fs::write(&file_path, "hi\n").unwrap();
 
-    let read_call = format!(
-        r#"<tool_call>{{"id":"call-1","name":"read","input":{{"file_path":"{}"}}}}</tool_call>"#,
-        file_path.display()
+    let read_call = wrapped_tool_call(
+        "call-1",
+        "read",
+        serde_json::json!({"file_path": file_path.to_string_lossy()}),
     );
     let mut runtime = ScriptedRuntime::new(vec![&read_call, "done"]);
     let tools = ToolRegistry::workspace_write(dir.path());

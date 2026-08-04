@@ -10,6 +10,7 @@ import pytest
 from python.bridge_prompt import build_chat_messages, extract_latest_user_text
 from python.bridge_runtime import BridgeRuntime
 from python.model_config import (
+    ENV_ALLOW_STUB_FALLBACK,
     ENV_API_BASE_URL,
     ENV_API_KEY,
     ENV_LOCAL_FILES_ONLY,
@@ -34,6 +35,7 @@ def _clear_env():
         ENV_VERBOSE,
         ENV_API_BASE_URL,
         ENV_API_KEY,
+        ENV_ALLOW_STUB_FALLBACK,
         "CANDLE_CLI_MODEL_CONFIG",
     ):
         os.environ.pop(key, None)
@@ -60,6 +62,7 @@ def test_model_config_defaults():
     assert config.verbose is False
     assert config.api_base_url == ""
     assert config.api_key == ""
+    assert config.allow_stub_fallback is False
     assert config.use_api is False
 
 
@@ -252,9 +255,29 @@ def test_verbose_config_propagates():
     assert runtime._verbose is True
 
 
-def test_generate_turn_falls_back_when_no_model():
+def test_generate_turn_reports_missing_model_by_default():
     config = ModelConfig()
     config.device = "cpu"
+    runtime = BridgeRuntime(config=config)
+
+    with mock.patch(
+        "transformers.AutoTokenizer.from_pretrained",
+        side_effect=OSError("model not found"),
+    ):
+        with pytest.raises(RuntimeError, match="local model runtime unavailable"):
+            runtime.generate_turn(
+                {
+                    "messages_json": json.dumps(
+                        [{"role": "User", "blocks": [{"Text": {"text": "hello world"}}]}]
+                    )
+                }
+            )
+
+
+def test_generate_turn_uses_stub_only_when_explicitly_enabled():
+    config = ModelConfig()
+    config.device = "cpu"
+    config.allow_stub_fallback = True
     runtime = BridgeRuntime(config=config)
 
     with mock.patch(
@@ -273,21 +296,6 @@ def test_generate_turn_falls_back_when_no_model():
     assert result["result"]["tool_calls"] == []
 
 
-def test_generate_turn_empty_messages():
-    config = ModelConfig()
-    config.device = "cpu"
-    runtime = BridgeRuntime(config=config)
-
-    with mock.patch(
-        "transformers.AutoTokenizer.from_pretrained",
-        side_effect=OSError("model not found"),
-    ):
-        result = runtime.generate_turn({"messages_json": "[]"})
-
-    assert "result" in result
-    assert result["result"]["final_text"] == "generated: "
-
-
 def test_fallback_to_stub_clears_model():
     config = ModelConfig()
     config.device = "cpu"
@@ -297,10 +305,12 @@ def test_fallback_to_stub_clears_model():
         "transformers.AutoTokenizer.from_pretrained",
         side_effect=OSError("model not found"),
     ):
-        runtime.generate_turn({"messages_json": "[]"})
+        with pytest.raises(RuntimeError):
+            runtime.generate_turn({"messages_json": "[]"})
 
     assert runtime._model is None
     assert runtime._tokenizer is None
+    assert runtime._fallback_reason == "failed to load tokenizer: model not found"
 
 
 # ── mock model helpers ───────────────────────────────────────────────────────
@@ -445,7 +455,7 @@ def test_generate_turn_via_api_with_system_prompt():
     assert result["result"]["final_text"] == "ok"
 
 
-def test_generate_turn_via_api_http_error_falls_back():
+def test_generate_turn_via_api_reports_http_error_after_retries():
     config = ModelConfig()
     config.api_base_url = "http://localhost:8080/v1"
     config.api_key = "sk-test"
@@ -460,17 +470,15 @@ def test_generate_turn_via_api_http_error_falls_back():
             hdrs=None,
             fp=None,
         ),
-    ):
-        result = runtime.generate_turn(
-            {
-                "messages_json": json.dumps(
-                    [{"role": "User", "blocks": [{"Text": {"text": "hello"}}]}]
-                )
-            }
-        )
-
-    # falls back to stub
-    assert result["result"]["final_text"] == "generated: hello"
+    ), mock.patch("time.sleep"):
+        with pytest.raises(RuntimeError, match="HTTP 500"):
+            runtime.generate_turn(
+                {
+                    "messages_json": json.dumps(
+                        [{"role": "User", "blocks": [{"Text": {"text": "hello"}}]}]
+                    )
+                }
+            )
 
 
 def test_generate_turn_via_api_empty_messages():
@@ -530,7 +538,7 @@ def test_generate_turn_retries_on_5xx_and_succeeds():
     def side_effect(req, timeout=None):
         call_count[0] += 1
         if call_count[0] < 3:
-            raise urllib.error.HTTPError(
+            raise HTTPError(
                 url="http://localhost:8080/v1/chat/completions",
                 code=503,
                 msg="Service Unavailable",
@@ -563,7 +571,7 @@ def test_generate_turn_does_not_retry_on_4xx():
 
     def side_effect(req, timeout=None):
         call_count[0] += 1
-        raise urllib.error.HTTPError(
+        raise HTTPError(
             url="http://localhost:8080/v1/chat/completions",
             code=400,
             msg="Bad Request",
@@ -572,13 +580,13 @@ def test_generate_turn_does_not_retry_on_4xx():
         )
 
     with mock.patch("urllib.request.urlopen", side_effect=side_effect):
-        result = runtime.generate_turn(
-            {
-                "messages_json": json.dumps(
-                    [{"role": "User", "blocks": [{"Text": {"text": "hello"}}]}]
-                )
-            }
-        )
+        with pytest.raises(RuntimeError, match="HTTP 400"):
+            runtime.generate_turn(
+                {
+                    "messages_json": json.dumps(
+                        [{"role": "User", "blocks": [{"Text": {"text": "hello"}}]}]
+                    )
+                }
+            )
 
     assert call_count[0] == 1
-    assert result["result"]["final_text"] == "generated: hello"

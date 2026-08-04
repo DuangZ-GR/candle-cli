@@ -54,7 +54,10 @@ impl ExecutionTrace {
             .started
             .map(|s| s.elapsed().as_millis() as u64)
             .unwrap_or(0);
-        let mut lines = vec![format!("Last trace ({:.1}s total)", total_ms as f64 / 1000.0)];
+        let mut lines = vec![format!(
+            "Last trace ({:.1}s total)",
+            total_ms as f64 / 1000.0
+        )];
         for (idx, step) in self.steps.iter().enumerate() {
             let timing = format!("+{}ms", step.elapsed_ms);
             let line = match &step.event {
