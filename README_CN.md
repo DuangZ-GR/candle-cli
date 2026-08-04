@@ -5,7 +5,7 @@
 
 [English](README.md) | [中文](README_CN.md)
 
-基于 Rust 的 Agentic CLI 工具，具备多 Agent 协同、分层记忆、沙盒执行、流式输出和可观测性能力。设计方向受 candle 轻量级 AI runtime 理念启发。
+`candle-cli` 是面向 PyTorch→MindSpore 工程迁移的 Rust-first 智能诊断 CLI：当前提供确定性 AST 扫描与安全 Agent 基础设施，目标是结合双框架运行证据定位首个语义偏差，并生成经过验证的修复。
 
 ## 核心特性
 
@@ -18,6 +18,7 @@
 - **可观测性** — `/tools`、`/status`（含 token 估算）、`/trace`（含毫秒计时和 JSON 导出）
 - **容错机制** — API 指数退避重试（4xx 不重试），shell 超时强制终止
 - **Rust 核心 + Python 桥接** — Rust 负责 CLI、agent loop、工具、权限；Python 桥接模型后端，子进程跨轮复用
+- **迁移静态扫描** — 无需安装 PyTorch/MindSpore，解析 import 别名、Tensor Method、源码位置和参数信息
 
 ## 快速开始
 
@@ -65,6 +66,24 @@ cargo run -- prompt "你好，介绍一下你自己"
 | `cargo run --` | 交互式 REPL（含 readline 编辑、流式输出） |
 | `cargo run -- harness` | 运行自动化场景评测 |
 | `cargo run -- doctor` | 打印运行时状态 |
+| `cargo run -- migrate scan <path>` | 扫描 PyTorch API 并输出版本化 JSON 报告 |
+
+### PyTorch→MindSpore 迁移扫描
+
+```bash
+# 输出 JSON 到终端
+cargo run -- migrate scan ./project --pretty
+
+# 生成 Markdown 报告；已存在的文件默认不会被覆盖
+cargo run -- migrate scan ./project --format markdown --output scan-report.md
+
+# 确认替换已有报告
+cargo run -- migrate scan ./project --format markdown --output scan-report.md --force
+```
+
+扫描器只使用 Python 标准库 AST，不导入也不执行待扫描工程。它支持 `import torch as t`、`from torch.nn.functional import relu` 等别名形式，并对可静态确认的 Tensor Method 和动态 `getattr` 调用分级标记。单文件默认限制为 2 MiB，可通过 `--max-file-bytes` 调整。
+
+固定的 `torch2ms-scanner-v1` 语法覆盖集包含 50 个任务。当前版本在该公开、随仓库发布的开发评测集上为 50/50 精确匹配、precision 100%、recall 100%。该结果仅说明这些已收录语法模式通过，不能代表未知真实项目的总体准确率；后续将另建独立真实项目测试集。
 
 ### REPL 命令
 

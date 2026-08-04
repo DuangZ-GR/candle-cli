@@ -5,7 +5,8 @@
   "description": "Shared records for PyTorch to MindSpore analysis and runtime diagnosis.",
   "oneOf": [
     { "$ref": "#/$defs/apiTrace" },
-    { "$ref": "#/$defs/diagnostic" }
+    { "$ref": "#/$defs/diagnostic" },
+    { "$ref": "#/$defs/scanReport" }
   ],
   "$defs": {
     "schemaVersion": {
@@ -122,6 +123,99 @@
         "message": { "type": "string", "minLength": 1 },
         "location": { "$ref": "#/$defs/location" },
         "data": { "type": "object" }
+      }
+    },
+    "scanFinding": {
+      "type": "object",
+      "required": [
+        "finding_id",
+        "api",
+        "location",
+        "call_kind",
+        "confidence",
+        "risk_level",
+        "expression",
+        "positional_argument_count",
+        "keyword_arguments"
+      ],
+      "properties": {
+        "finding_id": { "type": "string", "minLength": 1 },
+        "api": { "type": "string", "minLength": 1 },
+        "location": { "$ref": "#/$defs/location" },
+        "call_kind": { "type": "string", "minLength": 1 },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "risk_level": { "type": "string", "minLength": 1 },
+        "expression": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "positional_argument_count": { "type": "integer", "minimum": 0 },
+        "keyword_arguments": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "scanIssue": {
+      "type": "object",
+      "required": ["file", "kind", "message"],
+      "properties": {
+        "file": { "type": "string", "minLength": 1 },
+        "kind": { "type": "string", "minLength": 1 },
+        "message": { "type": "string", "minLength": 1 },
+        "line": { "type": "integer", "minimum": 1 },
+        "column": { "type": "integer", "minimum": 0 }
+      },
+      "dependentRequired": { "column": ["line"] }
+    },
+    "scanSummary": {
+      "type": "object",
+      "required": [
+        "finding_count",
+        "unique_api_count",
+        "direct_call_count",
+        "tensor_method_count",
+        "dynamic_call_count",
+        "issue_count",
+        "api_counts"
+      ],
+      "properties": {
+        "finding_count": { "type": "integer", "minimum": 0 },
+        "unique_api_count": { "type": "integer", "minimum": 0 },
+        "direct_call_count": { "type": "integer", "minimum": 0 },
+        "tensor_method_count": { "type": "integer", "minimum": 0 },
+        "dynamic_call_count": { "type": "integer", "minimum": 0 },
+        "issue_count": { "type": "integer", "minimum": 0 },
+        "api_counts": {
+          "type": "object",
+          "additionalProperties": { "type": "integer", "minimum": 1 }
+        }
+      }
+    },
+    "scanReport": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "record_kind",
+        "root",
+        "files_discovered",
+        "files_scanned",
+        "findings",
+        "issues",
+        "summary"
+      ],
+      "properties": {
+        "schema_version": { "$ref": "#/$defs/schemaVersion" },
+        "record_kind": { "const": "scan_report" },
+        "root": { "type": "string", "minLength": 1 },
+        "files_discovered": { "type": "integer", "minimum": 0 },
+        "files_scanned": { "type": "integer", "minimum": 0 },
+        "findings": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/scanFinding" }
+        },
+        "issues": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/scanIssue" }
+        },
+        "summary": { "$ref": "#/$defs/scanSummary" }
       }
     },
     "diagnostic": {

@@ -5,7 +5,7 @@
 
 [English](README.md) | [中文](README_CN.md)
 
-Rust-first agentic CLI with multi-agent coordination, layered memory, sandboxed execution, and observability. Inspired by candle's lightweight AI runtime philosophy.
+`candle-cli` is a Rust-first diagnostic CLI for PyTorch-to-MindSpore migration. It currently combines deterministic AST scanning with a safety-oriented agent foundation, and is evolving toward evidence-backed first-divergence diagnosis and verified repairs.
 
 ## Highlights
 
@@ -18,6 +18,7 @@ Rust-first agentic CLI with multi-agent coordination, layered memory, sandboxed 
 - **Observability** — `/tools`, `/status` (with token estimation), `/trace` (with millisecond timing and JSON export)
 - **Fault tolerance** — API retry with exponential backoff (4xx not retried), shell timeout with kill
 - **Rust core + Python bridge** — Rust owns CLI, agent loop, tools, permissions; Python bridges model backends with persistent worker
+- **Migration scanner** — discovers aliased PyTorch calls, inferred Tensor methods, source spans, and arguments without importing either framework
 
 ## Quickstart
 
@@ -66,6 +67,24 @@ cargo run -- prompt "Hello, introduce yourself"
 | `cargo run --` | Interactive REPL with readline editing |
 | `cargo run -- harness` | Run automated scenario benchmark |
 | `cargo run -- doctor` | Print runtime status |
+| `cargo run -- migrate scan <path>` | Scan PyTorch APIs and emit a versioned JSON report |
+
+### PyTorch-to-MindSpore migration scan
+
+```bash
+# JSON on stdout
+cargo run -- migrate scan ./project --pretty
+
+# Markdown report; existing files are not overwritten by default
+cargo run -- migrate scan ./project --format markdown --output scan-report.md
+
+# Explicitly replace an existing report
+cargo run -- migrate scan ./project --format markdown --output scan-report.md --force
+```
+
+The scanner uses only Python's standard-library AST and never imports or executes the target project. It resolves common import aliases, records source spans and arguments, infers statically identifiable Tensor methods, and flags dynamic `getattr` calls. The default per-file limit is 2 MiB and can be changed with `--max-file-bytes`.
+
+The checked-in `torch2ms-scanner-v1` syntax suite contains 50 tasks. This version exactly matches 50/50 cases with 100% precision and recall on that public development suite. These numbers demonstrate coverage of the included syntax patterns only; they are not an estimate for unseen real-world projects. A separate held-out project suite is planned.
 
 ### REPL commands
 

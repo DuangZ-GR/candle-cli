@@ -1,5 +1,6 @@
 use candle_cli::cli::args::{Cli, CommandMode};
 use candle_cli::cli::harness::run_harness;
+use candle_cli::cli::migrate::run_migrate;
 use candle_cli::cli::repl::{run_prompt, run_repl};
 use candle_cli::ui::format::format_status_line;
 use candle_cli::ui::render::render_line;
@@ -29,6 +30,7 @@ fn main() -> std::io::Result<()> {
             ));
             Ok(())
         }
+        Some(CommandMode::Migrate { command }) => run_migrate(command),
         None => run_repl(session_dir),
     }
 }

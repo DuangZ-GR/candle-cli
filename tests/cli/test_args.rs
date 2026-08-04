@@ -1,4 +1,4 @@
-use candle_cli::cli::args::{Cli, CommandMode};
+use candle_cli::cli::args::{Cli, CommandMode, MigrateCommand, ScanOutputFormat};
 use clap::Parser;
 
 #[test]
@@ -11,4 +11,29 @@ fn parses_prompt_mode() {
 fn parses_resume_flag() {
     let cli = Cli::parse_from(["candle-cli", "--resume"]);
     assert!(cli.resume);
+}
+
+#[test]
+fn parses_migrate_scan_mode() {
+    let cli = Cli::parse_from([
+        "candle-cli",
+        "migrate",
+        "scan",
+        "project",
+        "--pretty",
+        "--max-file-bytes",
+        "4096",
+    ]);
+
+    match cli.command {
+        Some(CommandMode::Migrate {
+            command: MigrateCommand::Scan(arguments),
+        }) => {
+            assert_eq!(arguments.path.to_string_lossy(), "project");
+            assert!(arguments.pretty);
+            assert_eq!(arguments.max_file_bytes, 4096);
+            assert_eq!(arguments.format, ScanOutputFormat::Json);
+        }
+        other => panic!("unexpected command: {other:?}"),
+    }
 }

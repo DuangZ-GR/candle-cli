@@ -27,6 +27,7 @@ def test_machine_schema_is_valid_json_and_declares_both_record_types():
     assert schema["$schema"] == "https://json-schema.org/draft/2020-12/schema"
     assert "apiTrace" in schema["$defs"]
     assert "diagnostic" in schema["$defs"]
+    assert "scanReport" in schema["$defs"]
 
 
 def test_api_trace_fixture_validates_and_round_trips():

@@ -10,7 +10,7 @@
 - 未知枚举值降级为 `unknown`，但原始值可保存在 `metadata` 中供排查。
 - JSON 文件使用 UTF-8；流式轨迹使用一行一条记录的 JSON Lines。
 
-Rust 实现在 `src/migration/schema.rs`，Python 实现在 `python/migration/schema.py`。两端共同读取 `tests/fixtures/migration` 中的固定样例，防止字段名或枚举编码发生漂移。
+Rust 实现在 `src/migration/schema.rs`，Python 实现在 `python/migration/schema.py`。两端共同读取 `tests/fixtures/migration` 中的固定样例，防止字段名或枚举编码发生漂移。协议当前包含 `api_trace`、`diagnostic` 和 `scan_report` 三种记录。
 
 ## 坐标约定
 
@@ -29,6 +29,10 @@ Rust 实现在 `src/migration/schema.rs`，Python 实现在 `python/migration/sc
 - `output` 或 `error`，且二者只能存在一个。
 
 动态或无法确定的 shape 维度使用 `null`，不能使用 `-1`，从而避免把真实的负值与未知值混淆。`preview` 只保存经过长度限制和脱敏的样例，不用于完整张量传输。
+
+## 扫描报告
+
+`scan_report` 汇总静态发现的 PyTorch API、源码范围、调用形式、置信度、初步风险和扫描问题。报告中的汇总计数必须与 findings/issues 明细严格一致，Rust CLI 在输出或写文件前会再次执行强类型校验。
 
 ## 诊断记录
 

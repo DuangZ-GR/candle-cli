@@ -52,8 +52,170 @@ pub fn ensure_compatible_schema(version: &str) -> Result<(), SchemaError> {
 pub enum RecordKind {
     ApiTrace,
     Diagnostic,
+    ScanReport,
     #[serde(other)]
     Unknown,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ScanCallKind {
+    Function,
+    TensorMethod,
+    Dynamic,
+    #[serde(other)]
+    Unknown,
+}
+
+impl ScanCallKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Function => "function",
+            Self::TensorMethod => "tensor_method",
+            Self::Dynamic => "dynamic",
+            Self::Unknown => "unknown",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RiskLevel {
+    Unclassified,
+    Low,
+    Medium,
+    High,
+    Critical,
+    #[serde(other)]
+    Unknown,
+}
+
+impl RiskLevel {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Unclassified => "unclassified",
+            Self::Low => "low",
+            Self::Medium => "medium",
+            Self::High => "high",
+            Self::Critical => "critical",
+            Self::Unknown => "unknown",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ScanFinding {
+    pub finding_id: String,
+    pub api: String,
+    pub location: SourceLocation,
+    pub call_kind: ScanCallKind,
+    pub confidence: f64,
+    pub risk_level: RiskLevel,
+    pub expression: String,
+    pub positional_argument_count: u32,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub keyword_arguments: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ScanIssue {
+    pub file: String,
+    pub kind: String,
+    pub message: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub line: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub column: Option<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ScanSummary {
+    pub finding_count: u64,
+    pub unique_api_count: u64,
+    pub direct_call_count: u64,
+    pub tensor_method_count: u64,
+    pub dynamic_call_count: u64,
+    pub issue_count: u64,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub api_counts: BTreeMap<String, u64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ScanReport {
+    pub schema_version: String,
+    pub record_kind: RecordKind,
+    pub root: String,
+    pub files_discovered: u64,
+    pub files_scanned: u64,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub findings: Vec<ScanFinding>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub issues: Vec<ScanIssue>,
+    pub summary: ScanSummary,
+}
+
+impl ScanReport {
+    pub fn validate(&self) -> Result<(), SchemaError> {
+        ensure_compatible_schema(&self.schema_version)?;
+        if self.record_kind != RecordKind::ScanReport {
+            return Err(SchemaError::new("record_kind must be scan_report"));
+        }
+        validate_non_empty("root", &self.root)?;
+        if self.files_scanned > self.files_discovered {
+            return Err(SchemaError::new(
+                "files_scanned must not exceed files_discovered",
+            ));
+        }
+
+        let mut api_counts = BTreeMap::new();
+        let mut direct_call_count = 0;
+        let mut tensor_method_count = 0;
+        let mut dynamic_call_count = 0;
+        for finding in &self.findings {
+            validate_non_empty("finding_id", &finding.finding_id)?;
+            validate_non_empty("api", &finding.api)?;
+            validate_non_empty("expression", &finding.expression)?;
+            finding.location.validate()?;
+            if !finding.confidence.is_finite() || !(0.0..=1.0).contains(&finding.confidence) {
+                return Err(SchemaError::new(
+                    "scan finding confidence must be a finite value between 0 and 1",
+                ));
+            }
+            *api_counts.entry(finding.api.clone()).or_insert(0) += 1;
+            match finding.call_kind {
+                ScanCallKind::Function => direct_call_count += 1,
+                ScanCallKind::TensorMethod => tensor_method_count += 1,
+                ScanCallKind::Dynamic => dynamic_call_count += 1,
+                ScanCallKind::Unknown => {}
+            }
+        }
+        for issue in &self.issues {
+            validate_non_empty("issue file", &issue.file)?;
+            validate_non_empty("issue kind", &issue.kind)?;
+            validate_non_empty("issue message", &issue.message)?;
+            if issue.line.is_none() && issue.column.is_some() {
+                return Err(SchemaError::new(
+                    "scan issue column requires a corresponding line",
+                ));
+            }
+        }
+
+        let expected = ScanSummary {
+            finding_count: self.findings.len() as u64,
+            unique_api_count: api_counts.len() as u64,
+            direct_call_count,
+            tensor_method_count,
+            dynamic_call_count,
+            issue_count: self.issues.len() as u64,
+            api_counts,
+        };
+        if self.summary != expected {
+            return Err(SchemaError::new(
+                "scan summary does not match findings and issues",
+            ));
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
