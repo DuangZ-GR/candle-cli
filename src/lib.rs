@@ -1,6 +1,7 @@
 pub mod agent;
 pub mod cli;
 pub mod context;
+pub mod migration;
 pub mod model;
 pub mod permissions;
 pub mod session;

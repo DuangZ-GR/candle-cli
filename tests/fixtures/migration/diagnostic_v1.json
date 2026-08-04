@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0",
+  "record_kind": "diagnostic",
+  "diagnostic_id": "diag-fixture-001",
+  "run_id": "run-fixture-001",
+  "category": "dtype_mismatch",
+  "severity": "high",
+  "confidence": 0.97,
+  "summary": "MindSpore 输出被转换为 bool",
+  "explanation": "首个可观测偏差出现在归约算子的输出 dtype。",
+  "location": {
+    "file": "model_ms.py",
+    "line": 42,
+    "column": 8
+  },
+  "source_api": "torch.sum",
+  "target_api": "mindspore.ops.sum",
+  "evidence": [
+    {
+      "kind": "runtime_trace",
+      "message": "PyTorch 输出为 float32，MindSpore 输出为 bool。",
+      "data": {
+        "source_dtype": "float32",
+        "target_dtype": "bool"
+      }
+    }
+  ],
+  "suggested_action": "检查输入转换和 dtype 参数。",
+  "verified": false,
+  "metadata": {
+    "mapping_version": "2026-08-04"
+  }
+}
