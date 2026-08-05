@@ -19,6 +19,7 @@
 - **Fault tolerance** — API retry with exponential backoff (4xx not retried), shell timeout with kill
 - **Rust core + Python bridge** — Rust owns CLI, agent loop, tools, permissions; Python bridges model backends with persistent worker
 - **Migration scanner** — discovers aliased PyTorch calls, inferred Tensor methods, source spans, and arguments without importing either framework
+- **Component parity** — captures PyTorch/MindSpore forward and gradient traces separately, then scores equivalence, defect class, and first-divergence Top-1
 - **Verified migration rewrites** — previews minimal API/dtype edits, applies them transactionally, runs an explicit validator, and supports checksum-protected rollback
 
 ## Quickstart
@@ -128,6 +129,8 @@ The pinned `real-projects-v1` corpus adds an out-of-sample coverage audit over 2
 After evidence-backed expansion to snapshot `.3`, mapped call coverage reaches 244/545 (44.77%), exact-only rewrite opportunities rise from 71 to 115, and all 18 preview files remain syntax-valid. A rule-frozen held-out audit on Segment Anything scans 17/17 files and maps 89/212 calls (41.98%), with 9/9 generated preview files syntax-valid. See `docs/M6_REAL_PROJECT_RESULTS.md`; these remain static metrics rather than MindSpore runtime accuracy.
 
 The version-gated runtime parity microbenchmark captures five deterministic API chains in separate PyTorch and MindSpore environments, then evaluates return structure, dtype, shape, NaN/Inf and numeric summaries through the common trace comparator. A pinned Linux run of `runtime-parity-v2` on PyTorch 2.6.0+cu124 and MindSpore 2.9.0 captured 5/5 cases and 10/10 calls on each side; all 5 cases were equivalent, for 100% parity and classification accuracy with both version gates satisfied. This is a basic forward-API microbenchmark, not whole-project migration accuracy. See `docs/M7_RUNTIME_PARITY.md`.
+
+`runtime-components-v1` extends the same evidence path to an MLP, a CNN block, input/weight gradients, BatchNorm inference, and three frozen dtype/default-mode/missing-operator defects. A pinned Linux run captured 7/7 cases and 12/12 call records per framework: all 4 equivalent components passed, all 3 held-out defects had the correct class and first-divergence Top-1, and the gradient case was equivalent. This remains a small deterministic component/fault-injection suite, not end-to-end project migration accuracy. See `docs/M11_COMPONENT_PARITY.md`.
 
 The checked-in `security-regression-v1` suite exercises 12 local path/permission attacks and 10 benign controls without running dangerous shell commands. All 12 attacks were intercepted (10 hard blocks and 2 confirmation gates), while 10/10 benign cases were allowed. These figures apply only to this deterministic regression set, not unknown attacks, container escape, prompt injection, or network exfiltration; see `docs/M8_SECURITY_BENCHMARK.md`.
 
@@ -307,7 +310,7 @@ cargo run -- harness
 cargo fmt --check
 cargo clippy --all-targets --all-features -- -D warnings
 cargo test
-python3 -m pytest python/test_bridge_runtime.py -q
+PYTHONPATH=python python3 -m pytest python -q
 ```
 
 ## License
