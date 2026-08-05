@@ -113,6 +113,8 @@ cargo run -- migrate rollback \
 
 基于官方证据扩充到快照 `.3` 后，调用映射覆盖达到 244/545（44.77%），exact-only 改写机会从 71 增至 115，18/18 个预览文件仍保持语法有效。规则冻结后才选取 Segment Anything 做留出审计：17/17 个文件扫描成功，映射 89/212 个调用（41.98%），9/9 个生成预览文件语法有效。详见 `docs/M6_REAL_PROJECT_RESULTS.md`；这些仍是静态指标，不等同于 MindSpore 运行时准确率。
 
+带版本门禁的 `runtime-parity-v1` 微基准可分别在 PyTorch 2.1 与 MindSpore 2.9 环境采集 5 条确定性 API 链，再通过公共轨迹比较器核对返回结构、dtype、shape、NaN/Inf 和数值摘要。当前机器只有 PyTorch 2.13、没有 MindSpore，因此只完成了非正式的源端 5/5 冒烟采集，没有声称任何运行一致率，详见 `docs/M7_RUNTIME_PARITY.md`。
+
 ### REPL 命令
 
 | 命令 | 别名 | 用途 |

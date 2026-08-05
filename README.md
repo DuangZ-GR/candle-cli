@@ -125,6 +125,8 @@ The pinned `real-projects-v1` corpus adds an out-of-sample coverage audit over 2
 
 After evidence-backed expansion to snapshot `.3`, mapped call coverage reaches 244/545 (44.77%), exact-only rewrite opportunities rise from 71 to 115, and all 18 preview files remain syntax-valid. A rule-frozen held-out audit on Segment Anything scans 17/17 files and maps 89/212 calls (41.98%), with 9/9 generated preview files syntax-valid. See `docs/M6_REAL_PROJECT_RESULTS.md`; these remain static metrics rather than MindSpore runtime accuracy.
 
+The version-gated `runtime-parity-v1` microbenchmark captures five deterministic API chains in separate PyTorch 2.1 and MindSpore 2.9 environments, then evaluates return structure, dtype, shape, NaN/Inf and numeric summaries through the common trace comparator. The current machine has PyTorch 2.13 but no MindSpore, so only a non-canonical 5/5 source-side smoke capture was run and no runtime parity percentage is claimed. See `docs/M7_RUNTIME_PARITY.md`.
+
 ### REPL commands
 
 | Command | Alias | Purpose |
