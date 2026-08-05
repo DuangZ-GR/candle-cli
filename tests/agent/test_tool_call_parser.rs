@@ -50,6 +50,30 @@ fn parses_fallback_function_style_with_empty_object() {
 }
 
 #[test]
+fn parses_fallback_calls_for_every_registered_non_pwd_tool() {
+    let cases = [
+        ("read", r#"{"file_path":"README.md"}"#),
+        ("glob", r#"{"pattern":"src/**/*.rs"}"#),
+        ("grep", r#"{"pattern":"main","path":"src"}"#),
+        ("web_search", r#"{"query":"MindSpore"}"#),
+        ("task", r#"{"description":"inspect the migration code"}"#),
+        ("write", r#"{"file_path":"report.txt","content":"ok"}"#),
+        (
+            "edit",
+            r#"{"file_path":"report.txt","old_string":"ok","new_string":"done"}"#,
+        ),
+        ("shell", r#"{"command":"pwd"}"#),
+    ];
+
+    for (name, input) in cases {
+        let parsed = parse_tool_call(&format!("{name}({input})"))
+            .expect("registered fallback call should parse")
+            .expect("registered fallback call should be present");
+        assert_eq!(parsed.name, name);
+    }
+}
+
+#[test]
 fn rejects_unknown_fallback_function_name() {
     let parsed = parse_tool_call(r#"foo({"file_path":"README.md"})"#)
         .expect("unknown function-style output should be treated as final text");

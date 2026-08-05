@@ -5,7 +5,7 @@
 
 [English](README.md) | [中文](README_CN.md)
 
-Rust-first agentic CLI with multi-agent coordination, layered memory, sandboxed execution, and observability. Inspired by candle's lightweight AI runtime philosophy.
+`candle-cli` is a Rust-first diagnostic CLI for PyTorch-to-MindSpore migration. It currently combines deterministic AST scanning with a safety-oriented agent foundation, and is evolving toward evidence-backed first-divergence diagnosis and verified repairs.
 
 ## Highlights
 
@@ -18,8 +18,14 @@ Rust-first agentic CLI with multi-agent coordination, layered memory, sandboxed 
 - **Observability** — `/tools`, `/status` (with token estimation), `/trace` (with millisecond timing and JSON export)
 - **Fault tolerance** — API retry with exponential backoff (4xx not retried), shell timeout with kill
 - **Rust core + Python bridge** — Rust owns CLI, agent loop, tools, permissions; Python bridges model backends with persistent worker
+- **Migration scanner** — discovers aliased PyTorch calls, inferred Tensor methods, source spans, and arguments without importing either framework
+- **Verified migration rewrites** — previews minimal API/dtype edits, applies them transactionally, runs an explicit validator, and supports checksum-protected rollback
 
 ## Quickstart
+
+Requirements: Rust stable and Python 3.10 or newer. Install Python bridge
+dependencies with `python -m pip install -r requirements.txt` when using the
+bridge runtime.
 
 ```bash
 git clone https://github.com/DuangZ-GR/candle-cli.git
@@ -61,7 +67,71 @@ cargo run -- prompt "Hello, introduce yourself"
 | `cargo run -- prompt "..."` | One-shot prompt and exit |
 | `cargo run --` | Interactive REPL with readline editing |
 | `cargo run -- harness` | Run automated scenario benchmark |
+| `cargo run -- security-harness` | Run deterministic path/permission security regression benchmark |
+| `cargo run -- context-harness` | Measure deterministic turn-compaction reduction and integrity |
 | `cargo run -- doctor` | Print runtime status |
+| `cargo run -- migrate scan <path>` | Scan PyTorch APIs and emit a versioned JSON report |
+| `cargo run -- migrate map <api>` | Query a versioned MindSpore mapping with official evidence |
+| `cargo run -- migrate import-msprobe ...` | Normalize an msprobe `dump.json` into canonical JSONL |
+| `cargo run -- migrate compare <pt.jsonl> <ms.jsonl>` | Align traces and locate the first observable divergence |
+| `cargo run -- migrate rewrite <path>` | Preview deterministic API and dtype rewrites without modifying source |
+| `cargo run -- migrate rollback <manifest>` | Restore files from a rewrite transaction |
+
+### PyTorch-to-MindSpore migration scan
+
+```bash
+# JSON on stdout
+cargo run -- migrate scan ./project --pretty
+
+# Markdown report; existing files are not overwritten by default
+cargo run -- migrate scan ./project --format markdown --output scan-report.md
+
+# Explicitly replace an existing report
+cargo run -- migrate scan ./project --format markdown --output scan-report.md --force
+
+# Query one API directly
+cargo run -- migrate map torch.arange --pretty
+
+# Import API-level msprobe statistics from both framework runs
+cargo run -- migrate import-msprobe torch_dump/dump.json torch.jsonl \
+  --framework pytorch --framework-version 2.1 --run-id experiment-001
+cargo run -- migrate import-msprobe ms_dump/dump.json mindspore.jsonl \
+  --framework mindspore --framework-version 2.9.0 --run-id experiment-001
+
+# Compare the saved artifacts; a valid divergence is reported as JSON, not a process failure
+cargo run -- migrate compare torch.jsonl mindspore.jsonl --pretty
+
+# Preview a minimal patch; source files are not changed
+cargo run -- migrate rewrite ./project --pretty
+
+# Apply only exact mappings and run a validator without a shell
+cargo run -- migrate rewrite ./project --apply \
+  --validate-program python --validate-arg=-m --validate-arg=pytest
+
+# Restore a transaction after a successful apply
+cargo run -- migrate rollback \
+  ./project/.candle-cli/backups/<transaction-id>/manifest.json --pretty
+```
+
+The scanner uses only Python's standard-library AST and never imports or executes the target project. It resolves common import aliases, records source spans and arguments, infers statically identifiable Tensor methods, and flags dynamic `getattr` calls. Each finding includes the target API, framework versions, knowledge snapshot, difference categories, and official evidence when known. The default per-file limit is 2 MiB and can be changed with `--max-file-bytes`.
+
+The current snapshot is grounded in the official PyTorch 2.1 to MindSpore 2.9.0 mapping table and contains 53 validated records. It covers 27 of 36 unique APIs (75%) in the fixed scanner suite: 25 exact, 2 different, and 9 unknown. An absent entry means the snapshot does not know; it does not claim that MindSpore lacks the API.
+
+The checked-in `torch2ms-scanner-v1` syntax suite contains 50 tasks. This version exactly matches 50/50 cases with 100% precision and recall on that public development suite. These numbers demonstrate coverage of the included syntax patterns only; they are not an estimate for unseen real-world projects. A separate held-out project suite is planned.
+
+Runtime comparison accepts canonical traces produced by the lightweight `TraceRecorder` or imported from current msprobe API-level `dump.json` statistics. Calls are aligned through the versioned mapping snapshot and compared in order by runtime error, return structure, dtype, shape, NaN/Inf counts, and numerical summaries. The fixed `trace-defects-v1` suite contains 10 synthetic cases and currently reaches 100% classification accuracy and 100% Top-1 localization on its 8 injected defects. This is a reproducible development-set result, not a real-world generalization claim; see `docs/M4_VERIFICATION.md` for scope and limitations.
+
+Rewriting is preview-only by default. The rewriter resolves import aliases and changes only mapped call names plus supported `dtype=` constants inside accepted calls; comments and surrounding formatting remain untouched. Mappings marked `difference` require `--include-differences`. Apply verifies preview hashes, writes same-filesystem backups and a transaction manifest, and automatically restores all changed sources if the validator fails or times out. An apply without `--validate-program` is deliberately reported as `verified: false`. The fixed `rewrite-cases-v1` synthetic development set contains 14 cases and currently has 100% exact-patch, safe-skip, and syntax-valid rates; this is not a held-out or real-project benchmark.
+
+The pinned `real-projects-v1` corpus adds an out-of-sample coverage audit over 25 files and 4,436 lines from PyTorch Examples, nanoGPT, and DETR. With knowledge snapshot `ms2.9.0-pt2.1-2026-08-05.1`, all 25 files scan without issues, while only 132/545 findings (24.22%) and 21/162 unique APIs (12.96%) are mapped. Exact-only rewriting finds 71 call edits across 18 files and all 18 previews remain syntactically valid. These are static coverage and syntax metrics, not runtime migration accuracy; see `docs/M6_REAL_PROJECT_BASELINE.md`.
+
+After evidence-backed expansion to snapshot `.3`, mapped call coverage reaches 244/545 (44.77%), exact-only rewrite opportunities rise from 71 to 115, and all 18 preview files remain syntax-valid. A rule-frozen held-out audit on Segment Anything scans 17/17 files and maps 89/212 calls (41.98%), with 9/9 generated preview files syntax-valid. See `docs/M6_REAL_PROJECT_RESULTS.md`; these remain static metrics rather than MindSpore runtime accuracy.
+
+The version-gated runtime parity microbenchmark captures five deterministic API chains in separate PyTorch and MindSpore environments, then evaluates return structure, dtype, shape, NaN/Inf and numeric summaries through the common trace comparator. A pinned Linux run of `runtime-parity-v2` on PyTorch 2.6.0+cu124 and MindSpore 2.9.0 captured 5/5 cases and 10/10 calls on each side; all 5 cases were equivalent, for 100% parity and classification accuracy with both version gates satisfied. This is a basic forward-API microbenchmark, not whole-project migration accuracy. See `docs/M7_RUNTIME_PARITY.md`.
+
+The checked-in `security-regression-v1` suite exercises 12 local path/permission attacks and 10 benign controls without running dangerous shell commands. All 12 attacks were intercepted (10 hard blocks and 2 confirmation gates), while 10/10 benign cases were allowed. These figures apply only to this deterministic regression set, not unknown attacks, container escape, prompt injection, or network exfiltration; see `docs/M8_SECURITY_BENCHMARK.md`.
+
+The `context-compaction-v1` suite reduces estimated serialized-message tokens from 4,434 to 1,395 (68.54%) across four deterministic conversations while preserving system messages and tool-call/result integrity. This is a heuristic compaction metric, not provider billing data. The Bridge now collects provider-reported token/cache usage when available, but no real provider benchmark has been checked in; the deterministic context report therefore keeps cache hit rate as `null`. See `docs/M9_CONTEXT_BENCHMARK.md` and `docs/M10_PROVIDER_USAGE.md`.
 
 ### REPL commands
 
@@ -103,6 +173,7 @@ Rust parses the block, executes the tool, records the result in session, and fee
 | `grep` | `{"pattern":"fn main","path":"src"}` | Search file contents recursively | No |
 | `web_search` | `{"query":"today weather"}` | Web search via DuckDuckGo/Sogou fallback | No |
 | `task` | `{"description":"analyze this code"}` | Delegate to read-only sub-agent (3-step loop) | No |
+| `write` | `{"file_path":"report.txt","content":"..."}` | Write a UTF-8 file inside the workspace | **Yes** |
 | `edit` | `{"file_path":"Cargo.toml","old_string":"0.1.0","new_string":"0.3.0"}` | Replace exactly one text occurrence | **Yes** |
 | `shell` | `{"command":"cargo test"}` | Run shell command with timeout | **Possible** |
 
@@ -111,9 +182,9 @@ Rust parses the block, executes the tool, records the result in session, and fee
 | Mode | Behavior |
 |------|----------|
 | `read-only` | Allow `pwd`, `read`, `glob`, `grep` only |
-| `workspace-write` (default) | Allow all tools without confirmation |
+| `workspace-write` (default) | Allow workspace file edits; require confirmation for host shell commands |
 | `prompt` | Auto-allow read tools; confirm `edit`, `write`, `shell` interactively |
-| `danger-full-access` | Allow all tools without confirmation |
+| `danger-full-access` | Allow all tools, including host shell commands, without confirmation |
 
 ### Multi-agent coordination
 
@@ -203,6 +274,9 @@ Set `CANDLE_CLI_VERBOSE=1` for API request details, token usage, timing, and GPU
 | `CANDLE_CLI_PERMISSION` | `workspace-write` | Permission mode |
 | `CANDLE_CLI_PERMISSION_RESPONSE` | (empty) | Pre-set prompt responses (`y`/`allow`/`deny`) |
 | `CANDLE_CLI_SHELL_TIMEOUT_SECS` | `30` | Shell command timeout (seconds) |
+| `CANDLE_CLI_MAX_TOOL_OUTPUT_CHARS` | `65536` | Maximum tool-result characters retained in model/session context |
+| `CANDLE_CLI_ALLOW_STUB_FALLBACK` | `false` | Enable echo-only bridge stub for demos/tests; never enable for real agent tasks |
+| `CANDLE_CLI_INCLUDE_USAGE` | `true` | Request usage in streaming API responses; disable for incompatible local backends |
 | `CANDLE_CLI_SANDBOX` | (empty) | Set to `docker` for container isolation |
 | `CANDLE_CLI_VERBOSE` | `false` | Print diagnostics to stderr |
 | `CANDLE_CLI_MODEL_CONFIG` | (empty) | Optional JSON config file path |

@@ -71,6 +71,14 @@ path = "tests/cli/test_doctor_status.rs"
 name = "test_bridge_runtime"
 path = "tests/model/test_bridge_runtime.rs"
 
+[[test]]
+name = "test_migration_schema"
+path = "tests/migration/test_schema.rs"
+
+[[test]]
+name = "test_migrate_scan"
+path = "tests/cli/test_migrate_scan.rs"
+
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 rustyline = "14"

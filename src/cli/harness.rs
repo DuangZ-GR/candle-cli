@@ -4,7 +4,7 @@ use crate::permissions::mode::PermissionMode;
 use crate::permissions::policy::PermissionPolicy;
 use crate::session::model::{ContentBlock, Message, MessageRole, Session};
 use crate::tools::registry::ToolRegistry;
-use std::io::{self, Write};
+use std::io;
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -21,10 +21,22 @@ pub struct ScenarioResult {
 
 pub fn run_harness(session_dir: PathBuf) -> io::Result<()> {
     let scenarios: Vec<(&str, &str)> = vec![
-        ("read_file", "Read the file README.md and tell me what license this project uses."),
-        ("glob_search", "Use glob to find all .rs files in the src directory."),
-        ("code_search", "Search for the string 'fn run_single_turn' in the project source code."),
-        ("shell_command", "Run 'ls src/' and report what directories you see."),
+        (
+            "read_file",
+            "Read the file README.md and tell me what license this project uses.",
+        ),
+        (
+            "glob_search",
+            "Use glob to find all .rs files in the src directory.",
+        ),
+        (
+            "code_search",
+            "Search for the string 'fn run_single_turn' in the project source code.",
+        ),
+        (
+            "shell_command",
+            "Run 'ls src/' and report what directories you see.",
+        ),
     ];
 
     let workspace = std::env::current_dir()?;
@@ -47,8 +59,7 @@ pub fn run_harness(session_dir: PathBuf) -> io::Result<()> {
 
         let scenario_start = Instant::now();
         let result = if std::env::var("CANDLE_CLI_RUNTIME").ok().as_deref() == Some("bridge") {
-            let mut runtime =
-                LocalBridgeRuntime::new("python3 python/bridge_worker.py".into());
+            let mut runtime = LocalBridgeRuntime::new("python3 python/bridge_worker.py".into());
             run_single_turn(&mut session, &mut runtime, &tools, &policy)
         } else {
             // Mock mode for testing

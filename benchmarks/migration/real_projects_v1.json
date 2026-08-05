@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "benchmark_version": "real-projects-v1",
+  "dataset_kind": "pinned_real_project_static_corpus",
+  "description": "Pinned, permissively licensed real PyTorch projects used for out-of-sample static scan and deterministic rewrite coverage measurement.",
+  "projects": [
+    {
+      "id": "pytorch-examples",
+      "repository": "https://github.com/pytorch/examples.git",
+      "commit": "acc295dc7b90714f1bf47f06004fc19a7fe235c4",
+      "checkout_dir": "pytorch-examples",
+      "license": "BSD-3-Clause",
+      "license_file": "LICENSE",
+      "paths": ["mnist/*.py", "dcgan/*.py", "vae/*.py", "word_language_model/*.py"]
+    },
+    {
+      "id": "nanogpt",
+      "repository": "https://github.com/karpathy/nanoGPT.git",
+      "commit": "3adf61e154c3fe3fca428ad6bc3818b27a3b8291",
+      "checkout_dir": "nanoGPT",
+      "license": "MIT",
+      "license_file": "LICENSE",
+      "paths": ["*.py"]
+    },
+    {
+      "id": "detr",
+      "repository": "https://github.com/facebookresearch/detr.git",
+      "commit": "29901c51d7fe8712168b8d0d64351170bc0f83e0",
+      "checkout_dir": "detr",
+      "license": "Apache-2.0",
+      "license_file": "LICENSE",
+      "paths": ["main.py", "engine.py", "models/*.py", "util/*.py"]
+    }
+  ]
+}

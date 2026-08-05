@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0",
+  "benchmark_version": "context-compaction-v1",
+  "dataset_kind": "deterministic_synthetic_conversations",
+  "estimator": "heuristic_cjk_1_token_latin_4_chars",
+  "case_count": 4,
+  "estimated_tokens_before": 4434,
+  "estimated_tokens_after": 1395,
+  "estimated_tokens_saved": 3039,
+  "estimated_token_reduction_rate": 0.6853856562922869,
+  "integrity_passed": true,
+  "provider_cache_metrics_available": false,
+  "provider_cache_hit_rate": null,
+  "passed": true,
+  "cases": [
+    {"id":"english-long","original_user_turns":20,"max_turns":5,"kept_user_turns":5,"messages_before":41,"messages_after":11,"estimated_tokens_before":1329,"estimated_tokens_after":355,"estimated_tokens_saved":974,"estimated_token_reduction_rate":0.7328818660647103,"system_messages_preserved":true,"tool_pairs_preserved":true,"passed":true},
+    {"id":"chinese-long","original_user_turns":16,"max_turns":4,"kept_user_turns":4,"messages_before":33,"messages_after":9,"estimated_tokens_before":1308,"estimated_tokens_after":350,"estimated_tokens_saved":958,"estimated_token_reduction_rate":0.7324159021406728,"system_messages_preserved":true,"tool_pairs_preserved":true,"passed":true},
+    {"id":"tool-heavy","original_user_turns":12,"max_turns":3,"kept_user_turns":3,"messages_before":49,"messages_after":13,"estimated_tokens_before":1509,"estimated_tokens_after":402,"estimated_tokens_saved":1107,"estimated_token_reduction_rate":0.7335984095427436,"system_messages_preserved":true,"tool_pairs_preserved":true,"passed":true},
+    {"id":"under-limit","original_user_turns":4,"max_turns":10,"kept_user_turns":4,"messages_before":9,"messages_after":9,"estimated_tokens_before":288,"estimated_tokens_after":288,"estimated_tokens_saved":0,"estimated_token_reduction_rate":0.0,"system_messages_preserved":true,"tool_pairs_preserved":true,"passed":true}
+  ],
+  "limitations": [
+    "Token counts are deterministic estimates, not provider billing tokens.",
+    "The suite measures turn compaction, not semantic summarization quality.",
+    "Provider cache hit rate is unavailable and intentionally reported as null."
+  ]
+}

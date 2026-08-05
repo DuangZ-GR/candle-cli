@@ -1,5 +1,6 @@
 use crate::agent::r#loop::run_single_turn_with_limit;
 use crate::model::runtime::CandleTargetRuntime;
+use crate::model::types::TurnResult;
 use crate::permissions::policy::PermissionPolicy;
 use crate::session::model::{ContentBlock, Message, MessageRole, Session};
 use crate::tools::registry::ToolRegistry;
@@ -11,7 +12,7 @@ pub fn run<R: CandleTargetRuntime>(
     runtime: &mut R,
     _parent_tools: &ToolRegistry,
     _parent_policy: &PermissionPolicy,
-) -> Result<String, String> {
+) -> Result<TurnResult, String> {
     // Sub-agent uses read-only tools only (safe by default)
     let sub_tools = ToolRegistry::read_only(".");
     let sub_policy = PermissionPolicy::new(crate::permissions::mode::PermissionMode::ReadOnly);
@@ -27,6 +28,5 @@ pub fn run<R: CandleTargetRuntime>(
     });
 
     // Short loop: max 3 steps for sub-agents
-    let result = run_single_turn_with_limit(&mut sub_session, runtime, &sub_tools, &sub_policy, 3)?;
-    Ok(result.final_text)
+    run_single_turn_with_limit(&mut sub_session, runtime, &sub_tools, &sub_policy, 3)
 }

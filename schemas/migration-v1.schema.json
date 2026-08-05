@@ -1,0 +1,488 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/DuangZ-GR/candle-cli/schemas/migration-v1.schema.json",
+  "title": "candle-cli migration record v1",
+  "description": "Shared records for PyTorch to MindSpore analysis and runtime diagnosis.",
+  "oneOf": [
+    { "$ref": "#/$defs/apiTrace" },
+    { "$ref": "#/$defs/diagnostic" },
+    { "$ref": "#/$defs/scanReport" },
+    { "$ref": "#/$defs/traceComparison" },
+    { "$ref": "#/$defs/msprobeImportReport" },
+    { "$ref": "#/$defs/rewritePlan" },
+    { "$ref": "#/$defs/rewriteApplyReport" },
+    { "$ref": "#/$defs/rewriteRollbackReport" }
+  ],
+  "$defs": {
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^1\\.[0-9]+$"
+    },
+    "location": {
+      "type": "object",
+      "required": ["file", "line", "column"],
+      "properties": {
+        "file": { "type": "string", "minLength": 1 },
+        "line": { "type": "integer", "minimum": 1 },
+        "column": { "type": "integer", "minimum": 0 },
+        "end_line": { "type": "integer", "minimum": 1 },
+        "end_column": { "type": "integer", "minimum": 0 }
+      },
+      "dependentRequired": {
+        "end_line": ["end_column"],
+        "end_column": ["end_line"]
+      }
+    },
+    "numericSummary": {
+      "type": "object",
+      "properties": {
+        "min": { "type": "number" },
+        "max": { "type": "number" },
+        "mean": { "type": "number" },
+        "nan_count": { "type": "integer", "minimum": 0 },
+        "inf_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "valueSummary": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "kind": { "type": "string", "minLength": 1 },
+        "dtype": { "type": "string", "minLength": 1 },
+        "shape": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              { "type": "integer", "minimum": 0 },
+              { "type": "null" }
+            ]
+          }
+        },
+        "numeric": { "$ref": "#/$defs/numericSummary" },
+        "preview": {},
+        "children": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/valueSummary" }
+        }
+      }
+    },
+    "argument": {
+      "type": "object",
+      "required": ["position", "value"],
+      "properties": {
+        "name": { "type": "string" },
+        "position": { "type": "integer", "minimum": 0 },
+        "value": { "$ref": "#/$defs/valueSummary" }
+      }
+    },
+    "runtimeError": {
+      "type": "object",
+      "required": ["error_type", "message"],
+      "properties": {
+        "error_type": { "type": "string", "minLength": 1 },
+        "message": { "type": "string", "minLength": 1 },
+        "traceback": { "type": "string" }
+      }
+    },
+    "apiTrace": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "record_kind",
+        "run_id",
+        "framework",
+        "framework_version",
+        "execution_mode",
+        "location",
+        "api",
+        "call_index"
+      ],
+      "properties": {
+        "schema_version": { "$ref": "#/$defs/schemaVersion" },
+        "record_kind": { "const": "api_trace" },
+        "run_id": { "type": "string", "minLength": 1 },
+        "framework": { "type": "string", "minLength": 1 },
+        "framework_version": { "type": "string", "minLength": 1 },
+        "execution_mode": { "type": "string", "minLength": 1 },
+        "location": { "$ref": "#/$defs/location" },
+        "api": { "type": "string", "minLength": 1 },
+        "call_index": { "type": "integer", "minimum": 0 },
+        "arguments": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/argument" }
+        },
+        "output": { "$ref": "#/$defs/valueSummary" },
+        "error": { "$ref": "#/$defs/runtimeError" },
+        "metadata": { "type": "object" }
+      },
+      "oneOf": [
+        { "required": ["output"], "not": { "required": ["error"] } },
+        { "required": ["error"], "not": { "required": ["output"] } }
+      ]
+    },
+    "evidence": {
+      "type": "object",
+      "required": ["kind", "message"],
+      "properties": {
+        "kind": { "type": "string", "minLength": 1 },
+        "message": { "type": "string", "minLength": 1 },
+        "location": { "$ref": "#/$defs/location" },
+        "data": { "type": "object" }
+      }
+    },
+    "scanFinding": {
+      "type": "object",
+      "required": [
+        "finding_id",
+        "api",
+        "location",
+        "call_kind",
+        "confidence",
+        "risk_level",
+        "mapping",
+        "expression",
+        "positional_argument_count",
+        "keyword_arguments"
+      ],
+      "properties": {
+        "finding_id": { "type": "string", "minLength": 1 },
+        "api": { "type": "string", "minLength": 1 },
+        "location": { "$ref": "#/$defs/location" },
+        "call_kind": { "type": "string", "minLength": 1 },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "risk_level": { "type": "string", "minLength": 1 },
+        "mapping": { "$ref": "#/$defs/mappingResolution" },
+        "expression": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "positional_argument_count": { "type": "integer", "minimum": 0 },
+        "keyword_arguments": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "mappingResolution": {
+      "type": "object",
+      "required": [
+        "source_api",
+        "status",
+        "differences",
+        "notes",
+        "evidence_urls",
+        "source_framework_version",
+        "target_framework_version",
+        "knowledge_version"
+      ],
+      "properties": {
+        "source_api": { "type": "string", "pattern": "^torch" },
+        "target_api": { "type": "string", "pattern": "^mindspore" },
+        "status": {
+          "enum": ["exact", "difference", "unsupported", "unknown"]
+        },
+        "differences": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "notes": { "type": "string", "minLength": 1 },
+        "evidence_urls": {
+          "type": "array",
+          "items": { "type": "string", "format": "uri" }
+        },
+        "source_framework_version": { "type": "string", "minLength": 1 },
+        "target_framework_version": { "type": "string", "minLength": 1 },
+        "knowledge_version": { "type": "string", "minLength": 1 }
+      }
+    },
+    "scanIssue": {
+      "type": "object",
+      "required": ["file", "kind", "message"],
+      "properties": {
+        "file": { "type": "string", "minLength": 1 },
+        "kind": { "type": "string", "minLength": 1 },
+        "message": { "type": "string", "minLength": 1 },
+        "line": { "type": "integer", "minimum": 1 },
+        "column": { "type": "integer", "minimum": 0 }
+      },
+      "dependentRequired": { "column": ["line"] }
+    },
+    "scanSummary": {
+      "type": "object",
+      "required": [
+        "finding_count",
+        "unique_api_count",
+        "direct_call_count",
+        "tensor_method_count",
+        "dynamic_call_count",
+        "issue_count",
+        "api_counts",
+        "mapping_counts"
+      ],
+      "properties": {
+        "finding_count": { "type": "integer", "minimum": 0 },
+        "unique_api_count": { "type": "integer", "minimum": 0 },
+        "direct_call_count": { "type": "integer", "minimum": 0 },
+        "tensor_method_count": { "type": "integer", "minimum": 0 },
+        "dynamic_call_count": { "type": "integer", "minimum": 0 },
+        "issue_count": { "type": "integer", "minimum": 0 },
+        "api_counts": {
+          "type": "object",
+          "additionalProperties": { "type": "integer", "minimum": 1 }
+        },
+        "mapping_counts": {
+          "type": "object",
+          "additionalProperties": { "type": "integer", "minimum": 1 }
+        }
+      }
+    },
+    "scanReport": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "record_kind",
+        "root",
+        "files_discovered",
+        "files_scanned",
+        "findings",
+        "issues",
+        "summary"
+      ],
+      "properties": {
+        "schema_version": { "$ref": "#/$defs/schemaVersion" },
+        "record_kind": { "const": "scan_report" },
+        "root": { "type": "string", "minLength": 1 },
+        "files_discovered": { "type": "integer", "minimum": 0 },
+        "files_scanned": { "type": "integer", "minimum": 0 },
+        "findings": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/scanFinding" }
+        },
+        "issues": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/scanIssue" }
+        },
+        "summary": { "$ref": "#/$defs/scanSummary" }
+      }
+    },
+    "traceComparison": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "record_kind",
+        "source_count",
+        "target_count",
+        "aligned_count",
+        "equivalent",
+        "diagnostic"
+      ],
+      "properties": {
+        "schema_version": { "$ref": "#/$defs/schemaVersion" },
+        "record_kind": { "const": "trace_comparison" },
+        "source_count": { "type": "integer", "minimum": 1 },
+        "target_count": { "type": "integer", "minimum": 1 },
+        "aligned_count": { "type": "integer", "minimum": 0 },
+        "equivalent": { "type": "boolean" },
+        "diagnostic": {
+          "oneOf": [
+            { "$ref": "#/$defs/diagnostic" },
+            { "type": "null" }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "equivalent": { "const": true } } },
+          "then": { "properties": { "diagnostic": { "type": "null" } } },
+          "else": { "properties": { "diagnostic": { "$ref": "#/$defs/diagnostic" } } }
+        }
+      ]
+    },
+    "msprobeImportReport": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "record_kind",
+        "framework",
+        "framework_version",
+        "run_id",
+        "input",
+        "output",
+        "records_imported",
+        "records_skipped",
+        "skipped"
+      ],
+      "properties": {
+        "schema_version": { "$ref": "#/$defs/schemaVersion" },
+        "record_kind": { "const": "msprobe_import_report" },
+        "framework": { "enum": ["pytorch", "mindspore"] },
+        "framework_version": { "type": "string", "minLength": 1 },
+        "run_id": { "type": "string", "minLength": 1 },
+        "input": { "type": "string", "minLength": 1 },
+        "output": { "type": "string", "minLength": 1 },
+        "records_imported": { "type": "integer", "minimum": 1 },
+        "records_skipped": { "type": "integer", "minimum": 0 },
+        "skipped": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["key", "reason"],
+            "properties": {
+              "key": { "type": "string", "minLength": 1 },
+              "reason": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      }
+    },
+    "rewriteEdit": {
+      "type": "object",
+      "required": ["start", "end", "replacement", "source_api", "target_api", "mapping_status"],
+      "properties": {
+        "start": { "type": "integer", "minimum": 0 },
+        "end": { "type": "integer", "minimum": 0 },
+        "replacement": { "type": "string", "minLength": 1 },
+        "source_api": { "type": "string", "minLength": 1 },
+        "target_api": { "type": "string", "minLength": 1 },
+        "mapping_status": { "enum": ["exact", "difference"] }
+      }
+    },
+    "rewriteFile": {
+      "type": "object",
+      "required": ["file", "original_sha256", "patched_sha256", "encoding", "edits", "diff"],
+      "properties": {
+        "file": { "type": "string", "minLength": 1 },
+        "original_sha256": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" },
+        "patched_sha256": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" },
+        "encoding": { "type": "string", "minLength": 1 },
+        "edits": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/rewriteEdit" }
+        },
+        "diff": { "type": "string", "minLength": 1 }
+      }
+    },
+    "rewriteIssue": {
+      "type": "object",
+      "required": ["file", "kind", "message"],
+      "properties": {
+        "file": { "type": "string", "minLength": 1 },
+        "kind": { "type": "string", "minLength": 1 },
+        "message": { "type": "string", "minLength": 1 }
+      }
+    },
+    "rewritePlan": {
+      "type": "object",
+      "required": ["schema_version", "record_kind", "root", "files_changed", "edit_count", "mapping_counts", "files", "issues"],
+      "properties": {
+        "schema_version": { "$ref": "#/$defs/schemaVersion" },
+        "record_kind": { "const": "rewrite_plan" },
+        "root": { "type": "string", "minLength": 1 },
+        "files_changed": { "type": "integer", "minimum": 0 },
+        "edit_count": { "type": "integer", "minimum": 0 },
+        "mapping_counts": {
+          "type": "object",
+          "required": ["exact", "difference"],
+          "properties": {
+            "exact": { "type": "integer", "minimum": 0 },
+            "difference": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "files": { "type": "array", "items": { "$ref": "#/$defs/rewriteFile" } },
+        "issues": { "type": "array", "items": { "$ref": "#/$defs/rewriteIssue" } }
+      }
+    },
+    "rewriteApplyReport": {
+      "type": "object",
+      "required": ["schema_version", "record_kind", "transaction_id", "files_changed", "manifest", "status", "verified", "validation"],
+      "properties": {
+        "schema_version": { "$ref": "#/$defs/schemaVersion" },
+        "record_kind": { "const": "rewrite_apply_report" },
+        "transaction_id": { "type": "string", "minLength": 1 },
+        "files_changed": { "type": "integer", "minimum": 1 },
+        "manifest": { "type": "string", "minLength": 1 },
+        "status": { "const": "applied" },
+        "verified": { "type": "boolean" },
+        "validation": {
+          "type": "object",
+          "required": ["status"],
+          "properties": {
+            "status": { "enum": ["not_run", "passed"] },
+            "command": { "type": "array", "items": { "type": "string" } },
+            "return_code": { "type": ["integer", "null"] },
+            "duration_ms": { "type": "number", "minimum": 0 },
+            "stdout": { "type": "string" },
+            "stderr": { "type": "string" },
+            "stdout_truncated": { "type": "boolean" },
+            "stderr_truncated": { "type": "boolean" }
+          }
+        }
+      }
+    },
+    "rewriteRollbackReport": {
+      "type": "object",
+      "required": ["schema_version", "record_kind", "transaction_id", "files_restored", "status"],
+      "properties": {
+        "schema_version": { "$ref": "#/$defs/schemaVersion" },
+        "record_kind": { "const": "rewrite_rollback_report" },
+        "transaction_id": { "type": "string", "minLength": 1 },
+        "files_restored": { "type": "integer", "minimum": 1 },
+        "status": { "const": "rolled_back" }
+      }
+    },
+    "diagnostic": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "record_kind",
+        "diagnostic_id",
+        "run_id",
+        "category",
+        "severity",
+        "confidence",
+        "summary",
+        "explanation",
+        "evidence"
+      ],
+      "properties": {
+        "schema_version": { "$ref": "#/$defs/schemaVersion" },
+        "record_kind": { "const": "diagnostic" },
+        "diagnostic_id": { "type": "string", "minLength": 1 },
+        "run_id": { "type": "string", "minLength": 1 },
+        "category": { "type": "string", "minLength": 1 },
+        "severity": { "type": "string", "minLength": 1 },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "summary": { "type": "string", "minLength": 1 },
+        "explanation": { "type": "string", "minLength": 1 },
+        "location": { "$ref": "#/$defs/location" },
+        "source_api": { "type": "string" },
+        "target_api": { "type": "string" },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/evidence" }
+        },
+        "suggested_action": { "type": "string" },
+        "verified": { "type": "boolean" },
+        "metadata": { "type": "object" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": ["verified"],
+            "properties": { "verified": { "const": true } }
+          },
+          "then": {
+            "properties": {
+              "evidence": {
+                "contains": {
+                  "type": "object",
+                  "required": ["kind"],
+                  "properties": { "kind": { "const": "diff_validation" } }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

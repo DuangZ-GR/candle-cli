@@ -1,6 +1,6 @@
 use crate::model::runtime::CandleTargetRuntime;
 use crate::model::types::{
-    RuntimeCapabilities, RuntimeHealth, ToolCallIntent, TurnRequest, TurnResult,
+    RuntimeCapabilities, RuntimeHealth, TokenUsage, ToolCallIntent, TurnRequest, TurnResult,
 };
 use serde_json::Value;
 use std::io::{BufRead, BufReader, Write};
@@ -36,14 +36,20 @@ impl LocalBridgeRuntime {
         let (program, args) = self.command_parts()?;
         let mut child = Command::new(program)
             .args(args)
+            .env("PYTHONUTF8", "1")
+            .env("PYTHONIOENCODING", "utf-8")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .spawn()
             .map_err(|e| e.to_string())?;
         let stdin: Box<dyn Write + Send> =
             Box::new(child.stdin.take().ok_or("stdin unavailable".to_string())?);
-        let stdout: Box<dyn BufRead + Send> =
-            Box::new(BufReader::new(child.stdout.take().ok_or("stdout unavailable".to_string())?));
+        let stdout: Box<dyn BufRead + Send> = Box::new(BufReader::new(
+            child
+                .stdout
+                .take()
+                .ok_or("stdout unavailable".to_string())?,
+        ));
         self.child = Some((child, stdin, stdout));
         Ok(())
     }
@@ -118,9 +124,15 @@ impl CandleTargetRuntime for LocalBridgeRuntime {
             })
             .unwrap_or_default();
 
+        let usage = result
+            .get("usage")
+            .and_then(parse_token_usage)
+            .unwrap_or_else(TokenUsage::unreported_request);
+
         Ok(TurnResult {
             final_text,
             tool_calls,
+            usage,
         })
     }
 
@@ -131,33 +143,56 @@ impl CandleTargetRuntime for LocalBridgeRuntime {
         };
         let mut child = match Command::new(program)
             .args(args)
+            .env("PYTHONUTF8", "1")
+            .env("PYTHONIOENCODING", "utf-8")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .spawn()
         {
             Ok(child) => child,
-            Err(error) => return RuntimeHealth { ok: false, message: error.to_string() },
+            Err(error) => {
+                return RuntimeHealth {
+                    ok: false,
+                    message: error.to_string(),
+                }
+            }
         };
         let Some(mut stdin) = child.stdin.take() else {
-            return RuntimeHealth { ok: false, message: "stdin unavailable".into() };
+            return RuntimeHealth {
+                ok: false,
+                message: "stdin unavailable".into(),
+            };
         };
         let Some(stdout) = child.stdout.take() else {
-            return RuntimeHealth { ok: false, message: "stdout unavailable".into() };
+            return RuntimeHealth {
+                ok: false,
+                message: "stdout unavailable".into(),
+            };
         };
         let _ = writeln!(stdin, "{}", serde_json::json!({ "type": "healthcheck" }));
         let _ = writeln!(stdin, "{}", serde_json::json!({ "type": "shutdown" }));
         let mut line = String::new();
         let mut reader = BufReader::new(stdout);
         if reader.read_line(&mut line).is_err() {
-            return RuntimeHealth { ok: false, message: "failed to read healthcheck".into() };
+            return RuntimeHealth {
+                ok: false,
+                message: "failed to read healthcheck".into(),
+            };
         }
         let _ = child.wait();
         match serde_json::from_str::<Value>(line.trim()) {
             Ok(value) => RuntimeHealth {
                 ok: value.get("ok").and_then(|v| v.as_bool()).unwrap_or(false),
-                message: value.get("message").and_then(|v| v.as_str()).unwrap_or("invalid").to_string(),
+                message: value
+                    .get("message")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("invalid")
+                    .to_string(),
             },
-            Err(error) => RuntimeHealth { ok: false, message: error.to_string() },
+            Err(error) => RuntimeHealth {
+                ok: false,
+                message: error.to_string(),
+            },
         }
     }
 
@@ -166,6 +201,67 @@ impl CandleTargetRuntime for LocalBridgeRuntime {
             supports_tools: true,
             supports_streaming: true,
         }
+    }
+}
+
+fn parse_token_usage(value: &Value) -> Option<TokenUsage> {
+    let usage = value.as_object()?;
+    let prompt_tokens = usage.get("prompt_tokens")?.as_u64()?;
+    let completion_tokens = usage.get("completion_tokens")?.as_u64()?;
+    let total_tokens = usage.get("total_tokens")?.as_u64()?;
+    if total_tokens != prompt_tokens.checked_add(completion_tokens)? {
+        return None;
+    }
+
+    let mut cached_prompt_tokens = usage.get("cached_prompt_tokens").and_then(Value::as_u64);
+    let mut cache_miss_prompt_tokens = usage
+        .get("cache_miss_prompt_tokens")
+        .and_then(Value::as_u64);
+    if cached_prompt_tokens.is_some_and(|cached| cached > prompt_tokens)
+        || matches!(
+            (cached_prompt_tokens, cache_miss_prompt_tokens),
+            (Some(cached), Some(missed)) if cached.checked_add(missed) != Some(prompt_tokens)
+        )
+    {
+        cached_prompt_tokens = None;
+        cache_miss_prompt_tokens = None;
+    }
+
+    Some(TokenUsage {
+        request_count: 1,
+        usage_reported_request_count: 1,
+        prompt_tokens,
+        completion_tokens,
+        total_tokens,
+        cache_metrics_reported_request_count: u64::from(cached_prompt_tokens.is_some()),
+        cached_prompt_tokens: cached_prompt_tokens.unwrap_or_default(),
+        cache_miss_prompt_tokens,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_token_usage;
+
+    #[test]
+    fn invalid_usage_degrades_to_unreported_instead_of_breaking_generation() {
+        let invalid_total = serde_json::json!({
+            "prompt_tokens": 10,
+            "completion_tokens": 2,
+            "total_tokens": 99
+        });
+        assert_eq!(parse_token_usage(&invalid_total), None);
+
+        let invalid_cache = serde_json::json!({
+            "prompt_tokens": 10,
+            "completion_tokens": 2,
+            "total_tokens": 12,
+            "cached_prompt_tokens": 11
+        });
+        let usage = parse_token_usage(&invalid_cache).unwrap();
+        assert!(usage.usage_complete());
+        assert!(!usage.cache_metrics_complete());
+        assert_eq!(usage.provider_cache_hit_rate(), None);
     }
 }
 

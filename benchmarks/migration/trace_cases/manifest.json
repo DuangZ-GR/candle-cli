@@ -1,0 +1,16 @@
+{
+  "benchmark_version": "trace-defects-v1",
+  "description": "Deterministic synthetic defect-injection set; not a real-world generalization claim.",
+  "cases": [
+    {"id":"equivalent","source":"source-add.jsonl","target":"target-add-equivalent.jsonl","equivalent":true},
+    {"id":"within-tolerance","source":"source-add.jsonl","target":"target-add-within-tolerance.jsonl","equivalent":true},
+    {"id":"dtype-call-0","source":"source-add.jsonl","target":"target-add-dtype.jsonl","equivalent":false,"category":"dtype_mismatch","source_call_index":0},
+    {"id":"shape-call-0","source":"source-add.jsonl","target":"target-add-shape.jsonl","equivalent":false,"category":"shape_mismatch","source_call_index":0},
+    {"id":"value-call-0","source":"source-add.jsonl","target":"target-add-value.jsonl","equivalent":false,"category":"value_mismatch","source_call_index":0},
+    {"id":"nan-call-0","source":"source-add.jsonl","target":"target-add-nan.jsonl","equivalent":false,"category":"value_mismatch","source_call_index":0},
+    {"id":"structure-call-0","source":"source-add.jsonl","target":"target-add-structure.jsonl","equivalent":false,"category":"return_structure_mismatch","source_call_index":0},
+    {"id":"runtime-call-0","source":"source-add.jsonl","target":"target-add-error.jsonl","equivalent":false,"category":"runtime_error","source_call_index":0},
+    {"id":"dtype-call-1","source":"source-two-calls.jsonl","target":"target-two-calls-dtype-second.jsonl","equivalent":false,"category":"dtype_mismatch","source_call_index":1},
+    {"id":"missing-call-1","source":"source-two-calls.jsonl","target":"target-only-first-call.jsonl","equivalent":false,"category":"needs_manual_review","source_call_index":1}
+  ]
+}

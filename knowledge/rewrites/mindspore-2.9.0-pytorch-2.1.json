@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0",
+  "snapshot_version": "ms2.9.0-pt2.1-2026-08-05.1",
+  "source_framework": {"name": "pytorch", "version": "2.1"},
+  "target_framework": {"name": "mindspore", "version": "2.9.0"},
+  "description": "Semantic sub-expression rewrites that are only applied inside an already accepted API mapping.",
+  "evidence_urls": [
+    "https://www.mindspore.cn/docs/en/stable/api_python/mindspore/mindspore.dtype.html",
+    "https://www.mindspore.cn/docs/zh-CN/stable/api_python/mint/mindspore.mint.ones.html",
+    "https://www.mindspore.cn/docs/zh-CN/stable/api_python/mint/mindspore.mint.zeros.html"
+  ],
+  "dtype_constants": {
+    "torch.bool": "mindspore.bool",
+    "torch.int8": "mindspore.int8",
+    "torch.int16": "mindspore.int16",
+    "torch.int32": "mindspore.int32",
+    "torch.int64": "mindspore.int64",
+    "torch.uint8": "mindspore.uint8",
+    "torch.float16": "mindspore.float16",
+    "torch.bfloat16": "mindspore.bfloat16",
+    "torch.float32": "mindspore.float32",
+    "torch.float64": "mindspore.float64",
+    "torch.complex64": "mindspore.complex64",
+    "torch.complex128": "mindspore.complex128"
+  }
+}

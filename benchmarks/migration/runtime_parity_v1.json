@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "benchmark_version": "runtime-parity-v1",
+  "dataset_kind": "deterministic_cross_framework_microcases",
+  "source_framework": {"name": "pytorch", "version_prefix": "2.1"},
+  "target_framework": {"name": "mindspore", "version_prefix": "2.9"},
+  "relative_tolerance": 0.00001,
+  "absolute_tolerance": 0.00000001,
+  "description": "Small deterministic CPU/PyNative cases for runtime parity. Framework captures may be produced in separate environments and evaluated together.",
+  "cases": [
+    {"id": "elementwise-reduction", "operations": ["add", "sum"], "expected_equivalent": true},
+    {"id": "shape-transform", "operations": ["reshape", "unsqueeze"], "expected_equivalent": true},
+    {"id": "matrix-reduction", "operations": ["matmul", "mean"], "expected_equivalent": true},
+    {"id": "activation-reduction", "operations": ["relu", "sum"], "expected_equivalent": true},
+    {"id": "concatenate-flatten", "operations": ["cat", "flatten"], "expected_equivalent": true}
+  ]
+}

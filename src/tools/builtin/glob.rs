@@ -3,7 +3,8 @@ use std::path::Path;
 
 pub fn run(pattern: &str, _root: Option<&str>) -> Result<String, String> {
     let mut matches = Vec::new();
-    collect_matches(pattern, &mut matches)?;
+    let normalized_pattern = pattern.replace('\\', "/");
+    collect_matches(&normalized_pattern, &mut matches)?;
     matches.sort();
     Ok(matches.join("\n"))
 }

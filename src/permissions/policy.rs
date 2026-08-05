@@ -19,7 +19,10 @@ impl PermissionPolicy {
     }
 
     pub fn requires_prompt(&self, tool_name: &str) -> bool {
-        matches!(self.mode, PermissionMode::Prompt)
-            && matches!(tool_name, "shell" | "edit" | "write")
+        match self.mode {
+            PermissionMode::WorkspaceWrite => tool_name == "shell",
+            PermissionMode::Prompt => matches!(tool_name, "shell" | "edit" | "write"),
+            PermissionMode::ReadOnly | PermissionMode::DangerFullAccess => false,
+        }
     }
 }

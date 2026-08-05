@@ -39,23 +39,28 @@ pub fn resolve_max_turns() -> usize {
         .unwrap_or(DEFAULT_MAX_TURNS)
 }
 
-pub fn build_turn_request(
-    session: &mut Session,
-    tools_json: &str,
-) -> Result<TurnRequest, String> {
+pub fn build_turn_request(session: &mut Session, tools_json: &str) -> Result<TurnRequest, String> {
     let max_turns = resolve_max_turns();
     compact_session(session, max_turns);
 
-    // Pre-search: inject grep results into the last user message if applicable.
-    inject_rag_context(session);
+    // RAG enriches only the outbound request. The original user message stays
+    // unchanged in the persisted session so repeated tool steps cannot nest
+    // previously injected context or corrupt future keyword extraction.
+    let mut request_session = session.clone();
+    inject_rag_context(&mut request_session);
 
-    let messages_json = serde_json::to_string(&session.messages).map_err(|e| e.to_string())?;
+    let messages_json =
+        serde_json::to_string(&request_session.messages).map_err(|e| e.to_string())?;
     let _token_est = estimate_tokens_json(&messages_json);
 
-    let memory_ctx = crate::session::memory::ProjectMemory::load(&session.workspace_root)
-        .to_context_string();
+    let memory_ctx =
+        crate::session::memory::ProjectMemory::load(&session.workspace_root).to_context_string();
     let system_prompt = if memory_ctx.lines().count() > 1 {
-        format!("{}\n\n{}", resolve_system_prompt_with_tools(tools_json), memory_ctx)
+        format!(
+            "{}\n\n{}",
+            resolve_system_prompt_with_tools(tools_json),
+            memory_ctx
+        )
     } else {
         resolve_system_prompt_with_tools(tools_json)
     };
@@ -108,7 +113,12 @@ fn inject_rag_context(session: &mut Session) {
     );
 
     // Replace the last user message text with the augmented version.
-    if let Some(msg) = session.messages.iter_mut().rev().find(|m| m.role == MessageRole::User) {
+    if let Some(msg) = session
+        .messages
+        .iter_mut()
+        .rev()
+        .find(|m| m.role == MessageRole::User)
+    {
         if let Some(block) = msg.blocks.first_mut() {
             if let ContentBlock::Text { text } = block {
                 *text = rag_block;
@@ -134,9 +144,24 @@ fn is_code_related(text: &str) -> bool {
     let lowered = text.to_lowercase();
 
     let chat_patterns = [
-        "你好", "hi", "hello", "hey", "谢谢", "thanks", "thank you",
-        "再见", "bye", "goodbye", "早上好", "晚上好", "good morning",
-        "good evening", "ok", "好的", "嗯", "哦",
+        "你好",
+        "hi",
+        "hello",
+        "hey",
+        "谢谢",
+        "thanks",
+        "thank you",
+        "再见",
+        "bye",
+        "goodbye",
+        "早上好",
+        "晚上好",
+        "good morning",
+        "good evening",
+        "ok",
+        "好的",
+        "嗯",
+        "哦",
     ];
     let trimmed = lowered.trim();
     for pat in &chat_patterns {
@@ -164,8 +189,7 @@ fn extract_keywords(text: &str) -> Vec<String> {
 
     let mut seen = std::collections::HashSet::new();
     for raw in trimmed.split(|c: char| {
-        c.is_whitespace()
-            || matches!(c, '，' | '。' | '？' | '！' | '、' | '：' | '；' | '的')
+        c.is_whitespace() || matches!(c, '，' | '。' | '？' | '！' | '、' | '：' | '；' | '的')
     }) {
         let word = raw.trim().to_lowercase();
         if word.len() < 3 || word.len() > 40 {
@@ -173,11 +197,41 @@ fn extract_keywords(text: &str) -> Vec<String> {
         }
         if matches!(
             word.as_str(),
-            "the" | "and" | "for" | "with" | "that" | "this" | "from"
-                | "what" | "when" | "where" | "which" | "how" | "does" | "can"
-                | "你" | "我" | "他" | "是" | "了" | "在" | "有" | "不"
-                | "这" | "那" | "什么" | "怎么" | "为什么" | "一个" | "一下"
-                | "帮我" | "请" | "可以" | "哪个" | "哪些" | "多少"
+            "the"
+                | "and"
+                | "for"
+                | "with"
+                | "that"
+                | "this"
+                | "from"
+                | "what"
+                | "when"
+                | "where"
+                | "which"
+                | "how"
+                | "does"
+                | "can"
+                | "你"
+                | "我"
+                | "他"
+                | "是"
+                | "了"
+                | "在"
+                | "有"
+                | "不"
+                | "这"
+                | "那"
+                | "什么"
+                | "怎么"
+                | "为什么"
+                | "一个"
+                | "一下"
+                | "帮我"
+                | "请"
+                | "可以"
+                | "哪个"
+                | "哪些"
+                | "多少"
         ) {
             continue;
         }

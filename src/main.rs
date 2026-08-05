@@ -1,6 +1,9 @@
 use candle_cli::cli::args::{Cli, CommandMode};
+use candle_cli::cli::context_harness::run_context_harness;
 use candle_cli::cli::harness::run_harness;
+use candle_cli::cli::migrate::run_migrate;
 use candle_cli::cli::repl::{run_prompt, run_repl};
+use candle_cli::cli::security_harness::run_security_harness;
 use candle_cli::ui::format::format_status_line;
 use candle_cli::ui::render::render_line;
 use clap::Parser;
@@ -14,26 +17,24 @@ fn session_dir() -> PathBuf {
     std::env::temp_dir().join("candle-cli-sessions")
 }
 
-fn main() {
+fn main() -> std::io::Result<()> {
     let cli = Cli::parse();
     let session_dir = session_dir();
 
     match cli.command {
-        Some(CommandMode::Prompt { input }) => {
-            let _ = run_prompt(session_dir, input);
-        }
-        Some(CommandMode::Harness) => {
-            let _ = run_harness(session_dir);
-        }
+        Some(CommandMode::Prompt { input }) => run_prompt(session_dir, input),
+        Some(CommandMode::Harness) => run_harness(session_dir),
+        Some(CommandMode::SecurityHarness) => run_security_harness(),
+        Some(CommandMode::ContextHarness) => run_context_harness(),
         Some(CommandMode::Doctor) => {
             render_line(&format_status_line("runtime", "mock"));
             render_line(&format_status_line(
                 "session_dir",
                 &session_dir.display().to_string(),
             ));
+            Ok(())
         }
-        None => {
-            let _ = run_repl(session_dir);
-        }
+        Some(CommandMode::Migrate { command }) => run_migrate(command),
+        None => run_repl(session_dir),
     }
 }

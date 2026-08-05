@@ -15,6 +15,11 @@ fn find_session_json(dir: &std::path::Path) -> PathBuf {
     panic!("no session JSON file found in {:?}", dir);
 }
 
+fn counting_bridge_command() -> String {
+    let python = std::env::var("CANDLE_CLI_TEST_PYTHON").unwrap_or_else(|_| "python3".into());
+    format!("{python} tests/fixtures/counting_bridge.py")
+}
+
 // ── prompt mode tests ──────────────────────────────────────────────────
 
 #[test]
@@ -37,12 +42,30 @@ fn prompt_mode_can_run_through_bridge_runtime() {
     let mut cmd = Command::cargo_bin("candle-cli").unwrap();
     cmd.env("CANDLE_CLI_SESSION_DIR", session_dir.path())
         .env("CANDLE_CLI_RUNTIME", "bridge")
+        .env("CANDLE_CLI_BRIDGE_COMMAND", counting_bridge_command())
         .args(["prompt", "hello"])
         .assert()
         .success();
 
     let session_body = fs::read_to_string(find_session_json(session_dir.path())).unwrap();
-    assert!(session_body.contains("generated: hello"));
+    assert!(session_body.contains("bridge turn 1"));
+}
+
+#[test]
+fn prompt_mode_returns_failure_for_invalid_runtime() {
+    let session_dir = tempdir().unwrap();
+    let mut cmd = Command::cargo_bin("candle-cli").unwrap();
+    let output = cmd
+        .env("CANDLE_CLI_SESSION_DIR", session_dir.path())
+        .env("CANDLE_CLI_RUNTIME", "typo")
+        .args(["prompt", "hello"])
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("unsupported CANDLE_CLI_RUNTIME 'typo'")
+    );
 }
 
 // ── REPL mode tests ────────────────────────────────────────────────────
@@ -53,12 +76,13 @@ fn repl_mode_can_run_through_bridge_runtime() {
     let mut cmd = Command::cargo_bin("candle-cli").unwrap();
     cmd.env("CANDLE_CLI_SESSION_DIR", session_dir.path())
         .env("CANDLE_CLI_RUNTIME", "bridge")
+        .env("CANDLE_CLI_BRIDGE_COMMAND", counting_bridge_command())
         .write_stdin("hello\n")
         .assert()
         .success();
 
     let session_body = fs::read_to_string(find_session_json(session_dir.path())).unwrap();
-    assert!(session_body.contains("generated: hello"));
+    assert!(session_body.contains("bridge turn 1"));
 }
 
 #[test]
@@ -66,7 +90,6 @@ fn repl_loop_runs_multiple_turns() {
     let session_dir = tempdir().unwrap();
     let mut cmd = Command::cargo_bin("candle-cli").unwrap();
     cmd.env("CANDLE_CLI_SESSION_DIR", session_dir.path())
-        .env("CANDLE_CLI_RUNTIME", "bridge")
         .write_stdin("first\nsecond\n")
         .assert()
         .success();
@@ -76,6 +99,22 @@ fn repl_loop_runs_multiple_turns() {
     // both user messages should be in the session
     assert!(session_body.contains("first"));
     assert!(session_body.contains("second"));
+}
+
+#[test]
+fn repl_reuses_one_bridge_worker_across_turns() {
+    let session_dir = tempdir().unwrap();
+    let mut cmd = Command::cargo_bin("candle-cli").unwrap();
+    cmd.env("CANDLE_CLI_SESSION_DIR", session_dir.path())
+        .env("CANDLE_CLI_RUNTIME", "bridge")
+        .env("CANDLE_CLI_BRIDGE_COMMAND", counting_bridge_command())
+        .write_stdin("first\nsecond\n")
+        .assert()
+        .success();
+
+    let session_body = fs::read_to_string(find_session_json(session_dir.path())).unwrap();
+    assert!(session_body.contains("bridge turn 1"));
+    assert!(session_body.contains("bridge turn 2"));
 }
 
 #[test]
@@ -257,15 +296,22 @@ fn repl_trace_reports_last_execution_chain() {
         .current_dir(".")
         .env("CANDLE_CLI_SESSION_DIR", session_dir.path())
         .env("CANDLE_CLI_RUNTIME", "bridge")
+        .env("CANDLE_CLI_BRIDGE_COMMAND", counting_bridge_command())
         .write_stdin("读取 README.md，总结如何运行项目\n/trace\n")
         .output()
         .unwrap();
 
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("Last trace"));
+    assert!(
+        stdout.contains("Last trace"),
+        "stdout:\n{stdout}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     assert!(stdout.contains("build_turn_request"));
     assert!(stdout.contains("runtime.generate_turn"));
+    assert!(stdout.contains("Provider usage: 1/1 requests reported"));
+    assert!(stdout.contains("provider cache hit rate: 80.00%"));
 }
 
 #[test]
@@ -285,6 +331,9 @@ fn repl_tools_lists_registered_tools() {
     assert!(stdout.contains("- read"));
     assert!(stdout.contains("- glob"));
     assert!(stdout.contains("- grep"));
+    assert!(stdout.contains("- web_search"));
+    assert!(stdout.contains("- task"));
+    assert!(stdout.contains("- write"));
     assert!(stdout.contains("- edit"));
     assert!(stdout.contains("- shell"));
 }

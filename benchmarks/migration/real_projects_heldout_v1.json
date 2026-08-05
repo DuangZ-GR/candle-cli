@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0",
+  "benchmark_version": "real-projects-heldout-v1",
+  "dataset_kind": "pinned_real_project_static_corpus",
+  "description": "A project selected only after the ms2.9.0-pt2.1-2026-08-05.3 mapping rules were frozen.",
+  "projects": [
+    {
+      "id": "segment-anything",
+      "repository": "https://github.com/facebookresearch/segment-anything.git",
+      "commit": "dca509fe793f601edb92606367a655c15ac00fdf",
+      "checkout_dir": "segment-anything",
+      "license": "Apache-2.0",
+      "license_file": "LICENSE",
+      "archive_file": "segment-anything.zip",
+      "archive_sha256": "775a9fa2ea5441a7f532c77a9a193fec21764ef59e008bbdd595fee84e3aaab6",
+      "archive_prefix": "segment-anything-dca509fe793f601edb92606367a655c15ac00fdf",
+      "paths": ["segment_anything/**/*.py", "scripts/*.py"]
+    }
+  ]
+}

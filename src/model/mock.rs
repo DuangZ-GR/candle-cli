@@ -1,5 +1,7 @@
 use crate::model::runtime::CandleTargetRuntime;
-use crate::model::types::{RuntimeCapabilities, RuntimeHealth, TurnRequest, TurnResult};
+use crate::model::types::{
+    RuntimeCapabilities, RuntimeHealth, TokenUsage, TurnRequest, TurnResult,
+};
 
 #[derive(Default)]
 pub struct MockRuntime;
@@ -9,6 +11,7 @@ impl CandleTargetRuntime for MockRuntime {
         Ok(TurnResult {
             final_text: "mock response".into(),
             tool_calls: Vec::new(),
+            usage: TokenUsage::unreported_request(),
         })
     }
 

@@ -2,7 +2,7 @@ use crate::agent::tool_call::{parse_tool_call, ToolCallParseError};
 use crate::agent::trace::{ExecutionTrace, TraceEvent};
 use crate::agent::turn::finish_turn;
 use crate::model::runtime::CandleTargetRuntime;
-use crate::model::types::{ToolCallIntent, TurnResult};
+use crate::model::types::{TokenUsage, ToolCallIntent, TurnResult};
 use crate::permissions::policy::PermissionPolicy;
 use crate::session::model::{ContentBlock, Message, MessageRole, Session};
 use crate::tools::registry::ToolRegistry;
@@ -57,6 +57,7 @@ pub fn run_single_turn_with_limit_and_trace<R: CandleTargetRuntime>(
     trace: &mut ExecutionTrace,
 ) -> Result<TurnResult, String> {
     let verbose = verbose_enabled();
+    let mut accumulated_usage = TokenUsage::default();
 
     for step in 0..max_steps {
         trace.push(TraceEvent::BuildTurnRequest);
@@ -65,10 +66,18 @@ pub fn run_single_turn_with_limit_and_trace<R: CandleTargetRuntime>(
         trace.push(TraceEvent::RuntimeGenerateTurn);
         let streaming = runtime.capabilities().supports_streaming
             && std::env::var("CANDLE_CLI_RUNTIME").ok().as_deref() == Some("bridge");
-        let mut spinner = if streaming { None } else { Some(Spinner::start()) };
+        let spinner = if streaming {
+            None
+        } else {
+            Some(Spinner::start())
+        };
         let result = runtime.generate_turn(request);
-        if let Some(mut s) = spinner { s.stop(); }
+        if let Some(mut s) = spinner {
+            s.stop();
+        }
         let result = result?;
+        accumulated_usage.merge(&result.usage);
+        trace.record_usage(&result.usage);
 
         trace.push(TraceEvent::ParseToolCall);
         match parse_tool_call(&result.final_text) {
@@ -97,11 +106,18 @@ pub fn run_single_turn_with_limit_and_trace<R: CandleTargetRuntime>(
                         true,
                     )
                 } else if tool_call.name == "task" {
-                    let desc: serde_json::Value = serde_json::from_str(&tool_call.input_json)
-                        .unwrap_or_default();
-                    let desc = desc.get("description").and_then(|v| v.as_str()).unwrap_or("");
+                    let desc: serde_json::Value =
+                        serde_json::from_str(&tool_call.input_json).unwrap_or_default();
+                    let desc = desc
+                        .get("description")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("");
                     match crate::tools::builtin::task::run(desc, runtime, tools, policy) {
-                        Ok(output) => (format_tool_success("task", &output), false),
+                        Ok(sub_result) => {
+                            accumulated_usage.merge(&sub_result.usage);
+                            trace.record_usage(&sub_result.usage);
+                            (format_tool_success("task", &sub_result.final_text), false)
+                        }
                         Err(err) => (format_tool_error("task", &err), true),
                     }
                 } else {
@@ -110,6 +126,7 @@ pub fn run_single_turn_with_limit_and_trace<R: CandleTargetRuntime>(
                         Err(err) => (format_tool_error(&tool_call.name, &err), true),
                     }
                 };
+                let output = bound_tool_output(output);
                 trace.push(TraceEvent::ToolResult {
                     tool: tool_call.name.clone(),
                     status: if is_error { "error" } else { "ok" }.to_string(),
@@ -124,6 +141,7 @@ pub fn run_single_turn_with_limit_and_trace<R: CandleTargetRuntime>(
                 return Ok(TurnResult {
                     final_text,
                     tool_calls: Vec::new(),
+                    usage: accumulated_usage,
                 });
             }
             Err(err) => {
@@ -140,6 +158,7 @@ pub fn run_single_turn_with_limit_and_trace<R: CandleTargetRuntime>(
     Ok(TurnResult {
         final_text,
         tool_calls: Vec::new(),
+        usage: accumulated_usage,
     })
 }
 
@@ -194,6 +213,33 @@ fn format_tool_error(tool_name: &str, message: &str) -> String {
     format!("status: error\ntool: {tool_name}\nmessage: {message}")
 }
 
+fn bound_tool_output(output: String) -> String {
+    let max_chars = std::env::var("CANDLE_CLI_MAX_TOOL_OUTPUT_CHARS")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(65_536);
+    truncate_tool_output(output, max_chars)
+}
+
+fn truncate_tool_output(output: String, max_chars: usize) -> String {
+    let char_count = output.chars().count();
+    if char_count <= max_chars {
+        return output;
+    }
+
+    let byte_end = output
+        .char_indices()
+        .nth(max_chars)
+        .map(|(index, _)| index)
+        .unwrap_or(output.len());
+    let omitted = char_count - max_chars;
+    format!(
+        "{}\n\n[tool output truncated: {omitted} characters omitted]",
+        &output[..byte_end]
+    )
+}
+
 fn verbose_enabled() -> bool {
     std::env::var("CANDLE_CLI_VERBOSE")
         .map(|value| matches!(value.as_str(), "1" | "true" | "yes" | "on"))
@@ -236,7 +282,34 @@ fn tools_json() -> &'static str {
   {"name":"grep","description":"Search files for a substring","input_schema":{"type":"object","properties":{"pattern":{"type":"string"},"path":{"type":"string"}},"required":["pattern"]}},
   {"name":"web_search","description":"Search the web via DuckDuckGo and return text results","input_schema":{"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}},
   {"name":"task","description":"Delegate a read-only subtask to a sub-agent","input_schema":{"type":"object","properties":{"description":{"type":"string"}},"required":["description"]}},
+  {"name":"write","description":"Write a UTF-8 file inside the workspace","input_schema":{"type":"object","properties":{"file_path":{"type":"string"},"content":{"type":"string"}},"required":["file_path","content"]}},
   {"name":"edit","description":"Replace exactly one string occurrence in an existing file","input_schema":{"type":"object","properties":{"file_path":{"type":"string"},"old_string":{"type":"string"},"new_string":{"type":"string"}},"required":["file_path","old_string","new_string"]}},
   {"name":"shell","description":"Run a shell command and return its output","input_schema":{"type":"object","properties":{"command":{"type":"string"}},"required":["command"]}}
 ]"#
+}
+
+#[cfg(test)]
+mod output_limit_tests {
+    use super::truncate_tool_output;
+
+    #[test]
+    fn keeps_output_within_the_limit_unchanged() {
+        assert_eq!(truncate_tool_output("hello".into(), 5), "hello");
+    }
+
+    #[test]
+    fn truncates_output_and_reports_the_omitted_character_count() {
+        assert_eq!(
+            truncate_tool_output("abcdefgh".into(), 5),
+            "abcde\n\n[tool output truncated: 3 characters omitted]"
+        );
+    }
+
+    #[test]
+    fn truncation_respects_utf8_character_boundaries() {
+        assert_eq!(
+            truncate_tool_output("迁移诊断".into(), 2),
+            "迁移\n\n[tool output truncated: 2 characters omitted]"
+        );
+    }
 }

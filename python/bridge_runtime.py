@@ -16,6 +16,7 @@ class BridgeRuntime:
         self._model = None
         self._tokenizer = None
         self._device = None
+        self._fallback_reason = None
 
     # ── verbose logging ──────────────────────────────────────────────────
 
@@ -136,14 +137,32 @@ class BridgeRuntime:
 
     def _fallback_to_stub(self, reason: str):
         print(
-            json.dumps({"ok": True, "warning": f"bridge runtime fallback: {reason}"}),
+            json.dumps({"ok": False, "warning": f"bridge runtime unavailable: {reason}"}),
             file=sys.stderr,
             flush=True,
         )
         self._model = None
         self._tokenizer = None
         self._device = None
-        self._log(f"  FALLBACK: {reason}")
+        self._fallback_reason = reason
+        self._log(f"  UNAVAILABLE: {reason}")
+
+    def _stub_or_raise(self, request: dict, reason: str) -> dict:
+        if not self._config.allow_stub_fallback:
+            raise RuntimeError(
+                f"local model runtime unavailable: {reason}. "
+                "Configure an API backend, install/load the local model, or set "
+                "CANDLE_CLI_ALLOW_STUB_FALLBACK=1 only for demos and tests"
+            )
+
+        user_text = extract_latest_user_text(request)
+        self._log(f"generate_turn: explicit stub mode, user_text_len={len(user_text)}")
+        return {
+            "result": {
+                "final_text": f"generated: {user_text}",
+                "tool_calls": [],
+            }
+        }
 
     # ── health ───────────────────────────────────────────────────────────
 
@@ -152,11 +171,69 @@ class BridgeRuntime:
 
     # ── API-based generation ─────────────────────────────────────────────
 
+    @staticmethod
+    def _normalize_usage(usage: object) -> dict | None:
+        if not isinstance(usage, dict):
+            return None
+
+        def non_negative_int(value: object) -> int | None:
+            return (
+                value
+                if isinstance(value, int)
+                and not isinstance(value, bool)
+                and value >= 0
+                else None
+            )
+
+        prompt_tokens = non_negative_int(usage.get("prompt_tokens"))
+        completion_tokens = non_negative_int(usage.get("completion_tokens"))
+        total_tokens = non_negative_int(usage.get("total_tokens"))
+        if prompt_tokens is None or completion_tokens is None or total_tokens is None:
+            return None
+        if total_tokens != prompt_tokens + completion_tokens:
+            return None
+
+        cached_prompt_tokens = non_negative_int(usage.get("prompt_cache_hit_tokens"))
+        cache_miss_prompt_tokens = non_negative_int(
+            usage.get("prompt_cache_miss_tokens")
+        )
+        prompt_details = usage.get("prompt_tokens_details")
+        if cached_prompt_tokens is None and isinstance(prompt_details, dict):
+            cached_prompt_tokens = non_negative_int(prompt_details.get("cached_tokens"))
+        if cached_prompt_tokens is not None and cached_prompt_tokens > prompt_tokens:
+            cached_prompt_tokens = None
+            cache_miss_prompt_tokens = None
+        if (
+            cached_prompt_tokens is not None
+            and cache_miss_prompt_tokens is not None
+            and cached_prompt_tokens + cache_miss_prompt_tokens != prompt_tokens
+        ):
+            cached_prompt_tokens = None
+            cache_miss_prompt_tokens = None
+
+        return {
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": total_tokens,
+            "cached_prompt_tokens": cached_prompt_tokens,
+            "cache_miss_prompt_tokens": cache_miss_prompt_tokens,
+        }
+
+    @staticmethod
+    def _result(final_text: str, usage: dict | None = None) -> dict:
+        return {
+            "result": {
+                "final_text": final_text.strip(),
+                "tool_calls": [],
+                "usage": usage,
+            }
+        }
+
     def _generate_via_api(self, request: dict) -> dict:
         messages_json = request.get("messages_json", "[]")
         chat_messages = build_chat_messages(messages_json)
         if not chat_messages:
-            return {"result": {"final_text": "", "tool_calls": []}}
+            return self._result("")
 
         # add system prompt if present
         api_messages: list[dict] = []
@@ -174,6 +251,8 @@ class BridgeRuntime:
             "thinking": {"type": "disabled"},
             "stream": True,
         }
+        if self._config.include_usage:
+            body["stream_options"] = {"include_usage": True}
 
         url = self._config.api_base_url.rstrip("/") + "/chat/completions"
         headers = {
@@ -188,6 +267,7 @@ class BridgeRuntime:
 
         max_retries = 3
         raw = None
+        response_usage = None
         for attempt in range(1, max_retries + 1):
             t0 = time.time()
             try:
@@ -208,7 +288,13 @@ class BridgeRuntime:
                             break
                         try:
                             chunk = json.loads(data_str)
-                            delta = chunk.get("choices", [{}])[0].get("delta", {})
+                            normalized_usage = self._normalize_usage(chunk.get("usage"))
+                            if normalized_usage is not None:
+                                response_usage = normalized_usage
+                            choices = chunk.get("choices") or []
+                            if not choices:
+                                continue
+                            delta = choices[0].get("delta", {})
                             token = delta.get("content", "")
                             if token:
                                 content_chunks.append(token)
@@ -226,62 +312,52 @@ class BridgeRuntime:
                     err_body = "(unable to read error body)"
                 self._log(f"  HTTP {exc.code}: {err_body}")
                 if exc.code and 400 <= exc.code < 500:
-                    # Client error — don't retry
-                    return {
-                        "result": {
-                            "final_text": f"generated: {extract_latest_user_text(request)}",
-                            "tool_calls": [],
-                        }
-                    }
+                    # Client errors are deterministic and should be reported
+                    # immediately rather than retried or disguised as output.
+                    raise RuntimeError(
+                        f"API request failed with HTTP {exc.code}: {err_body}"
+                    ) from exc
                 if attempt < max_retries:
                     wait = 2 ** (attempt - 1)
                     self._log(f"  retrying in {wait}s (attempt {attempt}/{max_retries})")
                     time.sleep(wait)
                 else:
-                    return {
-                        "result": {
-                            "final_text": f"generated: {extract_latest_user_text(request)}",
-                            "tool_calls": [],
-                        }
-                    }
-            except Exception:
+                    raise RuntimeError(
+                        f"API request failed after {max_retries} attempts "
+                        f"with HTTP {exc.code}: {err_body}"
+                    ) from exc
+            except RuntimeError:
+                raise
+            except Exception as exc:
                 if attempt < max_retries:
                     wait = 2 ** (attempt - 1)
                     self._log(f"  network error, retrying in {wait}s (attempt {attempt}/{max_retries})")
                     time.sleep(wait)
                 else:
                     self._log("  API request failed after all retries")
-                    return {
-                        "result": {
-                            "final_text": f"generated: {extract_latest_user_text(request)}",
-                            "tool_calls": [],
-                        }
-                    }
+                    raise RuntimeError(
+                        f"API request failed after {max_retries} attempts: {exc}"
+                    ) from exc
 
         try:
             if content_chunks:
                 content = "".join(content_chunks)
                 self._log(f"  response length: {len(content)} chars")
-                return {"result": {"final_text": content.strip(), "tool_calls": []}}
+                return self._result(content, response_usage)
             data = json.loads(raw or "{}")
             content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
             if not content:
                 raise KeyError("content missing")
-            usage = data.get("usage", {})
-            if usage:
+            response_usage = self._normalize_usage(data.get("usage"))
+            if response_usage:
                 self._log(
-                    f"  tokens: prompt={usage.get('prompt_tokens', 0)} completion={usage.get('completion_tokens', 0)} total={usage.get('total_tokens', 0)}"
+                    f"  tokens: prompt={response_usage['prompt_tokens']} completion={response_usage['completion_tokens']} total={response_usage['total_tokens']}"
                 )
             self._log(f"  response length: {len(content)} chars")
-            return {"result": {"final_text": content.strip(), "tool_calls": []}}
+            return self._result(content, response_usage)
         except (KeyError, IndexError, json.JSONDecodeError) as exc:
             self._log(f"  failed to parse API response: {exc}")
-            return {
-                "result": {
-                    "final_text": f"generated: {extract_latest_user_text(request)}",
-                    "tool_calls": [],
-                }
-            }
+            raise RuntimeError(f"failed to parse API response: {exc}") from exc
 
     # ── local model generation ───────────────────────────────────────────
 
@@ -311,7 +387,7 @@ class BridgeRuntime:
             self._log(f"  tokenization time: {time.time() - t0:.2f}s")
 
             self._log(f"  generating (max_new_tokens={self._config.max_new_tokens})...")
-            t0 = time.time()
+            t0 = time.perf_counter()
             with torch.no_grad():
                 outputs = self._model.generate(
                     inputs,
@@ -321,7 +397,7 @@ class BridgeRuntime:
                     do_sample=True,
                     pad_token_id=self._tokenizer.pad_token_id,
                 )
-            gen_time = time.time() - t0
+            gen_time = max(time.perf_counter() - t0, 1e-9)
             output_tokens = outputs.shape[1] - input_tokens
             self._log(f"  output tokens: {output_tokens}")
             self._log(f"  generation time: {gen_time:.2f}s ({output_tokens / gen_time:.1f} tok/s)")
@@ -333,16 +409,18 @@ class BridgeRuntime:
             )
 
             self._log(f"  response length: {len(response_text)} chars")
-            return {"result": {"final_text": response_text.strip(), "tool_calls": []}}
-        except Exception:
-            traceback.print_exc(file=sys.stderr)
-            self._log(f"  ERROR during generation, falling back to stub")
-            return {
-                "result": {
-                    "final_text": f"generated: {extract_latest_user_text(request)}",
-                    "tool_calls": [],
-                }
+            usage = {
+                "prompt_tokens": int(input_tokens),
+                "completion_tokens": int(output_tokens),
+                "total_tokens": int(input_tokens + output_tokens),
+                "cached_prompt_tokens": None,
+                "cache_miss_prompt_tokens": None,
             }
+            return self._result(response_text, usage)
+        except Exception as exc:
+            traceback.print_exc(file=sys.stderr)
+            self._log("  ERROR during local generation")
+            return self._stub_or_raise(request, f"local generation failed: {exc}")
 
     # ── main entry ───────────────────────────────────────────────────────
 
@@ -353,15 +431,11 @@ class BridgeRuntime:
         if self._config.use_api:
             return self._generate_via_api(request)
 
-        # local model fallback
+        # A missing local backend is an error by default. An echo stub remains
+        # available only when explicitly enabled for demos and protocol tests.
         if self._model is None or self._tokenizer is None:
-            user_text = extract_latest_user_text(request)
-            self._log(f"generate_turn: fallback mode, user_text_len={len(user_text)}")
-            return {
-                "result": {
-                    "final_text": f"generated: {user_text}",
-                    "tool_calls": [],
-                }
-            }
+            return self._stub_or_raise(
+                request, self._fallback_reason or "model or tokenizer was not loaded"
+            )
 
         return self._generate_local(request)
