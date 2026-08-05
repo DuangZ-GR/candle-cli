@@ -29,6 +29,8 @@ pub enum MigrateCommand {
     Map(MapArgs),
     Compare(CompareArgs),
     ImportMsprobe(ImportMsprobeArgs),
+    Rewrite(RewriteArgs),
+    Rollback(RollbackArgs),
 }
 
 #[derive(Args, Debug)]
@@ -64,6 +66,38 @@ pub struct ImportMsprobeArgs {
     pub framework_version: String,
     #[arg(long)]
     pub run_id: Option<String>,
+    #[arg(long)]
+    pub force: bool,
+    #[arg(long)]
+    pub pretty: bool,
+}
+
+#[derive(Args, Debug)]
+pub struct RewriteArgs {
+    pub path: PathBuf,
+    #[arg(long)]
+    pub knowledge_base: Option<PathBuf>,
+    #[arg(long, default_value_t = 2 * 1024 * 1024)]
+    pub max_file_bytes: u64,
+    #[arg(long)]
+    pub include_differences: bool,
+    #[arg(long)]
+    pub apply: bool,
+    #[arg(long)]
+    pub allow_partial: bool,
+    #[arg(long)]
+    pub validate_program: Option<String>,
+    #[arg(long = "validate-arg", allow_hyphen_values = true)]
+    pub validate_args: Vec<String>,
+    #[arg(long, default_value_t = 300.0)]
+    pub validation_timeout: f64,
+    #[arg(long)]
+    pub pretty: bool,
+}
+
+#[derive(Args, Debug)]
+pub struct RollbackArgs {
+    pub manifest: PathBuf,
     #[arg(long)]
     pub force: bool,
     #[arg(long)]

@@ -30,6 +30,9 @@ def test_machine_schema_is_valid_json_and_declares_all_record_types():
     assert "scanReport" in schema["$defs"]
     assert "traceComparison" in schema["$defs"]
     assert "msprobeImportReport" in schema["$defs"]
+    assert "rewritePlan" in schema["$defs"]
+    assert "rewriteApplyReport" in schema["$defs"]
+    assert "rewriteRollbackReport" in schema["$defs"]
 
 
 def test_api_trace_fixture_validates_and_round_trips():

@@ -10,7 +10,7 @@
 - 未知枚举值降级为 `unknown`，但原始值可保存在 `metadata` 中供排查。
 - JSON 文件使用 UTF-8；流式轨迹使用一行一条记录的 JSON Lines。
 
-Rust 实现在 `src/migration/schema.rs`，Python 实现在 `python/migration/schema.py`。两端共同读取 `tests/fixtures/migration` 中的固定样例，防止字段名或枚举编码发生漂移。协议当前包含 `api_trace`、`diagnostic`、`scan_report`、`trace_comparison` 和 `msprobe_import_report` 五种记录。
+Rust 实现在 `src/migration/schema.rs`，Python 实现在 `python/migration/schema.py`。两端共同读取 `tests/fixtures/migration` 中的固定样例，防止字段名或枚举编码发生漂移。协议当前包含 `api_trace`、`diagnostic`、`scan_report`、`trace_comparison`、`msprobe_import_report`、`rewrite_plan`、`rewrite_apply_report` 和 `rewrite_rollback_report` 八种记录。
 
 ## 坐标约定
 
@@ -41,6 +41,14 @@ Rust 实现在 `src/migration/schema.rs`，Python 实现在 `python/migration/sc
 ## 扫描报告
 
 `scan_report` 汇总静态发现的 PyTorch API、源码范围、调用形式、置信度、初步风险和扫描问题。报告中的汇总计数必须与 findings/issues 明细严格一致，Rust CLI 在输出或写文件前会再次执行强类型校验。
+
+## 确定性重写记录
+
+`rewrite_plan` 是只读预览，包含每个文件应用前后的 SHA-256、字符坐标编辑、统一 diff、映射状态和未处理问题。路径始终相对于迁移根目录；出现语法错误、越界符号链接或超限文件时，默认禁止部分应用。
+
+`rewrite_apply_report` 表示事务已经完整写入。`verified` 只有在调用方提供的无 shell 验证命令以退出码 0 完成时才为 `true`；未执行验证时必须为 `false` 且 `validation.status` 为 `not_run`。验证失败或超时不会产生成功报告，已修改源码会自动恢复，事务清单保留为 `aborted` 以供审计。
+
+`rewrite_rollback_report` 只表示事务中的文件已恢复。回滚前会同时校验备份哈希和当前 Patch 哈希，防止静默覆盖应用后的用户修改。`--force` 是显式的覆盖选择，不是默认行为。
 
 ## 诊断记录
 

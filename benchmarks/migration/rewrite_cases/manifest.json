@@ -1,0 +1,20 @@
+{
+  "benchmark_version": "rewrite-cases-v1",
+  "description": "Deterministic synthetic rewrite development set; not a held-out real-project benchmark.",
+  "cases": [
+    {"id":"direct-add","source":"import torch\ny = torch.add(x, 1)\n","expected":"import mindspore\nimport torch\ny = mindspore.mint.add(x, 1)\n"},
+    {"id":"torch-alias","source":"import torch as th\ny=th.abs(x)  # keep\n","expected":"import mindspore\nimport torch as th\ny=mindspore.mint.abs(x)  # keep\n"},
+    {"id":"from-alias","source":"from torch import add as plus\ny = plus(x, 1)\n","expected":"import mindspore\nfrom torch import add as plus\ny = mindspore.mint.add(x, 1)\n"},
+    {"id":"mindspore-alias","source":"import mindspore as ms\nimport torch\ny = torch.add(x, 1)\n","expected":"import mindspore as ms\nimport torch\ny = ms.mint.add(x, 1)\n"},
+    {"id":"nested","source":"import torch\ny = torch.add(torch.abs(x), 1)\n","expected":"import mindspore\nimport torch\ny = mindspore.mint.add(mindspore.mint.abs(x), 1)\n"},
+    {"id":"unicode-offset","source":"import torch\n结果 = '中文'; y = torch.add(x, 1)\n","expected":"import mindspore\nimport torch\n结果 = '中文'; y = mindspore.mint.add(x, 1)\n"},
+    {"id":"future-import","source":"\"\"\"docs\"\"\"\nfrom __future__ import annotations\nimport torch\ny = torch.add(x, 1)\n","expected":"\"\"\"docs\"\"\"\nfrom __future__ import annotations\nimport mindspore\nimport torch\ny = mindspore.mint.add(x, 1)\n"},
+    {"id":"difference-default-skip","source":"import torch\ny = torch.arange(5)\n","expected":null},
+    {"id":"difference-explicit","source":"import torch\ny = torch.arange(5)\n","include_differences":true,"expected":"import mindspore\nimport torch\ny = mindspore.mint.arange(5)\n"},
+    {"id":"unknown-safe-skip","source":"import torch\ny = torch.future_api(x)\n","expected":null},
+    {"id":"tensor-method-safe-skip","source":"import torch\nx: torch.Tensor = value\ny = x.sum()\n","expected":null},
+    {"id":"linear-difference-explicit","source":"import torch\nlayer = torch.nn.Linear(4, 2)\n","include_differences":true,"expected":"import mindspore\nimport torch\nlayer = mindspore.mint.nn.Linear(4, 2)\n"},
+    {"id":"dtype-constant","source":"import torch\ny = torch.zeros((2, 3), dtype=torch.float32)\n","expected":"import mindspore\nimport torch\ny = mindspore.mint.zeros((2, 3), dtype=mindspore.float32)\n"},
+    {"id":"dtype-unknown-call-safe-skip","source":"import torch\ny = torch.future_api(2, dtype=torch.float32)\n","expected":null}
+  ]
+}

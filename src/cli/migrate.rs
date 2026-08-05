@@ -1,7 +1,11 @@
 use crate::cli::args::{
-    CompareArgs, ImportMsprobeArgs, MapArgs, MigrateCommand, ScanArgs, ScanOutputFormat,
+    CompareArgs, ImportMsprobeArgs, MapArgs, MigrateCommand, RewriteArgs, RollbackArgs, ScanArgs,
+    ScanOutputFormat,
 };
-use crate::migration::{MappingResolution, MsprobeImportReport, ScanReport, TraceComparisonResult};
+use crate::migration::{
+    MappingResolution, MsprobeImportReport, RewriteApplyReport, RewritePlanReport,
+    RewriteRollbackReport, ScanReport, TraceComparisonResult,
+};
 use std::ffi::OsString;
 use std::io::{Error, ErrorKind, Result, Write};
 use std::path::{Path, PathBuf};
@@ -13,7 +17,123 @@ pub fn run_migrate(command: MigrateCommand) -> Result<()> {
         MigrateCommand::Map(arguments) => run_map(arguments),
         MigrateCommand::Compare(arguments) => run_compare(arguments),
         MigrateCommand::ImportMsprobe(arguments) => run_import_msprobe(arguments),
+        MigrateCommand::Rewrite(arguments) => run_rewrite(arguments),
+        MigrateCommand::Rollback(arguments) => run_rollback(arguments),
     }
+}
+
+fn run_rewrite(arguments: RewriteArgs) -> Result<()> {
+    if arguments.validate_program.is_none() && !arguments.validate_args.is_empty() {
+        return Err(Error::new(
+            ErrorKind::InvalidInput,
+            "--validate-arg requires --validate-program",
+        ));
+    }
+    let python_root = python_root();
+    let mut command = python_command(&python_root)?;
+    command
+        .args(["-m", "migration.rewriter", "plan"])
+        .arg(&arguments.path)
+        .arg("--max-file-bytes")
+        .arg(arguments.max_file_bytes.to_string())
+        .arg("--validation-timeout")
+        .arg(arguments.validation_timeout.to_string());
+    if let Some(path) = &arguments.knowledge_base {
+        command.arg("--knowledge-base").arg(path);
+    }
+    if arguments.include_differences {
+        command.arg("--include-differences");
+    }
+    if arguments.apply {
+        command.arg("--apply");
+    }
+    if arguments.allow_partial {
+        command.arg("--allow-partial");
+    }
+    if arguments.pretty {
+        command.arg("--pretty");
+    }
+    if let Some(program) = &arguments.validate_program {
+        command.arg("--validate-command").arg(program);
+        command.args(&arguments.validate_args);
+    }
+    let output = command.output().map_err(|error| {
+        Error::new(
+            error.kind(),
+            format!("failed to start deterministic rewrite: {error}"),
+        )
+    })?;
+    if !output.status.success() {
+        return Err(Error::other(
+            String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        ));
+    }
+    if arguments.apply {
+        let report: RewriteApplyReport =
+            serde_json::from_slice(&output.stdout).map_err(|error| {
+                Error::new(
+                    ErrorKind::InvalidData,
+                    format!("rewrite apply returned invalid JSON: {error}"),
+                )
+            })?;
+        report.validate().map_err(|error| {
+            Error::new(
+                ErrorKind::InvalidData,
+                format!("rewrite apply returned an invalid report: {error}"),
+            )
+        })?;
+    } else {
+        let report: RewritePlanReport =
+            serde_json::from_slice(&output.stdout).map_err(|error| {
+                Error::new(
+                    ErrorKind::InvalidData,
+                    format!("rewrite preview returned invalid JSON: {error}"),
+                )
+            })?;
+        report.validate().map_err(|error| {
+            Error::new(
+                ErrorKind::InvalidData,
+                format!("rewrite preview returned an invalid report: {error}"),
+            )
+        })?;
+    }
+    write_report(None, &output.stdout)
+}
+
+fn run_rollback(arguments: RollbackArgs) -> Result<()> {
+    let python_root = python_root();
+    let mut command = python_command(&python_root)?;
+    command
+        .args(["-m", "migration.rewriter", "rollback"])
+        .arg(&arguments.manifest);
+    if arguments.force {
+        command.arg("--force");
+    }
+    if arguments.pretty {
+        command.arg("--pretty");
+    }
+    let output = command
+        .output()
+        .map_err(|error| Error::new(error.kind(), format!("failed to start rollback: {error}")))?;
+    if !output.status.success() {
+        return Err(Error::other(
+            String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        ));
+    }
+    let report: RewriteRollbackReport =
+        serde_json::from_slice(&output.stdout).map_err(|error| {
+            Error::new(
+                ErrorKind::InvalidData,
+                format!("rewrite rollback returned invalid JSON: {error}"),
+            )
+        })?;
+    report.validate().map_err(|error| {
+        Error::new(
+            ErrorKind::InvalidData,
+            format!("rewrite rollback returned an invalid report: {error}"),
+        )
+    })?;
+    write_report(None, &output.stdout)
 }
 
 fn run_import_msprobe(arguments: ImportMsprobeArgs) -> Result<()> {

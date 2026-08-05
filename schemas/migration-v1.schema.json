@@ -8,7 +8,10 @@
     { "$ref": "#/$defs/diagnostic" },
     { "$ref": "#/$defs/scanReport" },
     { "$ref": "#/$defs/traceComparison" },
-    { "$ref": "#/$defs/msprobeImportReport" }
+    { "$ref": "#/$defs/msprobeImportReport" },
+    { "$ref": "#/$defs/rewritePlan" },
+    { "$ref": "#/$defs/rewriteApplyReport" },
+    { "$ref": "#/$defs/rewriteRollbackReport" }
   ],
   "$defs": {
     "schemaVersion": {
@@ -327,6 +330,102 @@
             }
           }
         }
+      }
+    },
+    "rewriteEdit": {
+      "type": "object",
+      "required": ["start", "end", "replacement", "source_api", "target_api", "mapping_status"],
+      "properties": {
+        "start": { "type": "integer", "minimum": 0 },
+        "end": { "type": "integer", "minimum": 0 },
+        "replacement": { "type": "string", "minLength": 1 },
+        "source_api": { "type": "string", "minLength": 1 },
+        "target_api": { "type": "string", "minLength": 1 },
+        "mapping_status": { "enum": ["exact", "difference"] }
+      }
+    },
+    "rewriteFile": {
+      "type": "object",
+      "required": ["file", "original_sha256", "patched_sha256", "encoding", "edits", "diff"],
+      "properties": {
+        "file": { "type": "string", "minLength": 1 },
+        "original_sha256": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" },
+        "patched_sha256": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" },
+        "encoding": { "type": "string", "minLength": 1 },
+        "edits": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/rewriteEdit" }
+        },
+        "diff": { "type": "string", "minLength": 1 }
+      }
+    },
+    "rewriteIssue": {
+      "type": "object",
+      "required": ["file", "kind", "message"],
+      "properties": {
+        "file": { "type": "string", "minLength": 1 },
+        "kind": { "type": "string", "minLength": 1 },
+        "message": { "type": "string", "minLength": 1 }
+      }
+    },
+    "rewritePlan": {
+      "type": "object",
+      "required": ["schema_version", "record_kind", "root", "files_changed", "edit_count", "mapping_counts", "files", "issues"],
+      "properties": {
+        "schema_version": { "$ref": "#/$defs/schemaVersion" },
+        "record_kind": { "const": "rewrite_plan" },
+        "root": { "type": "string", "minLength": 1 },
+        "files_changed": { "type": "integer", "minimum": 0 },
+        "edit_count": { "type": "integer", "minimum": 0 },
+        "mapping_counts": {
+          "type": "object",
+          "required": ["exact", "difference"],
+          "properties": {
+            "exact": { "type": "integer", "minimum": 0 },
+            "difference": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "files": { "type": "array", "items": { "$ref": "#/$defs/rewriteFile" } },
+        "issues": { "type": "array", "items": { "$ref": "#/$defs/rewriteIssue" } }
+      }
+    },
+    "rewriteApplyReport": {
+      "type": "object",
+      "required": ["schema_version", "record_kind", "transaction_id", "files_changed", "manifest", "status", "verified", "validation"],
+      "properties": {
+        "schema_version": { "$ref": "#/$defs/schemaVersion" },
+        "record_kind": { "const": "rewrite_apply_report" },
+        "transaction_id": { "type": "string", "minLength": 1 },
+        "files_changed": { "type": "integer", "minimum": 1 },
+        "manifest": { "type": "string", "minLength": 1 },
+        "status": { "const": "applied" },
+        "verified": { "type": "boolean" },
+        "validation": {
+          "type": "object",
+          "required": ["status"],
+          "properties": {
+            "status": { "enum": ["not_run", "passed"] },
+            "command": { "type": "array", "items": { "type": "string" } },
+            "return_code": { "type": ["integer", "null"] },
+            "duration_ms": { "type": "number", "minimum": 0 },
+            "stdout": { "type": "string" },
+            "stderr": { "type": "string" },
+            "stdout_truncated": { "type": "boolean" },
+            "stderr_truncated": { "type": "boolean" }
+          }
+        }
+      }
+    },
+    "rewriteRollbackReport": {
+      "type": "object",
+      "required": ["schema_version", "record_kind", "transaction_id", "files_restored", "status"],
+      "properties": {
+        "schema_version": { "$ref": "#/$defs/schemaVersion" },
+        "record_kind": { "const": "rewrite_rollback_report" },
+        "transaction_id": { "type": "string", "minLength": 1 },
+        "files_restored": { "type": "integer", "minimum": 1 },
+        "status": { "const": "rolled_back" }
       }
     },
     "diagnostic": {

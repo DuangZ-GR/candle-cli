@@ -324,3 +324,138 @@ fn migrate_import_msprobe_writes_a_valid_canonical_trace() {
     assert_eq!(record["api"], "mindspore.mint.add");
     assert_eq!(record["output"]["dtype"], "float32");
 }
+
+#[test]
+fn migrate_rewrite_previews_without_modifying_source() {
+    let directory = tempdir().unwrap();
+    let source_path = directory.path().join("model.py");
+    fs::write(&source_path, "import torch\ny = torch.add(x, 1)\n").unwrap();
+
+    let output = Command::cargo_bin("candle-cli")
+        .unwrap()
+        .env("CANDLE_CLI_PYTHON", test_python())
+        .args(["migrate", "rewrite"])
+        .arg(&source_path)
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["record_kind"], "rewrite_plan");
+    assert_eq!(report["files_changed"], 1);
+    assert!(report["files"][0]["diff"]
+        .as_str()
+        .unwrap()
+        .contains("mindspore.mint.add"));
+    assert!(fs::read_to_string(source_path)
+        .unwrap()
+        .contains("torch.add"));
+}
+
+#[test]
+fn migrate_rewrite_apply_and_rollback_restore_source() {
+    let directory = tempdir().unwrap();
+    let source_path = directory.path().join("model.py");
+    let original = "import torch\ny = torch.add(x, 1)\n";
+    fs::write(&source_path, original).unwrap();
+
+    let apply_output = Command::cargo_bin("candle-cli")
+        .unwrap()
+        .env("CANDLE_CLI_PYTHON", test_python())
+        .args(["migrate", "rewrite"])
+        .arg(&source_path)
+        .arg("--apply")
+        .output()
+        .unwrap();
+    assert!(
+        apply_output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&apply_output.stderr)
+    );
+    let apply_report: Value = serde_json::from_slice(&apply_output.stdout).unwrap();
+    assert_eq!(apply_report["record_kind"], "rewrite_apply_report");
+    assert!(fs::read_to_string(&source_path)
+        .unwrap()
+        .contains("mindspore.mint.add"));
+
+    let rollback_output = Command::cargo_bin("candle-cli")
+        .unwrap()
+        .env("CANDLE_CLI_PYTHON", test_python())
+        .args(["migrate", "rollback"])
+        .arg(apply_report["manifest"].as_str().unwrap())
+        .output()
+        .unwrap();
+    assert!(
+        rollback_output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&rollback_output.stderr)
+    );
+    let rollback_report: Value = serde_json::from_slice(&rollback_output.stdout).unwrap();
+    assert_eq!(rollback_report["record_kind"], "rewrite_rollback_report");
+    assert_eq!(fs::read_to_string(source_path).unwrap(), original);
+}
+
+#[test]
+fn migrate_rewrite_only_marks_successful_validation_as_verified() {
+    let directory = tempdir().unwrap();
+    let source_path = directory.path().join("model.py");
+    fs::write(&source_path, "import torch\ny = torch.add(x, 1)\n").unwrap();
+    let python = test_python();
+
+    let output = Command::cargo_bin("candle-cli")
+        .unwrap()
+        .env("CANDLE_CLI_PYTHON", &python)
+        .args(["migrate", "rewrite"])
+        .arg(&source_path)
+        .args([
+            "--apply",
+            "--validate-program",
+            &python,
+            "--validate-arg=-c",
+            "--validate-arg=print('ok')",
+        ])
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["verified"], true);
+    assert_eq!(report["validation"]["status"], "passed");
+    assert_eq!(report["validation"]["return_code"], 0);
+}
+
+#[test]
+fn migrate_rewrite_validation_failure_restores_source() {
+    let directory = tempdir().unwrap();
+    let source_path = directory.path().join("model.py");
+    let original = "import torch\ny = torch.add(x, 1)\n";
+    fs::write(&source_path, original).unwrap();
+    let python = test_python();
+
+    let output = Command::cargo_bin("candle-cli")
+        .unwrap()
+        .env("CANDLE_CLI_PYTHON", &python)
+        .args(["migrate", "rewrite"])
+        .arg(&source_path)
+        .args([
+            "--apply",
+            "--validate-program",
+            &python,
+            "--validate-arg=-c",
+            "--validate-arg=raise SystemExit(7)",
+        ])
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("rolled back"));
+    assert_eq!(fs::read_to_string(source_path).unwrap(), original);
+}

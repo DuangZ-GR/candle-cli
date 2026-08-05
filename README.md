@@ -19,6 +19,7 @@
 - **Fault tolerance** — API retry with exponential backoff (4xx not retried), shell timeout with kill
 - **Rust core + Python bridge** — Rust owns CLI, agent loop, tools, permissions; Python bridges model backends with persistent worker
 - **Migration scanner** — discovers aliased PyTorch calls, inferred Tensor methods, source spans, and arguments without importing either framework
+- **Verified migration rewrites** — previews minimal API/dtype edits, applies them transactionally, runs an explicit validator, and supports checksum-protected rollback
 
 ## Quickstart
 
@@ -71,6 +72,8 @@ cargo run -- prompt "Hello, introduce yourself"
 | `cargo run -- migrate map <api>` | Query a versioned MindSpore mapping with official evidence |
 | `cargo run -- migrate import-msprobe ...` | Normalize an msprobe `dump.json` into canonical JSONL |
 | `cargo run -- migrate compare <pt.jsonl> <ms.jsonl>` | Align traces and locate the first observable divergence |
+| `cargo run -- migrate rewrite <path>` | Preview deterministic API and dtype rewrites without modifying source |
+| `cargo run -- migrate rollback <manifest>` | Restore files from a rewrite transaction |
 
 ### PyTorch-to-MindSpore migration scan
 
@@ -95,6 +98,17 @@ cargo run -- migrate import-msprobe ms_dump/dump.json mindspore.jsonl \
 
 # Compare the saved artifacts; a valid divergence is reported as JSON, not a process failure
 cargo run -- migrate compare torch.jsonl mindspore.jsonl --pretty
+
+# Preview a minimal patch; source files are not changed
+cargo run -- migrate rewrite ./project --pretty
+
+# Apply only exact mappings and run a validator without a shell
+cargo run -- migrate rewrite ./project --apply \
+  --validate-program python --validate-arg=-m --validate-arg=pytest
+
+# Restore a transaction after a successful apply
+cargo run -- migrate rollback \
+  ./project/.candle-cli/backups/<transaction-id>/manifest.json --pretty
 ```
 
 The scanner uses only Python's standard-library AST and never imports or executes the target project. It resolves common import aliases, records source spans and arguments, infers statically identifiable Tensor methods, and flags dynamic `getattr` calls. Each finding includes the target API, framework versions, knowledge snapshot, difference categories, and official evidence when known. The default per-file limit is 2 MiB and can be changed with `--max-file-bytes`.
@@ -104,6 +118,8 @@ The current snapshot is grounded in the official PyTorch 2.1 to MindSpore 2.9.0 
 The checked-in `torch2ms-scanner-v1` syntax suite contains 50 tasks. This version exactly matches 50/50 cases with 100% precision and recall on that public development suite. These numbers demonstrate coverage of the included syntax patterns only; they are not an estimate for unseen real-world projects. A separate held-out project suite is planned.
 
 Runtime comparison accepts canonical traces produced by the lightweight `TraceRecorder` or imported from current msprobe API-level `dump.json` statistics. Calls are aligned through the versioned mapping snapshot and compared in order by runtime error, return structure, dtype, shape, NaN/Inf counts, and numerical summaries. The fixed `trace-defects-v1` suite contains 10 synthetic cases and currently reaches 100% classification accuracy and 100% Top-1 localization on its 8 injected defects. This is a reproducible development-set result, not a real-world generalization claim; see `docs/M4_VERIFICATION.md` for scope and limitations.
+
+Rewriting is preview-only by default. The rewriter resolves import aliases and changes only mapped call names plus supported `dtype=` constants inside accepted calls; comments and surrounding formatting remain untouched. Mappings marked `difference` require `--include-differences`. Apply verifies preview hashes, writes same-filesystem backups and a transaction manifest, and automatically restores all changed sources if the validator fails or times out. An apply without `--validate-program` is deliberately reported as `verified: false`. The fixed `rewrite-cases-v1` synthetic development set contains 14 cases and currently has 100% exact-patch, safe-skip, and syntax-valid rates; this is not a held-out or real-project benchmark.
 
 ### REPL commands
 

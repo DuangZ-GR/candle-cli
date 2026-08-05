@@ -106,3 +106,49 @@ fn parses_migrate_import_msprobe_mode() {
         other => panic!("unexpected command: {other:?}"),
     }
 }
+
+#[test]
+fn parses_migrate_rewrite_and_rollback_modes() {
+    let rewrite = Cli::parse_from([
+        "candle-cli",
+        "migrate",
+        "rewrite",
+        "project",
+        "--include-differences",
+        "--apply",
+        "--validate-program",
+        "python",
+        "--validate-arg=-m",
+        "--validate-arg",
+        "pytest",
+    ]);
+    match rewrite.command {
+        Some(CommandMode::Migrate {
+            command: MigrateCommand::Rewrite(arguments),
+        }) => {
+            assert_eq!(arguments.path.to_string_lossy(), "project");
+            assert!(arguments.include_differences);
+            assert!(arguments.apply);
+            assert_eq!(arguments.validate_program.as_deref(), Some("python"));
+            assert_eq!(arguments.validate_args, ["-m", "pytest"]);
+        }
+        other => panic!("unexpected command: {other:?}"),
+    }
+
+    let rollback = Cli::parse_from([
+        "candle-cli",
+        "migrate",
+        "rollback",
+        "manifest.json",
+        "--force",
+    ]);
+    match rollback.command {
+        Some(CommandMode::Migrate {
+            command: MigrateCommand::Rollback(arguments),
+        }) => {
+            assert_eq!(arguments.manifest.to_string_lossy(), "manifest.json");
+            assert!(arguments.force);
+        }
+        other => panic!("unexpected command: {other:?}"),
+    }
+}

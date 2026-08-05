@@ -19,6 +19,7 @@
 - **容错机制** — API 指数退避重试（4xx 不重试），shell 超时强制终止
 - **Rust 核心 + Python 桥接** — Rust 负责 CLI、agent loop、工具、权限；Python 桥接模型后端，子进程跨轮复用
 - **迁移静态扫描** — 无需安装 PyTorch/MindSpore，解析 import 别名、Tensor Method、源码位置和参数信息
+- **可验证迁移重写** — 最小化预览 API/dtype 修改，事务式应用，显式执行验证命令，并支持校验和保护的回滚
 
 ## 快速开始
 
@@ -68,6 +69,10 @@ cargo run -- prompt "你好，介绍一下你自己"
 | `cargo run -- doctor` | 打印运行时状态 |
 | `cargo run -- migrate scan <path>` | 扫描 PyTorch API 并输出版本化 JSON 报告 |
 | `cargo run -- migrate map <api>` | 查询带框架版本与官方证据的 MindSpore 映射 |
+| `cargo run -- migrate import-msprobe ...` | 将 msprobe `dump.json` 归一化为标准 JSONL |
+| `cargo run -- migrate compare <pt.jsonl> <ms.jsonl>` | 对齐双框架轨迹并定位首个可观测偏差 |
+| `cargo run -- migrate rewrite <path>` | 只预览确定性 API/dtype 重写，不修改源码 |
+| `cargo run -- migrate rollback <manifest>` | 从重写事务中恢复源码 |
 
 ### PyTorch→MindSpore 迁移扫描
 
@@ -83,6 +88,17 @@ cargo run -- migrate scan ./project --format markdown --output scan-report.md --
 
 # 单独查询一个 API
 cargo run -- migrate map torch.arange --pretty
+
+# 只生成最小 Patch 预览，不修改源码
+cargo run -- migrate rewrite ./project --pretty
+
+# 应用精确映射并直接执行验证程序（不经过 shell）
+cargo run -- migrate rewrite ./project --apply \
+  --validate-program python --validate-arg=-m --validate-arg=pytest
+
+# 根据事务清单回滚
+cargo run -- migrate rollback \
+  ./project/.candle-cli/backups/<transaction-id>/manifest.json --pretty
 ```
 
 扫描器只使用 Python 标准库 AST，不导入也不执行待扫描工程。它支持 `import torch as t`、`from torch.nn.functional import relu` 等别名形式，并对可静态确认的 Tensor Method 和动态 `getattr` 调用分级标记。每条 finding 自动附带目标 API、PyTorch/MindSpore 版本、映射快照版本、差异类型和官方证据。单文件默认限制为 2 MiB，可通过 `--max-file-bytes` 调整。
@@ -90,6 +106,8 @@ cargo run -- migrate map torch.arange --pretty
 当前映射快照基于 PyTorch 2.1 与 MindSpore 2.9.0 官方映射表，收录 37 条经过证据校验的记录。在固定扫描集的 36 个唯一 API 上覆盖 27 个（75%）：25 个一致映射、2 个差异映射、9 个保持 unknown。未收录只表示当前快照未知，不代表 MindSpore 不支持。
 
 固定的 `torch2ms-scanner-v1` 语法覆盖集包含 50 个任务。当前版本在该公开、随仓库发布的开发评测集上为 50/50 精确匹配、precision 100%、recall 100%。该结果仅说明这些已收录语法模式通过，不能代表未知真实项目的总体准确率；后续将另建独立真实项目测试集。
+
+确定性重写默认只预览。它解析 import 别名，只修改已接受映射的调用名称及其内部受支持的 `dtype=` 常量，不重排周边代码或注释；标记为 `difference` 的映射必须显式传入 `--include-differences`。应用前会校验预览时的源码哈希，随后在同一项目的 `.candle-cli/backups` 中保存备份和事务清单。验证命令失败或超时时会自动恢复全部源码；未提供 `--validate-program` 的应用结果会明确标记为 `verified: false`。固定的 `rewrite-cases-v1` 合成开发集包含 14 个案例，当前精确 Patch、安全跳过和语法有效率均为 100%；这不是 held-out 或真实项目评测结果。
 
 ### REPL 命令
 

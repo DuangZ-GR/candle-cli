@@ -55,6 +55,9 @@ pub enum RecordKind {
     ScanReport,
     TraceComparison,
     MsprobeImportReport,
+    RewritePlan,
+    RewriteApplyReport,
+    RewriteRollbackReport,
     #[serde(other)]
     Unknown,
 }
@@ -257,6 +260,219 @@ impl MsprobeImportReport {
         for issue in &self.skipped {
             validate_non_empty("skipped key", &issue.key)?;
             validate_non_empty("skipped reason", &issue.reason)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RewriteEdit {
+    pub start: u64,
+    pub end: u64,
+    pub replacement: String,
+    pub source_api: String,
+    pub target_api: String,
+    pub mapping_status: MappingStatus,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RewriteFile {
+    pub file: String,
+    pub original_sha256: String,
+    pub patched_sha256: String,
+    pub encoding: String,
+    pub edits: Vec<RewriteEdit>,
+    pub diff: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RewriteIssue {
+    pub file: String,
+    pub kind: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RewritePlanReport {
+    pub schema_version: String,
+    pub record_kind: RecordKind,
+    pub root: String,
+    pub files_changed: u64,
+    pub edit_count: u64,
+    pub mapping_counts: BTreeMap<String, u64>,
+    pub files: Vec<RewriteFile>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub issues: Vec<RewriteIssue>,
+}
+
+impl RewritePlanReport {
+    pub fn validate(&self) -> Result<(), SchemaError> {
+        ensure_compatible_schema(&self.schema_version)?;
+        if self.record_kind != RecordKind::RewritePlan {
+            return Err(SchemaError::new("record_kind must be rewrite_plan"));
+        }
+        validate_non_empty("rewrite root", &self.root)?;
+        if self.files_changed != self.files.len() as u64 {
+            return Err(SchemaError::new("files_changed must match files"));
+        }
+        let mut edit_count = 0;
+        let mut mapping_counts = BTreeMap::from([
+            ("exact".to_string(), 0_u64),
+            ("difference".to_string(), 0_u64),
+        ]);
+        for file in &self.files {
+            validate_non_empty("rewrite file", &file.file)?;
+            validate_sha256("original_sha256", &file.original_sha256)?;
+            validate_sha256("patched_sha256", &file.patched_sha256)?;
+            if file.original_sha256 == file.patched_sha256 {
+                return Err(SchemaError::new(
+                    "rewrite original and patched hashes must differ",
+                ));
+            }
+            validate_non_empty("rewrite encoding", &file.encoding)?;
+            validate_non_empty("rewrite diff", &file.diff)?;
+            if file.edits.is_empty() {
+                return Err(SchemaError::new("rewrite file must contain edits"));
+            }
+            let mut previous_end = 0;
+            for (index, edit) in file.edits.iter().enumerate() {
+                if edit.end < edit.start {
+                    return Err(SchemaError::new("rewrite edit end precedes start"));
+                }
+                if index > 0 && edit.start < previous_end {
+                    return Err(SchemaError::new("rewrite edits overlap"));
+                }
+                previous_end = edit.end;
+                validate_non_empty("rewrite replacement", &edit.replacement)?;
+                validate_non_empty("rewrite source_api", &edit.source_api)?;
+                validate_non_empty("rewrite target_api", &edit.target_api)?;
+                let status = edit.mapping_status.as_str();
+                if !matches!(
+                    edit.mapping_status,
+                    MappingStatus::Exact | MappingStatus::Difference
+                ) {
+                    return Err(SchemaError::new(
+                        "rewrite mapping_status must be exact or difference",
+                    ));
+                }
+                if edit.source_api != "<import>" {
+                    *mapping_counts.entry(status.to_string()).or_insert(0) += 1;
+                }
+                edit_count += 1;
+            }
+        }
+        if self.edit_count != edit_count {
+            return Err(SchemaError::new("edit_count must match file edits"));
+        }
+        if self.mapping_counts != mapping_counts {
+            return Err(SchemaError::new("mapping_counts must match rewrite edits"));
+        }
+        for issue in &self.issues {
+            validate_non_empty("rewrite issue file", &issue.file)?;
+            validate_non_empty("rewrite issue kind", &issue.kind)?;
+            validate_non_empty("rewrite issue message", &issue.message)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RewriteApplyReport {
+    pub schema_version: String,
+    pub record_kind: RecordKind,
+    pub transaction_id: String,
+    pub files_changed: u64,
+    pub manifest: String,
+    pub status: String,
+    pub verified: bool,
+    pub validation: RewriteValidationReport,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RewriteValidationReport {
+    pub status: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub command: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub return_code: Option<i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub duration_ms: Option<f64>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub stdout: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub stderr: String,
+    #[serde(default)]
+    pub stdout_truncated: bool,
+    #[serde(default)]
+    pub stderr_truncated: bool,
+}
+
+impl RewriteApplyReport {
+    pub fn validate(&self) -> Result<(), SchemaError> {
+        ensure_compatible_schema(&self.schema_version)?;
+        if self.record_kind != RecordKind::RewriteApplyReport {
+            return Err(SchemaError::new("record_kind must be rewrite_apply_report"));
+        }
+        validate_non_empty("transaction_id", &self.transaction_id)?;
+        validate_non_empty("rewrite manifest", &self.manifest)?;
+        if self.files_changed == 0 {
+            return Err(SchemaError::new(
+                "rewrite apply must change at least one file",
+            ));
+        }
+        if self.status != "applied" {
+            return Err(SchemaError::new("rewrite apply status must be applied"));
+        }
+        let expected_validation_status = if self.verified { "passed" } else { "not_run" };
+        if self.validation.status != expected_validation_status {
+            return Err(SchemaError::new(
+                "rewrite verified flag does not match validation status",
+            ));
+        }
+        if self.verified {
+            if self.validation.command.is_empty()
+                || self.validation.return_code != Some(0)
+                || self
+                    .validation
+                    .duration_ms
+                    .is_none_or(|duration| !duration.is_finite() || duration < 0.0)
+            {
+                return Err(SchemaError::new(
+                    "verified rewrite requires a successful validation command",
+                ));
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RewriteRollbackReport {
+    pub schema_version: String,
+    pub record_kind: RecordKind,
+    pub transaction_id: String,
+    pub files_restored: u64,
+    pub status: String,
+}
+
+impl RewriteRollbackReport {
+    pub fn validate(&self) -> Result<(), SchemaError> {
+        ensure_compatible_schema(&self.schema_version)?;
+        if self.record_kind != RecordKind::RewriteRollbackReport {
+            return Err(SchemaError::new(
+                "record_kind must be rewrite_rollback_report",
+            ));
+        }
+        validate_non_empty("transaction_id", &self.transaction_id)?;
+        if self.files_restored == 0 {
+            return Err(SchemaError::new(
+                "rewrite rollback must restore at least one file",
+            ));
+        }
+        if self.status != "rolled_back" {
+            return Err(SchemaError::new(
+                "rewrite rollback status must be rolled_back",
+            ));
         }
         Ok(())
     }
@@ -775,6 +991,15 @@ impl DiagnosticRecord {
 fn validate_non_empty(field: &str, value: &str) -> Result<(), SchemaError> {
     if value.trim().is_empty() {
         return Err(SchemaError::new(format!("{field} must not be empty")));
+    }
+    Ok(())
+}
+
+fn validate_sha256(field: &str, value: &str) -> Result<(), SchemaError> {
+    if value.len() != 64 || !value.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err(SchemaError::new(format!(
+            "{field} must be a 64-character hexadecimal SHA-256"
+        )));
     }
     Ok(())
 }

@@ -34,6 +34,9 @@ class RecordKind(StringEnum):
     DIAGNOSTIC = "diagnostic"
     TRACE_COMPARISON = "trace_comparison"
     MSPROBE_IMPORT_REPORT = "msprobe_import_report"
+    REWRITE_PLAN = "rewrite_plan"
+    REWRITE_APPLY_REPORT = "rewrite_apply_report"
+    REWRITE_ROLLBACK_REPORT = "rewrite_rollback_report"
     UNKNOWN = "unknown"
 
 
