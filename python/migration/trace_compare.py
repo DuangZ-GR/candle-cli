@@ -194,13 +194,36 @@ def _compare_call(
             and source.error.error_type == target.error.error_type
         ):
             return None
+        category = DiagnosticCategory.RUNTIME_ERROR
+        if (
+            source.error is None
+            and target.error is not None
+            and target.error.error_type
+            in {
+                "AttributeError",
+                "ImportError",
+                "ModuleNotFoundError",
+                "NotImplementedError",
+            }
+        ):
+            category = DiagnosticCategory.MISSING_OPERATOR
+        summary = (
+            "MindSpore 目标算子不可用"
+            if category == DiagnosticCategory.MISSING_OPERATOR
+            else "框架运行结果不一致"
+        )
+        explanation = (
+            "PyTorch 调用成功，但 MindSpore 目标调用报告算子或模块不可用。"
+            if category == DiagnosticCategory.MISSING_OPERATOR
+            else "一个框架产生运行时错误，或两端错误类型不同。"
+        )
         return _diagnostic(
             source,
             target,
-            DiagnosticCategory.RUNTIME_ERROR,
+            category,
             Severity.HIGH,
-            "框架运行结果不一致",
-            "一个框架产生运行时错误，或两端错误类型不同。",
+            summary,
+            explanation,
             {"source_error": _error_data(source), "target_error": _error_data(target)},
             relative_tolerance,
             absolute_tolerance,
@@ -212,6 +235,18 @@ def _compare_call(
     if difference is None:
         return None
     category, severity, summary, explanation, data = difference
+    semantic_roles = {
+        source.metadata.get("semantic_role"),
+        target.metadata.get("semantic_role"),
+    }
+    if "gradient" in semantic_roles:
+        category = DiagnosticCategory.GRADIENT_MISMATCH
+        summary = "梯度不一致"
+        explanation = f"首个可观测偏差位于梯度调用的 {data.get('path', 'output')}。"
+    elif "randomness" in semantic_roles:
+        category = DiagnosticCategory.RANDOMNESS_MISMATCH
+        summary = "随机性行为不一致"
+        explanation = f"首个可观测偏差位于随机调用的 {data.get('path', 'output')}。"
     return _diagnostic(
         source,
         target,
@@ -283,6 +318,11 @@ def _compare_value(source, target, path, relative_tolerance, absolute_tolerance)
                     f"数值摘要 {statistic} 超出容差",
                     {"statistic": statistic, "source": source_value, "target": target_value},
                 )
+    preview_difference = _compare_numeric_preview(
+        source.preview, target.preview, path, relative_tolerance, absolute_tolerance
+    )
+    if preview_difference is not None:
+        return preview_difference
     for index, (source_child, target_child) in enumerate(
         zip(source.children, target.children)
     ):
@@ -296,6 +336,47 @@ def _compare_value(source, target, path, relative_tolerance, absolute_tolerance)
         if difference is not None:
             return difference
     return None
+
+
+def _compare_numeric_preview(source, target, path, relative_tolerance, absolute_tolerance):
+    source_values = _numeric_preview_values(source)
+    target_values = _numeric_preview_values(target)
+    if source_values is None or target_values is None:
+        return None
+    if len(source_values) != len(target_values):
+        return _value_difference(
+            path,
+            "数值预览长度不一致",
+            {"source_length": len(source_values), "target_length": len(target_values)},
+        )
+    for index, (source_value, target_value) in enumerate(
+        zip(source_values, target_values)
+    ):
+        if not math.isclose(
+            source_value,
+            target_value,
+            rel_tol=relative_tolerance,
+            abs_tol=absolute_tolerance,
+        ):
+            return _value_difference(
+                path,
+                f"数值预览第 {index} 项超出容差",
+                {
+                    "preview_index": index,
+                    "source": source_value,
+                    "target": target_value,
+                },
+            )
+    return None
+
+
+def _numeric_preview_values(value):
+    values = value if isinstance(value, list) else [value]
+    if not values or any(
+        not isinstance(item, (int, float)) or isinstance(item, bool) for item in values
+    ):
+        return None
+    return [float(item) for item in values]
 
 
 def _value_difference(path, explanation, data):

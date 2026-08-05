@@ -22,6 +22,8 @@ def trace_record(
     numeric=None,
     children=None,
     error=None,
+    metadata=None,
+    preview=None,
 ):
     output = None
     if error is None:
@@ -33,6 +35,8 @@ def trace_record(
         }
         if numeric is not None:
             output["numeric"] = numeric
+        if preview is not None:
+            output["preview"] = preview
     payload = {
         "schema_version": "1.0",
         "record_kind": "api_trace",
@@ -43,6 +47,7 @@ def trace_record(
         "location": {"file": "model.py", "line": call_index + 1, "column": 0},
         "api": api,
         "call_index": call_index,
+        "metadata": metadata or {},
     }
     if output is not None:
         payload["output"] = output
@@ -123,9 +128,32 @@ def test_numeric_difference_outside_tolerance_is_value_mismatch():
     assert result.diagnostic.evidence[0].data["statistic"] == "mean"
 
 
+def test_tensor_preview_detects_permutation_with_identical_summary():
+    summary = {"min": 1.0, "max": 3.0, "mean": 2.0}
+    result = compare_one(
+        source={"numeric": summary, "preview": [1.0, 2.0, 3.0]},
+        target={"numeric": summary, "preview": [3.0, 2.0, 1.0]},
+    )
+    assert result.diagnostic.category == DiagnosticCategory.VALUE_MISMATCH
+    assert result.diagnostic.evidence[0].data["preview_index"] == 0
+
+
 def test_runtime_error_on_one_side_is_classified():
     result = compare_one(target={"error": "TypeError"})
     assert result.diagnostic.category == DiagnosticCategory.RUNTIME_ERROR
+
+
+def test_missing_target_operator_is_classified_separately():
+    result = compare_one(target={"error": "NotImplementedError"})
+    assert result.diagnostic.category == DiagnosticCategory.MISSING_OPERATOR
+
+
+def test_gradient_value_difference_uses_gradient_category():
+    result = compare_one(
+        source={"numeric": {"mean": 1.0}, "metadata": {"semantic_role": "gradient"}},
+        target={"numeric": {"mean": 2.0}, "metadata": {"semantic_role": "gradient"}},
+    )
+    assert result.diagnostic.category == DiagnosticCategory.GRADIENT_MISMATCH
 
 
 def test_same_error_type_on_both_sides_is_equivalent():

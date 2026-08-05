@@ -1,0 +1,97 @@
+{
+  "schema_version": "1.0",
+  "benchmark_version": "runtime-components-v1",
+  "dataset_kind": "cross_framework_component_cases",
+  "source_framework": {"name": "pytorch", "version_prefix": "2.6"},
+  "target_framework": {"name": "mindspore", "version_prefix": "2.9"},
+  "relative_tolerance": 0.00001,
+  "absolute_tolerance": 0.0000001,
+  "description": "Deterministic component-level parity and frozen migration defect cases.",
+  "cases": [
+    {
+      "id": "mlp-forward",
+      "split": "development",
+      "capabilities": ["component", "forward", "mlp"],
+      "expected_equivalent": true,
+      "expected_category": null,
+      "expected_call_index": null,
+      "operations": [
+        {"name": "dense-1", "source_api": "torch.nn.Linear", "target_api": "mindspore.nn.Dense", "semantic_role": "forward"},
+        {"name": "relu", "source_api": "torch.nn.functional.relu", "target_api": "mindspore.ops.relu", "semantic_role": "forward"},
+        {"name": "dense-2", "source_api": "torch.nn.Linear", "target_api": "mindspore.nn.Dense", "semantic_role": "forward"}
+      ]
+    },
+    {
+      "id": "cnn-forward",
+      "split": "development",
+      "capabilities": ["component", "forward", "cnn"],
+      "expected_equivalent": true,
+      "expected_category": null,
+      "expected_call_index": null,
+      "operations": [
+        {"name": "conv2d", "source_api": "torch.nn.Conv2d", "target_api": "mindspore.nn.Conv2d", "semantic_role": "forward"},
+        {"name": "relu", "source_api": "torch.nn.functional.relu", "target_api": "mindspore.ops.relu", "semantic_role": "forward"},
+        {"name": "flatten", "source_api": "torch.flatten", "target_api": "mindspore.ops.flatten", "semantic_role": "forward"}
+      ]
+    },
+    {
+      "id": "input-weight-gradients",
+      "split": "development",
+      "capabilities": ["component", "gradient"],
+      "expected_equivalent": true,
+      "expected_category": null,
+      "expected_call_index": null,
+      "operations": [
+        {"name": "loss", "source_api": "torch.sum", "target_api": "mindspore.ops.sum", "semantic_role": "forward"},
+        {"name": "gradients", "source_api": "torch.autograd.grad", "target_api": "mindspore.grad", "semantic_role": "gradient"}
+      ]
+    },
+    {
+      "id": "batchnorm-eval",
+      "split": "development",
+      "capabilities": ["component", "inference", "normalization"],
+      "expected_equivalent": true,
+      "expected_category": null,
+      "expected_call_index": null,
+      "operations": [
+        {"name": "batchnorm", "source_api": "torch.nn.BatchNorm2d", "target_api": "mindspore.nn.BatchNorm2d", "semantic_role": "inference"}
+      ]
+    },
+    {
+      "id": "dtype-bool-regression",
+      "split": "heldout",
+      "capabilities": ["fault-localization", "dtype"],
+      "expected_equivalent": false,
+      "expected_category": "dtype_mismatch",
+      "expected_call_index": 0,
+      "fault_injection": true,
+      "operations": [
+        {"name": "add", "source_api": "torch.add", "target_api": "mindspore.ops.add", "semantic_role": "forward"}
+      ]
+    },
+    {
+      "id": "batchnorm-default-mode",
+      "split": "heldout",
+      "capabilities": ["fault-localization", "training", "normalization"],
+      "expected_equivalent": false,
+      "expected_category": "value_mismatch",
+      "expected_call_index": 0,
+      "fault_injection": false,
+      "operations": [
+        {"name": "batchnorm", "source_api": "torch.nn.BatchNorm2d", "target_api": "mindspore.nn.BatchNorm2d", "semantic_role": "training"}
+      ]
+    },
+    {
+      "id": "missing-operator-injected",
+      "split": "heldout",
+      "capabilities": ["fault-localization", "missing-operator"],
+      "expected_equivalent": false,
+      "expected_category": "missing_operator",
+      "expected_call_index": 0,
+      "fault_injection": true,
+      "operations": [
+        {"name": "sigmoid", "source_api": "torch.sigmoid", "target_api": "mindspore.ops.sigmoid", "semantic_role": "forward"}
+      ]
+    }
+  ]
+}

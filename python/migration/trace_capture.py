@@ -329,6 +329,7 @@ class TraceRecorder:
         function: Callable[..., T],
         *args: Any,
         location: SourceLocation | None = None,
+        trace_metadata: Mapping[str, Any] | None = None,
         **kwargs: Any,
     ) -> T:
         """Invoke a callable, record its normalized result, and preserve exceptions."""
@@ -363,7 +364,15 @@ class TraceRecorder:
                 if self.include_traceback
                 else None,
             )
-            self._write(api, resolved_location, arguments, None, runtime_error, started)
+            self._write(
+                api,
+                resolved_location,
+                arguments,
+                None,
+                runtime_error,
+                started,
+                trace_metadata,
+            )
             raise
         self._write(
             api,
@@ -372,13 +381,20 @@ class TraceRecorder:
             self._summarize(output),
             None,
             started,
+            trace_metadata,
         )
         return output
 
     def _summarize(self, value: Any) -> ValueSummary:
         return summarize_value(value, max_tensor_elements=self.max_tensor_elements)
 
-    def _write(self, api, location, arguments, output, error, started) -> None:
+    def _write(
+        self, api, location, arguments, output, error, started, trace_metadata
+    ) -> None:
+        metadata = dict(trace_metadata or {})
+        if "duration_ms" in metadata:
+            raise ValueError("trace metadata must not override duration_ms")
+        metadata["duration_ms"] = round((time.perf_counter() - started) * 1000, 6)
         with self._lock:
             record = ApiTraceRecord(
                 schema_version=SCHEMA_VERSION,
@@ -393,7 +409,7 @@ class TraceRecorder:
                 arguments=arguments,
                 output=output,
                 error=error,
-                metadata={"duration_ms": round((time.perf_counter() - started) * 1000, 6)},
+                metadata=metadata,
             )
             record.validate()
             self._stream.write(json.dumps(record.to_dict(), ensure_ascii=False, sort_keys=True))

@@ -21,6 +21,7 @@
 - **容错机制** — API 指数退避重试（4xx 不重试），shell 超时强制终止
 - **Rust 核心 + Python 桥接** — Rust 负责 CLI、agent loop、工具、权限；Python 桥接模型后端，子进程跨轮复用
 - **迁移静态扫描** — 无需安装 PyTorch/MindSpore，解析 import 别名、Tensor Method、源码位置和参数信息
+- **组件级差分验证** — 分离采集 PyTorch/MindSpore 前向与梯度轨迹，评估等价性、缺陷分类和首错 Top-1
 - **可验证迁移重写** — 最小化预览 API/dtype 修改，事务式应用，显式执行验证命令，并支持校验和保护的回滚
 
 ## 快速开始
@@ -118,6 +119,8 @@ cargo run -- migrate rollback \
 基于官方证据扩充到快照 `.3` 后，调用映射覆盖达到 244/545（44.77%），exact-only 改写机会从 71 增至 115，18/18 个预览文件仍保持语法有效。规则冻结后才选取 Segment Anything 做留出审计：17/17 个文件扫描成功，映射 89/212 个调用（41.98%），9/9 个生成预览文件语法有效。详见 `docs/M6_REAL_PROJECT_RESULTS.md`；这些仍是静态指标，不等同于 MindSpore 运行时准确率。
 
 带版本门禁的运行微基准可分别在 PyTorch 与 MindSpore 环境采集 5 条确定性 API 链，再通过公共轨迹比较器核对返回结构、dtype、shape、NaN/Inf 和数值摘要。`runtime-parity-v2` 已在 Linux 的 PyTorch 2.6.0+cu124 与 MindSpore 2.9.0 环境完成真实双端采集：两端均为 5/5 案例、10/10 调用成功，5/5 案例等价，运行一致率与分类准确率均为 100%，版本门禁通过。该数据只代表基础前向 API 微基准，不代表真实项目端到端迁移准确率，详见 `docs/M7_RUNTIME_PARITY.md`。
+
+`runtime-components-v1` 进一步覆盖 MLP、CNN、输入/权重梯度、BatchNorm 推理，以及 dtype 误转、默认训练模式和缺失算子三类固定偏差。Linux 真实双端采集完成 7/7 案例和每端 12/12 调用记录；4/4 等价组件通过，3/3 留出偏差的类别与首错 Top-1 正确，梯度案例 1/1 一致。该集合仍是小型确定性组件与故障注入，不是完整项目迁移准确率，详见 `docs/M11_COMPONENT_PARITY.md`。
 
 随仓库固定的 `security-regression-v1` 在不执行危险 Shell 的情况下测试 12 个本地路径/权限攻击样例和 10 个正常样例：12/12 被介入（10 个硬拦截、2 个确认门禁），10/10 正常样例放行。该数据只适用于当前确定性回归集，不能外推到未知攻击、容器逃逸、提示注入或网络外传，详见 `docs/M8_SECURITY_BENCHMARK.md`。
 
@@ -266,7 +269,7 @@ cargo run -- harness
 cargo fmt --check
 cargo clippy --all-targets --all-features -- -D warnings
 cargo test
-python3 -m pytest python/test_bridge_runtime.py -q
+PYTHONPATH=python python3 -m pytest python -q
 ```
 
 ## 许可证

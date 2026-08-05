@@ -106,6 +106,26 @@ def test_trace_recorder_writes_valid_output_and_arguments(tmp_path):
     assert record.metadata["duration_ms"] >= 0
 
 
+def test_trace_recorder_preserves_bounded_semantic_metadata(tmp_path):
+    path = tmp_path / "trace.jsonl"
+    with TraceRecorder(
+        path,
+        framework=Framework.PYTORCH,
+        framework_version="2.6.0",
+        execution_mode=ExecutionMode.EAGER,
+    ) as recorder:
+        recorder.call(
+            "torch.autograd.grad",
+            lambda: 1,
+            trace_metadata={"semantic_role": "gradient", "case_split": "heldout"},
+        )
+
+    record = load_trace_jsonl(path, Framework.PYTORCH)[0]
+    assert record.metadata["semantic_role"] == "gradient"
+    assert record.metadata["case_split"] == "heldout"
+    assert record.metadata["duration_ms"] >= 0
+
+
 def test_trace_recorder_preserves_exception_and_redacts_secret(tmp_path):
     path = tmp_path / "trace.jsonl"
     with TraceRecorder(
