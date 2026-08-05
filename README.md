@@ -113,7 +113,7 @@ cargo run -- migrate rollback \
 
 The scanner uses only Python's standard-library AST and never imports or executes the target project. It resolves common import aliases, records source spans and arguments, infers statically identifiable Tensor methods, and flags dynamic `getattr` calls. Each finding includes the target API, framework versions, knowledge snapshot, difference categories, and official evidence when known. The default per-file limit is 2 MiB and can be changed with `--max-file-bytes`.
 
-The current snapshot is grounded in the official PyTorch 2.1 to MindSpore 2.9.0 mapping table and contains 37 validated records. It covers 27 of 36 unique APIs (75%) in the fixed scanner suite: 25 exact, 2 different, and 9 unknown. An absent entry means the snapshot does not know; it does not claim that MindSpore lacks the API.
+The current snapshot is grounded in the official PyTorch 2.1 to MindSpore 2.9.0 mapping table and contains 53 validated records. It covers 27 of 36 unique APIs (75%) in the fixed scanner suite: 25 exact, 2 different, and 9 unknown. An absent entry means the snapshot does not know; it does not claim that MindSpore lacks the API.
 
 The checked-in `torch2ms-scanner-v1` syntax suite contains 50 tasks. This version exactly matches 50/50 cases with 100% precision and recall on that public development suite. These numbers demonstrate coverage of the included syntax patterns only; they are not an estimate for unseen real-world projects. A separate held-out project suite is planned.
 
@@ -122,6 +122,8 @@ Runtime comparison accepts canonical traces produced by the lightweight `TraceRe
 Rewriting is preview-only by default. The rewriter resolves import aliases and changes only mapped call names plus supported `dtype=` constants inside accepted calls; comments and surrounding formatting remain untouched. Mappings marked `difference` require `--include-differences`. Apply verifies preview hashes, writes same-filesystem backups and a transaction manifest, and automatically restores all changed sources if the validator fails or times out. An apply without `--validate-program` is deliberately reported as `verified: false`. The fixed `rewrite-cases-v1` synthetic development set contains 14 cases and currently has 100% exact-patch, safe-skip, and syntax-valid rates; this is not a held-out or real-project benchmark.
 
 The pinned `real-projects-v1` corpus adds an out-of-sample coverage audit over 25 files and 4,436 lines from PyTorch Examples, nanoGPT, and DETR. With knowledge snapshot `ms2.9.0-pt2.1-2026-08-05.1`, all 25 files scan without issues, while only 132/545 findings (24.22%) and 21/162 unique APIs (12.96%) are mapped. Exact-only rewriting finds 71 call edits across 18 files and all 18 previews remain syntactically valid. These are static coverage and syntax metrics, not runtime migration accuracy; see `docs/M6_REAL_PROJECT_BASELINE.md`.
+
+After evidence-backed expansion to snapshot `.3`, mapped call coverage reaches 244/545 (44.77%), exact-only rewrite opportunities rise from 71 to 115, and all 18 preview files remain syntax-valid. A rule-frozen held-out audit on Segment Anything scans 17/17 files and maps 89/212 calls (41.98%), with 9/9 generated preview files syntax-valid. See `docs/M6_REAL_PROJECT_RESULTS.md`; these remain static metrics rather than MindSpore runtime accuracy.
 
 ### REPL commands
 

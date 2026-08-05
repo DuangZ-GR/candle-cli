@@ -1,0 +1,46 @@
+{
+  "benchmark_version": "real-projects-heldout-v1",
+  "dataset_kind": "pinned_real_project_static_corpus",
+  "knowledge": {"sha256": "05178fda72b27ffe4476a32bee22c4b8ecf7287304545d6b0cefe7a26ad994fe", "snapshot_version": "ms2.9.0-pt2.1-2026-08-05.3", "source_framework_version": "2.1", "target_framework_version": "2.9.0"},
+  "limitations": ["No third-party project code is executed.", "Mapping coverage is measured over scanner findings, not manually labelled recall.", "Syntax-valid previews are not equivalent to MindSpore runtime correctness."],
+  "project_count": 1,
+  "projects": [
+    {
+      "call_kinds": {"dynamic": 0, "function": 148, "tensor_method": 64},
+      "commit": "dca509fe793f601edb92606367a655c15ac00fdf",
+      "files": 17, "files_scanned": 17, "findings": 212,
+      "mapped_finding_coverage": 0.419811, "mapped_findings": 89,
+      "mapped_unique_api_coverage": 0.31746, "mapped_unique_apis": 20,
+      "mapping_counts": {"difference": 21, "exact": 68, "unknown": 123, "unsupported": 0},
+      "project_id": "segment-anything",
+      "rewrite": {"call_rewrites": 45, "dtype_edits": 0, "files_with_rewrite": 9, "import_edits": 9, "syntax_valid_files": 9, "syntax_valid_rate": 1.0, "text_edits": 54},
+      "scan_issues": 0, "scan_success_rate": 1.0, "source_lines": 3052,
+      "top_unknown_apis": [
+        {"api": "torch.as_tensor", "count": 12}, {"api": "torch.Tensor.unsqueeze", "count": 10},
+        {"api": "torch.Tensor.view", "count": 9}, {"api": "torch.Tensor.permute", "count": 8}, {"api": "torch.tensor", "count": 8},
+        {"api": "torch.Tensor.to", "count": 5}, {"api": "torch.max", "count": 5}, {"api": "torch.nn.ModuleList", "count": 5},
+        {"api": "torch.nn.Parameter", "count": 5}, {"api": "torch.no_grad", "count": 5}
+      ],
+      "unique_apis": 63
+    }
+  ],
+  "rewrite_policy": "exact_mappings_only",
+  "schema_version": "1.0",
+  "summary": {
+    "call_kinds": {"dynamic": 0, "function": 148, "tensor_method": 64},
+    "files": 17, "files_scanned": 17, "findings": 212,
+    "mapped_finding_coverage": 0.419811, "mapped_findings": 89,
+    "mapped_unique_api_coverage": 0.31746, "mapped_unique_apis": 20,
+    "mapping_counts": {"difference": 21, "exact": 68, "unknown": 123, "unsupported": 0},
+    "project_id": "all",
+    "rewrite": {"call_rewrites": 45, "dtype_edits": 0, "files_with_rewrite": 9, "import_edits": 9, "syntax_valid_files": 9, "syntax_valid_rate": 1.0, "text_edits": 54},
+    "scan_issues": 0, "scan_success_rate": 1.0, "source_lines": 3052,
+    "top_unknown_apis": [
+      {"api": "torch.as_tensor", "count": 12}, {"api": "torch.Tensor.unsqueeze", "count": 10},
+      {"api": "torch.Tensor.view", "count": 9}, {"api": "torch.Tensor.permute", "count": 8}, {"api": "torch.tensor", "count": 8},
+      {"api": "torch.Tensor.to", "count": 5}, {"api": "torch.max", "count": 5}, {"api": "torch.nn.ModuleList", "count": 5},
+      {"api": "torch.nn.Parameter", "count": 5}, {"api": "torch.no_grad", "count": 5}
+    ],
+    "unique_apis": 63
+  }
+}

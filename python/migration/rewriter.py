@@ -172,6 +172,9 @@ class _RewriteScanner(TorchCallScanner):
         self.rewrite_rules = rewrite_rules
         self.include_differences = include_differences
         self.mindspore_name = mindspore_name
+        self.unsupported_parameters = set(
+            knowledge.payload.get("common_unsupported_parameters", [])
+        )
         self.edits: list[TextEdit] = []
 
     def _record_call(self, node, canonical, call_kind, confidence) -> None:
@@ -181,6 +184,10 @@ class _RewriteScanner(TorchCallScanner):
         if mapping.target_api is None or mapping.status not in {"exact", "difference"}:
             return
         if mapping.status == "difference" and not self.include_differences:
+            return
+        if any(
+            keyword.arg in self.unsupported_parameters for keyword in node.keywords
+        ):
             return
         target = _target_name(mapping.target_api, self.mindspore_name)
         start = _source_offset(self.source, node.func.lineno, node.func.col_offset)

@@ -103,13 +103,15 @@ cargo run -- migrate rollback \
 
 扫描器只使用 Python 标准库 AST，不导入也不执行待扫描工程。它支持 `import torch as t`、`from torch.nn.functional import relu` 等别名形式，并对可静态确认的 Tensor Method 和动态 `getattr` 调用分级标记。每条 finding 自动附带目标 API、PyTorch/MindSpore 版本、映射快照版本、差异类型和官方证据。单文件默认限制为 2 MiB，可通过 `--max-file-bytes` 调整。
 
-当前映射快照基于 PyTorch 2.1 与 MindSpore 2.9.0 官方映射表，收录 37 条经过证据校验的记录。在固定扫描集的 36 个唯一 API 上覆盖 27 个（75%）：25 个一致映射、2 个差异映射、9 个保持 unknown。未收录只表示当前快照未知，不代表 MindSpore 不支持。
+当前映射快照基于 PyTorch 2.1 与 MindSpore 2.9.0 官方映射表，收录 53 条经过证据校验的记录。在固定扫描集的 36 个唯一 API 上覆盖 27 个（75%）：25 个一致映射、2 个差异映射、9 个保持 unknown。未收录只表示当前快照未知，不代表 MindSpore 不支持。
 
 固定的 `torch2ms-scanner-v1` 语法覆盖集包含 50 个任务。当前版本在该公开、随仓库发布的开发评测集上为 50/50 精确匹配、precision 100%、recall 100%。该结果仅说明这些已收录语法模式通过，不能代表未知真实项目的总体准确率；后续将另建独立真实项目测试集。
 
 确定性重写默认只预览。它解析 import 别名，只修改已接受映射的调用名称及其内部受支持的 `dtype=` 常量，不重排周边代码或注释；标记为 `difference` 的映射必须显式传入 `--include-differences`。应用前会校验预览时的源码哈希，随后在同一项目的 `.candle-cli/backups` 中保存备份和事务清单。验证命令失败或超时时会自动恢复全部源码；未提供 `--validate-program` 的应用结果会明确标记为 `verified: false`。固定的 `rewrite-cases-v1` 合成开发集包含 14 个案例，当前精确 Patch、安全跳过和语法有效率均为 100%；这不是 held-out 或真实项目评测结果。
 
 固定的 `real-projects-v1` 增加了真实项目覆盖审计，包含 PyTorch Examples、nanoGPT、DETR 的 25 个文件与 4,436 行代码。在知识库快照 `ms2.9.0-pt2.1-2026-08-05.1` 下，25/25 文件扫描无问题，但当前只映射 132/545 个调用发现（24.22%）和 21/162 个唯一 API（12.96%）。exact-only 策略在 18 个文件中产生 71 个调用改写，18/18 个预览保持语法有效。这些是静态覆盖与语法指标，不是运行时迁移准确率，详见 `docs/M6_REAL_PROJECT_BASELINE.md`。
+
+基于官方证据扩充到快照 `.3` 后，调用映射覆盖达到 244/545（44.77%），exact-only 改写机会从 71 增至 115，18/18 个预览文件仍保持语法有效。规则冻结后才选取 Segment Anything 做留出审计：17/17 个文件扫描成功，映射 89/212 个调用（41.98%），9/9 个生成预览文件语法有效。详见 `docs/M6_REAL_PROJECT_RESULTS.md`；这些仍是静态指标，不等同于 MindSpore 运行时准确率。
 
 ### REPL 命令
 

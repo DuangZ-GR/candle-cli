@@ -94,6 +94,15 @@ def test_dtype_is_not_rewritten_when_enclosing_api_is_not_accepted(tmp_path):
     assert plan_rewrite(path).files == []
 
 
+def test_exact_mapping_with_unsupported_common_parameter_is_safely_skipped(tmp_path):
+    path = write_source(
+        tmp_path,
+        "import torch\ny = torch.zeros(2, device='cuda', dtype=torch.float32)\n",
+    )
+
+    assert plan_rewrite(path).files == []
+
+
 def test_difference_mapping_is_previewed_only_when_explicitly_enabled(tmp_path):
     path = write_source(tmp_path, "import torch\ny = torch.arange(5)\n")
 
@@ -103,6 +112,18 @@ def test_difference_mapping_is_previewed_only_when_explicitly_enabled(tmp_path):
     assert default_plan.files == []
     assert "mindspore.mint.arange" in patched(enabled_plan)
     assert enabled_plan.to_dict()["mapping_counts"]["difference"] == 1
+
+
+def test_new_exact_module_mapping_rewrites_but_training_mode_difference_skips(tmp_path):
+    path = write_source(
+        tmp_path,
+        "import torch\nconv = torch.nn.Conv2d(3, 8, 3)\ndrop = torch.nn.Dropout(0.1)\n",
+    )
+
+    result = patched(plan_rewrite(path))
+
+    assert "conv = mindspore.mint.nn.Conv2d(3, 8, 3)" in result
+    assert "drop = torch.nn.Dropout(0.1)" in result
 
 
 def test_unknown_api_and_tensor_method_are_not_rewritten(tmp_path):
