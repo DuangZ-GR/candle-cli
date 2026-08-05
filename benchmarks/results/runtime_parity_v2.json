@@ -1,0 +1,31 @@
+{
+  "benchmark_version": "runtime-parity-v2",
+  "case_count": 5,
+  "cases": [
+    {"classification_correct": true, "expected_equivalent": true, "first_divergence_category": null, "id": "elementwise-reduction", "source_call_index": null, "status": "equivalent"},
+    {"classification_correct": true, "expected_equivalent": true, "first_divergence_category": null, "id": "shape-transform", "source_call_index": null, "status": "equivalent"},
+    {"classification_correct": true, "expected_equivalent": true, "first_divergence_category": null, "id": "matrix-reduction", "source_call_index": null, "status": "equivalent"},
+    {"classification_correct": true, "expected_equivalent": true, "first_divergence_category": null, "id": "activation-reduction", "source_call_index": null, "status": "equivalent"},
+    {"classification_correct": true, "expected_equivalent": true, "first_divergence_category": null, "id": "concatenate-flatten", "source_call_index": null, "status": "equivalent"}
+  ],
+  "classification_accuracy": 1.0,
+  "complete": true,
+  "dataset_kind": "deterministic_cross_framework_microcases",
+  "evaluated_case_count": 5,
+  "first_divergence_categories": {},
+  "knowledge": {
+    "sha256": "a58918c76537f611abbedda5095c770c0378246cf525aef376286a6b2985c339",
+    "snapshot_version": "ms2.9.0-pt2.1-2026-08-05.3"
+  },
+  "limitations": [
+    "Microcases exercise deterministic forward APIs only.",
+    "A complete report requires captures from both pinned framework version families.",
+    "Passing microcases does not prove whole-project migration correctness."
+  ],
+  "passed": true,
+  "runtime_parity_rate": 1.0,
+  "schema_version": "1.0",
+  "source_framework_versions": ["2.6.0+cu124"],
+  "target_framework_versions": ["2.9.0"],
+  "version_prefixes_match": true
+}
