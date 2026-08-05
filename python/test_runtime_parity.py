@@ -122,6 +122,20 @@ def test_default_runtime_manifest_is_complete_and_versioned():
     assert manifest.target_version_prefix == "2.9"
 
 
+def test_runtime_v2_manifest_matches_isolated_server_versions():
+    path = (
+        __import__("migration.runtime_parity", fromlist=["DEFAULT_MANIFEST"])
+        .DEFAULT_MANIFEST.with_name("runtime_parity_v2.json")
+    )
+
+    manifest = load_manifest(path)
+
+    assert manifest.benchmark_version == "runtime-parity-v2"
+    assert {case.case_id for case in manifest.cases} == set(CASE_OPERATIONS)
+    assert manifest.source_version_prefix == "2.6"
+    assert manifest.target_version_prefix == "2.9"
+
+
 def test_manifest_rejects_case_drift(tmp_path):
     document = json.loads(
         __import__("migration.runtime_parity", fromlist=["DEFAULT_MANIFEST"])
