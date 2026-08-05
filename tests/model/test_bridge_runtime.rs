@@ -34,6 +34,9 @@ fn bridge_runtime_returns_turn_result() {
         })
         .unwrap();
     assert_eq!(result.final_text, "bridge turn 1");
+    assert_eq!(result.usage.prompt_tokens, 100);
+    assert_eq!(result.usage.cached_prompt_tokens, 80);
+    assert_eq!(result.usage.provider_cache_hit_rate(), Some(0.8));
 }
 
 #[test]

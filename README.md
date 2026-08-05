@@ -131,7 +131,7 @@ The version-gated `runtime-parity-v1` microbenchmark captures five deterministic
 
 The checked-in `security-regression-v1` suite exercises 12 local path/permission attacks and 10 benign controls without running dangerous shell commands. All 12 attacks were intercepted (10 hard blocks and 2 confirmation gates), while 10/10 benign cases were allowed. These figures apply only to this deterministic regression set, not unknown attacks, container escape, prompt injection, or network exfiltration; see `docs/M8_SECURITY_BENCHMARK.md`.
 
-The `context-compaction-v1` suite reduces estimated serialized-message tokens from 4,434 to 1,395 (68.54%) across four deterministic conversations while preserving system messages and tool-call/result integrity. This is a heuristic compaction metric, not provider billing data. Provider cache metrics are not currently observable, so cache hit rate is explicitly `null`; see `docs/M9_CONTEXT_BENCHMARK.md`.
+The `context-compaction-v1` suite reduces estimated serialized-message tokens from 4,434 to 1,395 (68.54%) across four deterministic conversations while preserving system messages and tool-call/result integrity. This is a heuristic compaction metric, not provider billing data. The Bridge now collects provider-reported token/cache usage when available, but no real provider benchmark has been checked in; the deterministic context report therefore keeps cache hit rate as `null`. See `docs/M9_CONTEXT_BENCHMARK.md` and `docs/M10_PROVIDER_USAGE.md`.
 
 ### REPL commands
 
@@ -276,6 +276,7 @@ Set `CANDLE_CLI_VERBOSE=1` for API request details, token usage, timing, and GPU
 | `CANDLE_CLI_SHELL_TIMEOUT_SECS` | `30` | Shell command timeout (seconds) |
 | `CANDLE_CLI_MAX_TOOL_OUTPUT_CHARS` | `65536` | Maximum tool-result characters retained in model/session context |
 | `CANDLE_CLI_ALLOW_STUB_FALLBACK` | `false` | Enable echo-only bridge stub for demos/tests; never enable for real agent tasks |
+| `CANDLE_CLI_INCLUDE_USAGE` | `true` | Request usage in streaming API responses; disable for incompatible local backends |
 | `CANDLE_CLI_SANDBOX` | (empty) | Set to `docker` for container isolation |
 | `CANDLE_CLI_VERBOSE` | `false` | Print diagnostics to stderr |
 | `CANDLE_CLI_MODEL_CONFIG` | (empty) | Optional JSON config file path |

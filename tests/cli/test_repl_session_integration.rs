@@ -310,6 +310,8 @@ fn repl_trace_reports_last_execution_chain() {
     );
     assert!(stdout.contains("build_turn_request"));
     assert!(stdout.contains("runtime.generate_turn"));
+    assert!(stdout.contains("Provider usage: 1/1 requests reported"));
+    assert!(stdout.contains("provider cache hit rate: 80.00%"));
 }
 
 #[test]

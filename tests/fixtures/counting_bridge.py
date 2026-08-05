@@ -28,6 +28,13 @@ for line in sys.stdin:
             "result": {
                 "final_text": f"bridge turn {turn}",
                 "tool_calls": [],
+                "usage": {
+                    "prompt_tokens": 100,
+                    "completion_tokens": 10,
+                    "total_tokens": 110,
+                    "cached_prompt_tokens": 80,
+                    "cache_miss_prompt_tokens": 20,
+                },
             },
         }
         print(json.dumps(result), flush=True)

@@ -2,7 +2,7 @@ use crate::agent::tool_call::{parse_tool_call, ToolCallParseError};
 use crate::agent::trace::{ExecutionTrace, TraceEvent};
 use crate::agent::turn::finish_turn;
 use crate::model::runtime::CandleTargetRuntime;
-use crate::model::types::{ToolCallIntent, TurnResult};
+use crate::model::types::{TokenUsage, ToolCallIntent, TurnResult};
 use crate::permissions::policy::PermissionPolicy;
 use crate::session::model::{ContentBlock, Message, MessageRole, Session};
 use crate::tools::registry::ToolRegistry;
@@ -57,6 +57,7 @@ pub fn run_single_turn_with_limit_and_trace<R: CandleTargetRuntime>(
     trace: &mut ExecutionTrace,
 ) -> Result<TurnResult, String> {
     let verbose = verbose_enabled();
+    let mut accumulated_usage = TokenUsage::default();
 
     for step in 0..max_steps {
         trace.push(TraceEvent::BuildTurnRequest);
@@ -75,6 +76,8 @@ pub fn run_single_turn_with_limit_and_trace<R: CandleTargetRuntime>(
             s.stop();
         }
         let result = result?;
+        accumulated_usage.merge(&result.usage);
+        trace.record_usage(&result.usage);
 
         trace.push(TraceEvent::ParseToolCall);
         match parse_tool_call(&result.final_text) {
@@ -110,7 +113,11 @@ pub fn run_single_turn_with_limit_and_trace<R: CandleTargetRuntime>(
                         .and_then(|v| v.as_str())
                         .unwrap_or("");
                     match crate::tools::builtin::task::run(desc, runtime, tools, policy) {
-                        Ok(output) => (format_tool_success("task", &output), false),
+                        Ok(sub_result) => {
+                            accumulated_usage.merge(&sub_result.usage);
+                            trace.record_usage(&sub_result.usage);
+                            (format_tool_success("task", &sub_result.final_text), false)
+                        }
                         Err(err) => (format_tool_error("task", &err), true),
                     }
                 } else {
@@ -134,6 +141,7 @@ pub fn run_single_turn_with_limit_and_trace<R: CandleTargetRuntime>(
                 return Ok(TurnResult {
                     final_text,
                     tool_calls: Vec::new(),
+                    usage: accumulated_usage,
                 });
             }
             Err(err) => {
@@ -150,6 +158,7 @@ pub fn run_single_turn_with_limit_and_trace<R: CandleTargetRuntime>(
     Ok(TurnResult {
         final_text,
         tool_calls: Vec::new(),
+        usage: accumulated_usage,
     })
 }
 

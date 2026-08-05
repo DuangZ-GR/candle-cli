@@ -121,7 +121,7 @@ cargo run -- migrate rollback \
 
 随仓库固定的 `security-regression-v1` 在不执行危险 Shell 的情况下测试 12 个本地路径/权限攻击样例和 10 个正常样例：12/12 被介入（10 个硬拦截、2 个确认门禁），10/10 正常样例放行。该数据只适用于当前确定性回归集，不能外推到未知攻击、容器逃逸、提示注入或网络外传，详见 `docs/M8_SECURITY_BENCHMARK.md`。
 
-`context-compaction-v1` 在四类确定性会话中把序列化消息的估算 Token 从 4,434 降至 1,395，减少 68.54%，同时保持系统消息和工具调用/结果配对完整。该指标使用启发式估算，不是 Provider 计费数据；当前也无法观测 Provider 缓存，因此缓存命中率明确为 `null`，详见 `docs/M9_CONTEXT_BENCHMARK.md`。
+`context-compaction-v1` 在四类确定性会话中把序列化消息的估算 Token 从 4,434 降至 1,395，减少 68.54%，同时保持系统消息和工具调用/结果配对完整。该指标使用启发式估算，不是 Provider 计费数据。Bridge 现已能在 Provider 返回字段时采集真实 Token/Cache usage，但仓库尚未固化真实 Provider 评测，因此确定性上下文报告仍将缓存命中率记为 `null`，详见 `docs/M9_CONTEXT_BENCHMARK.md` 与 `docs/M10_PROVIDER_USAGE.md`。
 
 ### REPL 命令
 
@@ -239,6 +239,7 @@ cargo run -- harness
 | `CANDLE_CLI_SHELL_TIMEOUT_SECS` | `30` | Shell 超时（秒） |
 | `CANDLE_CLI_MAX_TOOL_OUTPUT_CHARS` | `65536` | 模型和会话上下文中保留的工具结果最大字符数 |
 | `CANDLE_CLI_ALLOW_STUB_FALLBACK` | `false` | 仅为演示/测试启用回显桩；真实 Agent 任务禁止开启 |
+| `CANDLE_CLI_INCLUDE_USAGE` | `true` | 请求流式 API 返回 usage；不兼容的本地后端可关闭 |
 | `CANDLE_CLI_SANDBOX` | 空 | `docker` 启用容器隔离 |
 | `CANDLE_CLI_VERBOSE` | `false` | 诊断信息输出到 stderr |
 | `CANDLE_CLI_MODEL_CONFIG` | 空 | 可选 JSON 配置文件 |

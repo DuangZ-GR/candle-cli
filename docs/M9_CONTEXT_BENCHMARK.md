@@ -26,12 +26,12 @@ cargo run -- context-harness
 
 当前估算器按“中文字符约 1 Token、拉丁字符约 4 字符/Token”计算序列化消息长度。它适合做同一实现的确定性前后对比，但不是任一模型 Provider 的真实计费 tokenizer。
 
-项目目前没有读取 Provider 返回的 cached-input-token 字段，也没有实现本地 prompt KV cache。因此报告明确记录：
+`context-compaction-v1` 本身不调用 Provider，也没有实现本地 prompt KV cache。因此这份确定性报告明确记录：
 
 - `provider_cache_metrics_available: false`
 - `provider_cache_hit_rate: null`
 
-不能把 68.54% 的上下文裁切率写成 68.54% 的缓存命中率。后续只有在 Bridge 统一采集请求 input tokens、cached input tokens、模型 ID、Provider 和计费口径之后，才能计算真实 cache hit rate 与成本节省。
+不能把 68.54% 的上下文裁切率写成 68.54% 的缓存命中率。M10 已让 Bridge 采集 Provider 返回的 input/output/cached input tokens，并在字段完整时计算整轮命中率；但只有固定 Provider、模型、请求集和计费口径并实际运行后，才能对外报告真实 cache hit rate 与成本节省，详见 `docs/M10_PROVIDER_USAGE.md`。
 
 ## 能力边界
 

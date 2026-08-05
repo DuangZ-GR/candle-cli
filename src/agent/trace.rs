@@ -1,5 +1,7 @@
 use std::time::Instant;
 
+use crate::model::types::TokenUsage;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TraceEvent {
     BuildTurnRequest,
@@ -21,6 +23,7 @@ pub struct ExecutionTrace {
     steps: Vec<TimedStep>,
     started: Option<Instant>,
     last_mark: Option<Instant>,
+    usage: TokenUsage,
 }
 
 impl ExecutionTrace {
@@ -29,6 +32,7 @@ impl ExecutionTrace {
             steps: Vec::new(),
             started: Some(Instant::now()),
             last_mark: Some(Instant::now()),
+            usage: TokenUsage::default(),
         }
     }
 
@@ -47,6 +51,14 @@ impl ExecutionTrace {
 
     pub fn is_empty(&self) -> bool {
         self.steps.is_empty()
+    }
+
+    pub fn record_usage(&mut self, usage: &TokenUsage) {
+        self.usage.merge(usage);
+    }
+
+    pub fn usage(&self) -> &TokenUsage {
+        &self.usage
     }
 
     pub fn render_lines(&self) -> Vec<String> {
@@ -82,6 +94,22 @@ impl ExecutionTrace {
             };
             lines.push(line);
         }
+        lines.push(format!(
+            "Provider usage: {}/{} requests reported",
+            self.usage.usage_reported_request_count, self.usage.request_count
+        ));
+        if self.usage.usage_complete() {
+            lines.push(format!(
+                "- tokens: prompt={} completion={} total={}",
+                self.usage.prompt_tokens, self.usage.completion_tokens, self.usage.total_tokens
+            ));
+        } else {
+            lines.push("- tokens: unavailable (provider usage incomplete)".to_string());
+        }
+        match self.usage.provider_cache_hit_rate() {
+            Some(rate) => lines.push(format!("- provider cache hit rate: {:.2}%", rate * 100.0)),
+            None => lines.push("- provider cache hit rate: unavailable".to_string()),
+        }
         lines
     }
 
@@ -104,6 +132,7 @@ impl ExecutionTrace {
             "total_ms": total_ms,
             "total_s": format!("{:.2}", total_ms as f64 / 1000.0),
             "steps": steps,
+            "usage": self.usage.to_json(),
         })
     }
 }

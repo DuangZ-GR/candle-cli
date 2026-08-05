@@ -171,11 +171,69 @@ class BridgeRuntime:
 
     # ── API-based generation ─────────────────────────────────────────────
 
+    @staticmethod
+    def _normalize_usage(usage: object) -> dict | None:
+        if not isinstance(usage, dict):
+            return None
+
+        def non_negative_int(value: object) -> int | None:
+            return (
+                value
+                if isinstance(value, int)
+                and not isinstance(value, bool)
+                and value >= 0
+                else None
+            )
+
+        prompt_tokens = non_negative_int(usage.get("prompt_tokens"))
+        completion_tokens = non_negative_int(usage.get("completion_tokens"))
+        total_tokens = non_negative_int(usage.get("total_tokens"))
+        if prompt_tokens is None or completion_tokens is None or total_tokens is None:
+            return None
+        if total_tokens != prompt_tokens + completion_tokens:
+            return None
+
+        cached_prompt_tokens = non_negative_int(usage.get("prompt_cache_hit_tokens"))
+        cache_miss_prompt_tokens = non_negative_int(
+            usage.get("prompt_cache_miss_tokens")
+        )
+        prompt_details = usage.get("prompt_tokens_details")
+        if cached_prompt_tokens is None and isinstance(prompt_details, dict):
+            cached_prompt_tokens = non_negative_int(prompt_details.get("cached_tokens"))
+        if cached_prompt_tokens is not None and cached_prompt_tokens > prompt_tokens:
+            cached_prompt_tokens = None
+            cache_miss_prompt_tokens = None
+        if (
+            cached_prompt_tokens is not None
+            and cache_miss_prompt_tokens is not None
+            and cached_prompt_tokens + cache_miss_prompt_tokens != prompt_tokens
+        ):
+            cached_prompt_tokens = None
+            cache_miss_prompt_tokens = None
+
+        return {
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": total_tokens,
+            "cached_prompt_tokens": cached_prompt_tokens,
+            "cache_miss_prompt_tokens": cache_miss_prompt_tokens,
+        }
+
+    @staticmethod
+    def _result(final_text: str, usage: dict | None = None) -> dict:
+        return {
+            "result": {
+                "final_text": final_text.strip(),
+                "tool_calls": [],
+                "usage": usage,
+            }
+        }
+
     def _generate_via_api(self, request: dict) -> dict:
         messages_json = request.get("messages_json", "[]")
         chat_messages = build_chat_messages(messages_json)
         if not chat_messages:
-            return {"result": {"final_text": "", "tool_calls": []}}
+            return self._result("")
 
         # add system prompt if present
         api_messages: list[dict] = []
@@ -193,6 +251,8 @@ class BridgeRuntime:
             "thinking": {"type": "disabled"},
             "stream": True,
         }
+        if self._config.include_usage:
+            body["stream_options"] = {"include_usage": True}
 
         url = self._config.api_base_url.rstrip("/") + "/chat/completions"
         headers = {
@@ -207,6 +267,7 @@ class BridgeRuntime:
 
         max_retries = 3
         raw = None
+        response_usage = None
         for attempt in range(1, max_retries + 1):
             t0 = time.time()
             try:
@@ -227,7 +288,13 @@ class BridgeRuntime:
                             break
                         try:
                             chunk = json.loads(data_str)
-                            delta = chunk.get("choices", [{}])[0].get("delta", {})
+                            normalized_usage = self._normalize_usage(chunk.get("usage"))
+                            if normalized_usage is not None:
+                                response_usage = normalized_usage
+                            choices = chunk.get("choices") or []
+                            if not choices:
+                                continue
+                            delta = choices[0].get("delta", {})
                             token = delta.get("content", "")
                             if token:
                                 content_chunks.append(token)
@@ -276,18 +343,18 @@ class BridgeRuntime:
             if content_chunks:
                 content = "".join(content_chunks)
                 self._log(f"  response length: {len(content)} chars")
-                return {"result": {"final_text": content.strip(), "tool_calls": []}}
+                return self._result(content, response_usage)
             data = json.loads(raw or "{}")
             content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
             if not content:
                 raise KeyError("content missing")
-            usage = data.get("usage", {})
-            if usage:
+            response_usage = self._normalize_usage(data.get("usage"))
+            if response_usage:
                 self._log(
-                    f"  tokens: prompt={usage.get('prompt_tokens', 0)} completion={usage.get('completion_tokens', 0)} total={usage.get('total_tokens', 0)}"
+                    f"  tokens: prompt={response_usage['prompt_tokens']} completion={response_usage['completion_tokens']} total={response_usage['total_tokens']}"
                 )
             self._log(f"  response length: {len(content)} chars")
-            return {"result": {"final_text": content.strip(), "tool_calls": []}}
+            return self._result(content, response_usage)
         except (KeyError, IndexError, json.JSONDecodeError) as exc:
             self._log(f"  failed to parse API response: {exc}")
             raise RuntimeError(f"failed to parse API response: {exc}") from exc
@@ -342,7 +409,14 @@ class BridgeRuntime:
             )
 
             self._log(f"  response length: {len(response_text)} chars")
-            return {"result": {"final_text": response_text.strip(), "tool_calls": []}}
+            usage = {
+                "prompt_tokens": int(input_tokens),
+                "completion_tokens": int(output_tokens),
+                "total_tokens": int(input_tokens + output_tokens),
+                "cached_prompt_tokens": None,
+                "cache_miss_prompt_tokens": None,
+            }
+            return self._result(response_text, usage)
         except Exception as exc:
             traceback.print_exc(file=sys.stderr)
             self._log("  ERROR during local generation")

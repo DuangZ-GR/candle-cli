@@ -13,6 +13,7 @@ from python.model_config import (
     ENV_ALLOW_STUB_FALLBACK,
     ENV_API_BASE_URL,
     ENV_API_KEY,
+    ENV_INCLUDE_USAGE,
     ENV_LOCAL_FILES_ONLY,
     ENV_MAX_NEW_TOKENS,
     ENV_MODEL_DEVICE,
@@ -36,6 +37,7 @@ def _clear_env():
         ENV_API_BASE_URL,
         ENV_API_KEY,
         ENV_ALLOW_STUB_FALLBACK,
+        ENV_INCLUDE_USAGE,
         "CANDLE_CLI_MODEL_CONFIG",
     ):
         os.environ.pop(key, None)
@@ -63,6 +65,7 @@ def test_model_config_defaults():
     assert config.api_base_url == ""
     assert config.api_key == ""
     assert config.allow_stub_fallback is False
+    assert config.include_usage is True
     assert config.use_api is False
 
 
@@ -140,6 +143,12 @@ def test_env_api_key():
     os.environ[ENV_API_KEY] = "sk-my-key"
     config = ModelConfig()
     assert config.api_key == "sk-my-key"
+
+
+def test_env_can_disable_stream_usage_for_incompatible_backends():
+    os.environ[ENV_INCLUDE_USAGE] = "false"
+    config = ModelConfig()
+    assert config.include_usage is False
 
 
 def test_env_all_together():
@@ -431,6 +440,7 @@ def test_generate_turn_via_api():
     assert body["messages"][0]["role"] == "user"
     assert body["messages"][0]["content"] == "hello"
     assert body["max_tokens"] == 512
+    assert body["stream_options"] == {"include_usage": True}
 
 
 def test_generate_turn_via_api_with_system_prompt():
@@ -521,6 +531,100 @@ def test_generate_turn_via_api_streaming_handles_empty_delta():
         )
 
     assert result["result"]["final_text"] == "ok"
+
+
+def test_generate_turn_via_api_collects_deepseek_cache_usage_chunk():
+    config = ModelConfig()
+    config.api_base_url = "https://api.deepseek.com/v1"
+    config.api_key = "sk-test"
+    runtime = BridgeRuntime(config=config)
+    lines = [
+        b'data: {"choices":[{"delta":{"content":"ok"}}],"usage":null}',
+        b'data: {"choices":[],"usage":{"prompt_tokens":100,"completion_tokens":5,"total_tokens":105,"prompt_cache_hit_tokens":80,"prompt_cache_miss_tokens":20}}',
+        b"data: [DONE]",
+    ]
+    resp = mock.MagicMock()
+    resp.__enter__.return_value = resp
+    resp.__iter__.return_value = iter(lines)
+
+    with mock.patch("urllib.request.urlopen", return_value=resp):
+        result = runtime.generate_turn(
+            {
+                "messages_json": json.dumps(
+                    [{"role": "User", "blocks": [{"Text": {"text": "hello"}}]}]
+                )
+            }
+        )
+
+    assert result["result"]["usage"] == {
+        "prompt_tokens": 100,
+        "completion_tokens": 5,
+        "total_tokens": 105,
+        "cached_prompt_tokens": 80,
+        "cache_miss_prompt_tokens": 20,
+    }
+
+
+def test_generate_turn_via_api_collects_openai_nested_cached_tokens():
+    usage = BridgeRuntime._normalize_usage(
+        {
+            "prompt_tokens": 64,
+            "completion_tokens": 8,
+            "total_tokens": 72,
+            "prompt_tokens_details": {"cached_tokens": 48},
+        }
+    )
+
+    assert usage == {
+        "prompt_tokens": 64,
+        "completion_tokens": 8,
+        "total_tokens": 72,
+        "cached_prompt_tokens": 48,
+        "cache_miss_prompt_tokens": None,
+    }
+
+
+def test_usage_normalizer_rejects_inconsistent_totals_and_cache_breakdown():
+    assert (
+        BridgeRuntime._normalize_usage(
+            {"prompt_tokens": 10, "completion_tokens": 2, "total_tokens": 99}
+        )
+        is None
+    )
+    usage = BridgeRuntime._normalize_usage(
+        {
+            "prompt_tokens": 10,
+            "completion_tokens": 2,
+            "total_tokens": 12,
+            "prompt_cache_hit_tokens": 9,
+            "prompt_cache_miss_tokens": 9,
+        }
+    )
+    assert usage is not None
+    assert usage["cached_prompt_tokens"] is None
+    assert usage["cache_miss_prompt_tokens"] is None
+
+
+def test_generate_turn_via_api_can_omit_stream_usage_option():
+    config = ModelConfig()
+    config.api_base_url = "http://localhost:8080/v1"
+    config.api_key = "sk-test"
+    config.include_usage = False
+    runtime = BridgeRuntime(config=config)
+
+    with mock.patch(
+        "urllib.request.urlopen", return_value=_mock_api_response("ok")
+    ) as mock_urlopen:
+        runtime.generate_turn(
+            {
+                "messages_json": json.dumps(
+                    [{"role": "User", "blocks": [{"Text": {"text": "hello"}}]}]
+                )
+            }
+        )
+
+    body = json.loads(mock_urlopen.call_args[0][0].data.decode("utf-8"))
+    assert "stream_options" not in body
 
 
 # ── Retry behaviour tests ────────────────────────────────────────────────────

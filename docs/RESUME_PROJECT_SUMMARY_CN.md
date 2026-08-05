@@ -38,8 +38,8 @@ flowchart LR
 | 首个偏差定位 | 10/10 等价性分类正确；8/8 缺陷类型及首个偏差 Top-1 正确 | 仓库内 10 个固定合成缺陷注入场景 |
 | 安全回归 | 12/12 攻击样例被硬拦截或进入确认门禁；10/10 正常样例放行 | 当前路径/权限回归集，不覆盖未知攻击 |
 | 上下文裁切 | 估算 Token 4,434→1,395，减少 68.54%；系统消息与工具链完整 | 启发式估算，不是 Provider 计费 Token |
-| Provider 缓存 | `provider_cache_hit_rate: null` | 尚未采集 cached-input-token，不能声称缓存命中率 |
-| 当前全量测试 | Rust 138/138；Python 282/282 | 本地回归；正式双框架运行数据仍待外部环境 |
+| Provider 缓存 | Bridge 已支持采集并设置完整性门禁；已发布基准仍为 `null` | 尚未固定真实 Provider 请求集，不能声称具体缓存命中率 |
+| 当前全量测试 | Rust 142/142；Python 287/287 | 本地回归；正式双框架运行数据仍待外部环境 |
 
 机器可读结果和完整限制分别位于 `benchmarks/results`、`docs/M6_REAL_PROJECT_RESULTS.md`、`docs/M7_RUNTIME_PARITY.md`、`docs/M8_SECURITY_BENCHMARK.md` 与 `docs/M9_CONTEXT_BENCHMARK.md`。
 
@@ -78,7 +78,7 @@ flowchart LR
 1. **完成正式双框架运行评测：** 在 Linux/ModelArts 分别使用 PyTorch 2.1.x 与 MindSpore 2.9.x 运行 `runtime-parity-v1`，回填基础 API 链的一致率和首个偏差结果。
 2. **增加真实网络组件：** 从算子链扩展到 MLP、CNN block、数据预处理和训练/推理模式差异，统计补丁采用率、验证通过率与回滚率。
 3. **升级上下文系统：** 从直接丢弃旧轮次升级为“近期原文 + 结构化任务状态 + 可验证摘要”，同时评测 Token、任务成功率和事实保留率。
-4. **采集真实 Token/Cache 指标：** 在 Bridge 统一记录 Provider、模型、input/output/cached input tokens 和请求延迟，按 Provider 口径计算成本与缓存指标。
+4. **运行真实 Token/Cache 评测：** Bridge 已能聚合 input/output/cached input tokens；下一步固定 Provider、模型、请求集和价格日期，补充请求延迟、重试率、成本与缓存指标。
 5. **扩展安全留出集：** 覆盖符号链接竞态、Windows junction、压缩包逃逸、命令/提示注入、网络外传和资源耗尽，并把开发规则集与留出攻击集分离。
 
 完成第 1、2 项后，项目即可从“静态迁移分析与安全修复工具”进一步升级为“有真实双框架运行证据的迁移诊断系统”。

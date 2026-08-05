@@ -1,6 +1,8 @@
 use candle_cli::agent::r#loop::run_single_turn;
 use candle_cli::model::runtime::CandleTargetRuntime;
-use candle_cli::model::types::{RuntimeCapabilities, RuntimeHealth, TurnRequest, TurnResult};
+use candle_cli::model::types::{
+    RuntimeCapabilities, RuntimeHealth, TokenUsage, TurnRequest, TurnResult,
+};
 use candle_cli::permissions::mode::PermissionMode;
 use candle_cli::permissions::policy::PermissionPolicy;
 use candle_cli::session::model::{ContentBlock, Message, MessageRole, Session};
@@ -34,6 +36,7 @@ impl CandleTargetRuntime for ScriptedRuntime {
         Ok(TurnResult {
             final_text,
             tool_calls: Vec::new(),
+            usage: TokenUsage::unreported_request(),
         })
     }
 
@@ -95,6 +98,9 @@ fn agent_loop_runs_read_edit_shell_then_final_answer() {
     let result = run_single_turn(&mut session, &mut runtime, &tools, &policy).unwrap();
 
     assert_eq!(result.final_text, "done");
+    assert_eq!(result.usage.request_count, 4);
+    assert_eq!(result.usage.usage_reported_request_count, 0);
+    assert_eq!(result.usage.provider_cache_hit_rate(), None);
     assert_eq!(fs::read_to_string(&file_path).unwrap(), "new text\n");
 }
 
