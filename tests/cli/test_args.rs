@@ -14,6 +14,12 @@ fn parses_resume_flag() {
 }
 
 #[test]
+fn parses_security_harness_mode() {
+    let cli = Cli::parse_from(["candle-cli", "security-harness"]);
+    assert!(matches!(cli.command, Some(CommandMode::SecurityHarness)));
+}
+
+#[test]
 fn parses_migrate_scan_mode() {
     let cli = Cli::parse_from([
         "candle-cli",

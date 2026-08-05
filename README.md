@@ -67,6 +67,7 @@ cargo run -- prompt "Hello, introduce yourself"
 | `cargo run -- prompt "..."` | One-shot prompt and exit |
 | `cargo run --` | Interactive REPL with readline editing |
 | `cargo run -- harness` | Run automated scenario benchmark |
+| `cargo run -- security-harness` | Run deterministic path/permission security regression benchmark |
 | `cargo run -- doctor` | Print runtime status |
 | `cargo run -- migrate scan <path>` | Scan PyTorch APIs and emit a versioned JSON report |
 | `cargo run -- migrate map <api>` | Query a versioned MindSpore mapping with official evidence |
@@ -126,6 +127,8 @@ The pinned `real-projects-v1` corpus adds an out-of-sample coverage audit over 2
 After evidence-backed expansion to snapshot `.3`, mapped call coverage reaches 244/545 (44.77%), exact-only rewrite opportunities rise from 71 to 115, and all 18 preview files remain syntax-valid. A rule-frozen held-out audit on Segment Anything scans 17/17 files and maps 89/212 calls (41.98%), with 9/9 generated preview files syntax-valid. See `docs/M6_REAL_PROJECT_RESULTS.md`; these remain static metrics rather than MindSpore runtime accuracy.
 
 The version-gated `runtime-parity-v1` microbenchmark captures five deterministic API chains in separate PyTorch 2.1 and MindSpore 2.9 environments, then evaluates return structure, dtype, shape, NaN/Inf and numeric summaries through the common trace comparator. The current machine has PyTorch 2.13 but no MindSpore, so only a non-canonical 5/5 source-side smoke capture was run and no runtime parity percentage is claimed. See `docs/M7_RUNTIME_PARITY.md`.
+
+The checked-in `security-regression-v1` suite exercises 12 local path/permission attacks and 10 benign controls without running dangerous shell commands. All 12 attacks were intercepted (10 hard blocks and 2 confirmation gates), while 10/10 benign cases were allowed. These figures apply only to this deterministic regression set, not unknown attacks, container escape, prompt injection, or network exfiltration; see `docs/M8_SECURITY_BENCHMARK.md`.
 
 ### REPL commands
 

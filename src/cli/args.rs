@@ -16,6 +16,7 @@ pub enum CommandMode {
         input: String,
     },
     Harness,
+    SecurityHarness,
     Doctor,
     Migrate {
         #[command(subcommand)]

@@ -66,6 +66,7 @@ cargo run -- prompt "你好，介绍一下你自己"
 | `cargo run -- prompt "..."` | 单轮提问后退出 |
 | `cargo run --` | 交互式 REPL（含 readline 编辑、流式输出） |
 | `cargo run -- harness` | 运行自动化场景评测 |
+| `cargo run -- security-harness` | 运行确定性的路径/权限安全回归基准 |
 | `cargo run -- doctor` | 打印运行时状态 |
 | `cargo run -- migrate scan <path>` | 扫描 PyTorch API 并输出版本化 JSON 报告 |
 | `cargo run -- migrate map <api>` | 查询带框架版本与官方证据的 MindSpore 映射 |
@@ -114,6 +115,8 @@ cargo run -- migrate rollback \
 基于官方证据扩充到快照 `.3` 后，调用映射覆盖达到 244/545（44.77%），exact-only 改写机会从 71 增至 115，18/18 个预览文件仍保持语法有效。规则冻结后才选取 Segment Anything 做留出审计：17/17 个文件扫描成功，映射 89/212 个调用（41.98%），9/9 个生成预览文件语法有效。详见 `docs/M6_REAL_PROJECT_RESULTS.md`；这些仍是静态指标，不等同于 MindSpore 运行时准确率。
 
 带版本门禁的 `runtime-parity-v1` 微基准可分别在 PyTorch 2.1 与 MindSpore 2.9 环境采集 5 条确定性 API 链，再通过公共轨迹比较器核对返回结构、dtype、shape、NaN/Inf 和数值摘要。当前机器只有 PyTorch 2.13、没有 MindSpore，因此只完成了非正式的源端 5/5 冒烟采集，没有声称任何运行一致率，详见 `docs/M7_RUNTIME_PARITY.md`。
+
+随仓库固定的 `security-regression-v1` 在不执行危险 Shell 的情况下测试 12 个本地路径/权限攻击样例和 10 个正常样例：12/12 被介入（10 个硬拦截、2 个确认门禁），10/10 正常样例放行。该数据只适用于当前确定性回归集，不能外推到未知攻击、容器逃逸、提示注入或网络外传，详见 `docs/M8_SECURITY_BENCHMARK.md`。
 
 ### REPL 命令
 

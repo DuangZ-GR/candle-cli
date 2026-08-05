@@ -2,6 +2,7 @@ use candle_cli::cli::args::{Cli, CommandMode};
 use candle_cli::cli::harness::run_harness;
 use candle_cli::cli::migrate::run_migrate;
 use candle_cli::cli::repl::{run_prompt, run_repl};
+use candle_cli::cli::security_harness::run_security_harness;
 use candle_cli::ui::format::format_status_line;
 use candle_cli::ui::render::render_line;
 use clap::Parser;
@@ -22,6 +23,7 @@ fn main() -> std::io::Result<()> {
     match cli.command {
         Some(CommandMode::Prompt { input }) => run_prompt(session_dir, input),
         Some(CommandMode::Harness) => run_harness(session_dir),
+        Some(CommandMode::SecurityHarness) => run_security_harness(),
         Some(CommandMode::Doctor) => {
             render_line(&format_status_line("runtime", "mock"));
             render_line(&format_status_line(
