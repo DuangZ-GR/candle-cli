@@ -68,6 +68,7 @@ cargo run -- prompt "Hello, introduce yourself"
 | `cargo run -- harness` | Run automated scenario benchmark |
 | `cargo run -- doctor` | Print runtime status |
 | `cargo run -- migrate scan <path>` | Scan PyTorch APIs and emit a versioned JSON report |
+| `cargo run -- migrate map <api>` | Query a versioned MindSpore mapping with official evidence |
 
 ### PyTorch-to-MindSpore migration scan
 
@@ -80,9 +81,14 @@ cargo run -- migrate scan ./project --format markdown --output scan-report.md
 
 # Explicitly replace an existing report
 cargo run -- migrate scan ./project --format markdown --output scan-report.md --force
+
+# Query one API directly
+cargo run -- migrate map torch.arange --pretty
 ```
 
-The scanner uses only Python's standard-library AST and never imports or executes the target project. It resolves common import aliases, records source spans and arguments, infers statically identifiable Tensor methods, and flags dynamic `getattr` calls. The default per-file limit is 2 MiB and can be changed with `--max-file-bytes`.
+The scanner uses only Python's standard-library AST and never imports or executes the target project. It resolves common import aliases, records source spans and arguments, infers statically identifiable Tensor methods, and flags dynamic `getattr` calls. Each finding includes the target API, framework versions, knowledge snapshot, difference categories, and official evidence when known. The default per-file limit is 2 MiB and can be changed with `--max-file-bytes`.
+
+The current snapshot is grounded in the official PyTorch 2.1 to MindSpore 2.9.0 mapping table and contains 37 validated records. It covers 27 of 36 unique APIs (75%) in the fixed scanner suite: 25 exact, 2 different, and 9 unknown. An absent entry means the snapshot does not know; it does not claim that MindSpore lacks the API.
 
 The checked-in `torch2ms-scanner-v1` syntax suite contains 50 tasks. This version exactly matches 50/50 cases with 100% precision and recall on that public development suite. These numbers demonstrate coverage of the included syntax patterns only; they are not an estimate for unseen real-world projects. A separate held-out project suite is planned.
 

@@ -134,6 +134,7 @@
         "call_kind",
         "confidence",
         "risk_level",
+        "mapping",
         "expression",
         "positional_argument_count",
         "keyword_arguments"
@@ -145,12 +146,45 @@
         "call_kind": { "type": "string", "minLength": 1 },
         "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
         "risk_level": { "type": "string", "minLength": 1 },
+        "mapping": { "$ref": "#/$defs/mappingResolution" },
         "expression": { "type": "string", "minLength": 1, "maxLength": 512 },
         "positional_argument_count": { "type": "integer", "minimum": 0 },
         "keyword_arguments": {
           "type": "array",
           "items": { "type": "string" }
         }
+      }
+    },
+    "mappingResolution": {
+      "type": "object",
+      "required": [
+        "source_api",
+        "status",
+        "differences",
+        "notes",
+        "evidence_urls",
+        "source_framework_version",
+        "target_framework_version",
+        "knowledge_version"
+      ],
+      "properties": {
+        "source_api": { "type": "string", "pattern": "^torch" },
+        "target_api": { "type": "string", "pattern": "^mindspore" },
+        "status": {
+          "enum": ["exact", "difference", "unsupported", "unknown"]
+        },
+        "differences": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "notes": { "type": "string", "minLength": 1 },
+        "evidence_urls": {
+          "type": "array",
+          "items": { "type": "string", "format": "uri" }
+        },
+        "source_framework_version": { "type": "string", "minLength": 1 },
+        "target_framework_version": { "type": "string", "minLength": 1 },
+        "knowledge_version": { "type": "string", "minLength": 1 }
       }
     },
     "scanIssue": {
@@ -174,7 +208,8 @@
         "tensor_method_count",
         "dynamic_call_count",
         "issue_count",
-        "api_counts"
+        "api_counts",
+        "mapping_counts"
       ],
       "properties": {
         "finding_count": { "type": "integer", "minimum": 0 },
@@ -184,6 +219,10 @@
         "dynamic_call_count": { "type": "integer", "minimum": 0 },
         "issue_count": { "type": "integer", "minimum": 0 },
         "api_counts": {
+          "type": "object",
+          "additionalProperties": { "type": "integer", "minimum": 1 }
+        },
+        "mapping_counts": {
           "type": "object",
           "additionalProperties": { "type": "integer", "minimum": 1 }
         }

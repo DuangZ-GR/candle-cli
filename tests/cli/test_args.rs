@@ -37,3 +37,18 @@ fn parses_migrate_scan_mode() {
         other => panic!("unexpected command: {other:?}"),
     }
 }
+
+#[test]
+fn parses_migrate_map_mode() {
+    let cli = Cli::parse_from(["candle-cli", "migrate", "map", "torch.sum", "--pretty"]);
+
+    match cli.command {
+        Some(CommandMode::Migrate {
+            command: MigrateCommand::Map(arguments),
+        }) => {
+            assert_eq!(arguments.api, "torch.sum");
+            assert!(arguments.pretty);
+        }
+        other => panic!("unexpected command: {other:?}"),
+    }
+}

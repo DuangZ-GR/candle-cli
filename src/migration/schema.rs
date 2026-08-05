@@ -90,6 +90,42 @@ pub enum RiskLevel {
     Unknown,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MappingStatus {
+    Exact,
+    Difference,
+    Unsupported,
+    Unknown,
+}
+
+impl MappingStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Exact => "exact",
+            Self::Difference => "difference",
+            Self::Unsupported => "unsupported",
+            Self::Unknown => "unknown",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MappingResolution {
+    pub source_api: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_api: Option<String>,
+    pub status: MappingStatus,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub differences: Vec<String>,
+    pub notes: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub evidence_urls: Vec<String>,
+    pub source_framework_version: String,
+    pub target_framework_version: String,
+    pub knowledge_version: String,
+}
+
 impl RiskLevel {
     pub fn as_str(self) -> &'static str {
         match self {
@@ -111,6 +147,7 @@ pub struct ScanFinding {
     pub call_kind: ScanCallKind,
     pub confidence: f64,
     pub risk_level: RiskLevel,
+    pub mapping: MappingResolution,
     pub expression: String,
     pub positional_argument_count: u32,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -138,6 +175,7 @@ pub struct ScanSummary {
     pub issue_count: u64,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub api_counts: BTreeMap<String, u64>,
+    pub mapping_counts: BTreeMap<String, u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -171,17 +209,24 @@ impl ScanReport {
         let mut direct_call_count = 0;
         let mut tensor_method_count = 0;
         let mut dynamic_call_count = 0;
+        let mut mapping_counts = BTreeMap::new();
         for finding in &self.findings {
             validate_non_empty("finding_id", &finding.finding_id)?;
             validate_non_empty("api", &finding.api)?;
             validate_non_empty("expression", &finding.expression)?;
             finding.location.validate()?;
+            finding
+                .mapping
+                .validate_for_finding(&finding.api, finding.risk_level)?;
             if !finding.confidence.is_finite() || !(0.0..=1.0).contains(&finding.confidence) {
                 return Err(SchemaError::new(
                     "scan finding confidence must be a finite value between 0 and 1",
                 ));
             }
             *api_counts.entry(finding.api.clone()).or_insert(0) += 1;
+            *mapping_counts
+                .entry(finding.mapping.status.as_str().to_string())
+                .or_insert(0) += 1;
             match finding.call_kind {
                 ScanCallKind::Function => direct_call_count += 1,
                 ScanCallKind::TensorMethod => tensor_method_count += 1,
@@ -208,10 +253,85 @@ impl ScanReport {
             dynamic_call_count,
             issue_count: self.issues.len() as u64,
             api_counts,
+            mapping_counts,
         };
         if self.summary != expected {
             return Err(SchemaError::new(
                 "scan summary does not match findings and issues",
+            ));
+        }
+        Ok(())
+    }
+}
+
+impl MappingResolution {
+    pub fn validate(&self) -> Result<(), SchemaError> {
+        validate_non_empty("mapping source_api", &self.source_api)?;
+        validate_non_empty("mapping notes", &self.notes)?;
+        validate_non_empty(
+            "mapping source_framework_version",
+            &self.source_framework_version,
+        )?;
+        validate_non_empty(
+            "mapping target_framework_version",
+            &self.target_framework_version,
+        )?;
+        validate_non_empty("mapping knowledge_version", &self.knowledge_version)?;
+        match self.status {
+            MappingStatus::Exact | MappingStatus::Difference => {
+                if self
+                    .target_api
+                    .as_deref()
+                    .is_none_or(|api| !api.starts_with("mindspore"))
+                {
+                    return Err(SchemaError::new(
+                        "known mapping must contain a MindSpore target_api",
+                    ));
+                }
+                if self.evidence_urls.is_empty() {
+                    return Err(SchemaError::new("known mapping must contain evidence_urls"));
+                }
+            }
+            MappingStatus::Unsupported | MappingStatus::Unknown => {
+                if self.target_api.is_some() {
+                    return Err(SchemaError::new(
+                        "unsupported or unknown mapping must not contain target_api",
+                    ));
+                }
+            }
+        }
+        if self.status == MappingStatus::Exact && !self.differences.is_empty() {
+            return Err(SchemaError::new(
+                "exact mapping must not contain differences",
+            ));
+        }
+        if self.status == MappingStatus::Difference && self.differences.is_empty() {
+            return Err(SchemaError::new(
+                "difference mapping must contain differences",
+            ));
+        }
+        Ok(())
+    }
+
+    fn validate_for_finding(
+        &self,
+        finding_api: &str,
+        risk_level: RiskLevel,
+    ) -> Result<(), SchemaError> {
+        self.validate()?;
+        if self.source_api != finding_api {
+            return Err(SchemaError::new(
+                "mapping source_api must match the scan finding api",
+            ));
+        }
+        let expected_risk = match self.status {
+            MappingStatus::Exact => RiskLevel::Low,
+            MappingStatus::Difference => RiskLevel::Medium,
+            MappingStatus::Unsupported | MappingStatus::Unknown => RiskLevel::High,
+        };
+        if risk_level != expected_risk {
+            return Err(SchemaError::new(
+                "scan finding risk_level does not match mapping status",
             ));
         }
         Ok(())

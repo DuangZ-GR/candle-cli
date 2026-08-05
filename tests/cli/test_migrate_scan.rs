@@ -118,3 +118,74 @@ fn migrate_scan_can_write_a_markdown_report() {
     assert!(markdown.contains("`torch.sum`"));
     assert!(markdown.contains("`model.py:2:0`"));
 }
+
+#[test]
+fn migrate_map_returns_an_evidence_backed_exact_mapping() {
+    let output = Command::cargo_bin("candle-cli")
+        .unwrap()
+        .env("CANDLE_CLI_PYTHON", test_python())
+        .args(["migrate", "map", "torch.sum"])
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let result: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(result["status"], "exact");
+    assert_eq!(result["target_api"], "mindspore.mint.sum");
+    assert_eq!(result["target_framework_version"], "2.9.0");
+    assert!(result["evidence_urls"].as_array().unwrap().len() > 0);
+}
+
+#[test]
+fn migrate_map_returns_unknown_without_claiming_unsupported() {
+    let output = Command::cargo_bin("candle-cli")
+        .unwrap()
+        .env("CANDLE_CLI_PYTHON", test_python())
+        .args(["migrate", "map", "torch.future_operator"])
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let result: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(result["status"], "unknown");
+    assert!(result["target_api"].is_null());
+    assert!(result["notes"].as_str().unwrap().contains("不能据此判断"));
+}
+
+#[test]
+fn migrate_scan_includes_mapping_and_updates_risk() {
+    let project = tempdir().unwrap();
+    fs::write(
+        project.path().join("model.py"),
+        "import torch\na = torch.sum(x)\nb = torch.arange(10)\n",
+    )
+    .unwrap();
+
+    let output = Command::cargo_bin("candle-cli")
+        .unwrap()
+        .env("CANDLE_CLI_PYTHON", test_python())
+        .args(["migrate", "scan"])
+        .arg(project.path())
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let findings = report["findings"].as_array().unwrap();
+    assert_eq!(findings[0]["mapping"]["status"], "exact");
+    assert_eq!(findings[0]["risk_level"], "low");
+    assert_eq!(findings[1]["mapping"]["status"], "difference");
+    assert_eq!(findings[1]["risk_level"], "medium");
+}

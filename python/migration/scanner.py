@@ -10,12 +10,13 @@ import os
 import sys
 import tokenize
 from collections import Counter
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any, Iterable
 
 from migration.schema import SCHEMA_VERSION
 from migration.schema import SchemaError, ensure_compatible_schema
+from migration.mapping import DEFAULT_KNOWLEDGE_BASE, MappingKnowledgeBase, MappingResolution
 
 DEFAULT_MAX_FILE_BYTES = 2 * 1024 * 1024
 IGNORED_DIRECTORIES = {
@@ -99,6 +100,7 @@ class ScanFinding:
     call_kind: str
     confidence: float
     risk_level: str
+    mapping: MappingResolution
     expression: str
     positional_argument_count: int
     keyword_arguments: list[str]
@@ -138,6 +140,7 @@ class ScanReport:
 
         api_counts = Counter()
         call_counts = Counter()
+        mapping_counts = Counter()
         for finding in self.findings:
             if not finding.finding_id.strip():
                 raise SchemaError("finding_id must not be empty")
@@ -151,6 +154,17 @@ class ScanReport:
                 raise SchemaError("scan finding confidence must be between 0 and 1")
             api_counts[finding.api] += 1
             call_counts[finding.call_kind] += 1
+            mapping_counts[finding.mapping.status] += 1
+            if finding.mapping.source_api != finding.api:
+                raise SchemaError("mapping source_api must match scan finding api")
+            expected_risk = {
+                "exact": "low",
+                "difference": "medium",
+                "unsupported": "high",
+                "unknown": "high",
+            }[finding.mapping.status]
+            if finding.risk_level != expected_risk:
+                raise SchemaError("risk_level does not match mapping status")
 
         for issue in self.issues:
             if not issue.file.strip() or not issue.kind.strip() or not issue.message.strip():
@@ -166,6 +180,7 @@ class ScanReport:
             "dynamic_call_count": call_counts["dynamic"],
             "issue_count": len(self.issues),
             "api_counts": dict(sorted(api_counts.items())),
+            "mapping_counts": dict(sorted(mapping_counts.items())),
         }
         if self.summary != expected:
             raise SchemaError("scan summary does not match findings and issues")
@@ -417,9 +432,6 @@ class TorchCallScanner(ast.NodeVisitor):
         keyword_arguments = [
             keyword.arg if keyword.arg is not None else "**" for keyword in node.keywords
         ]
-        risk_level = "high" if call_kind == "dynamic" else (
-            "medium" if call_kind == "tensor_method" else "unclassified"
-        )
         self.findings.append(
             ScanFinding(
                 finding_id=finding_id,
@@ -427,7 +439,18 @@ class TorchCallScanner(ast.NodeVisitor):
                 location=location,
                 call_kind=call_kind,
                 confidence=confidence,
-                risk_level=risk_level,
+                risk_level="unclassified",
+                mapping=MappingResolution(
+                    source_api=canonical,
+                    target_api=None,
+                    status="unknown",
+                    differences=[],
+                    notes="mapping enrichment pending",
+                    evidence_urls=[],
+                    source_framework_version="unknown",
+                    target_framework_version="unknown",
+                    knowledge_version="unknown",
+                ),
                 expression=expression,
                 positional_argument_count=len(node.args),
                 keyword_arguments=keyword_arguments,
@@ -457,7 +480,11 @@ def _read_python_source(path: Path) -> str:
         return source_file.read()
 
 
-def scan_path(path: str | Path, max_file_bytes: int = DEFAULT_MAX_FILE_BYTES) -> ScanReport:
+def scan_path(
+    path: str | Path,
+    max_file_bytes: int = DEFAULT_MAX_FILE_BYTES,
+    knowledge_base: str | Path = DEFAULT_KNOWLEDGE_BASE,
+) -> ScanReport:
     root = Path(path)
     if not root.exists():
         raise FileNotFoundError(f"scan path does not exist: {root}")
@@ -467,6 +494,7 @@ def scan_path(path: str | Path, max_file_bytes: int = DEFAULT_MAX_FILE_BYTES) ->
         raise ValueError(f"scan file must use the .py extension: {root}")
     if max_file_bytes <= 0:
         raise ValueError("max_file_bytes must be greater than zero")
+    knowledge = MappingKnowledgeBase.load(knowledge_base)
 
     candidates = list(_iter_python_files(root))
     findings: list[ScanFinding] = []
@@ -514,8 +542,22 @@ def scan_path(path: str | Path, max_file_bytes: int = DEFAULT_MAX_FILE_BYTES) ->
             item.api,
         )
     )
+    enriched_findings = []
+    for finding in findings:
+        mapping = knowledge.resolve(finding.api)
+        risk_level = {
+            "exact": "low",
+            "difference": "medium",
+            "unsupported": "high",
+            "unknown": "high",
+        }[mapping.status]
+        enriched_findings.append(
+            replace(finding, mapping=mapping, risk_level=risk_level)
+        )
+    findings = enriched_findings
     issues.sort(key=lambda item: (item.file, item.line or 0, item.column or 0))
     api_counts = Counter(finding.api for finding in findings)
+    mapping_counts = Counter(finding.mapping.status for finding in findings)
     summary = {
         "finding_count": len(findings),
         "unique_api_count": len(api_counts),
@@ -524,6 +566,7 @@ def scan_path(path: str | Path, max_file_bytes: int = DEFAULT_MAX_FILE_BYTES) ->
         "dynamic_call_count": sum(item.call_kind == "dynamic" for item in findings),
         "issue_count": len(issues),
         "api_counts": dict(sorted(api_counts.items())),
+        "mapping_counts": dict(sorted(mapping_counts.items())),
     }
     return ScanReport(
         schema_version=SCHEMA_VERSION,
@@ -544,10 +587,13 @@ def main(argv: list[str] | None = None) -> int:
         "--max-file-bytes", type=int, default=DEFAULT_MAX_FILE_BYTES
     )
     parser.add_argument("--pretty", action="store_true")
+    parser.add_argument("--knowledge-base", default=str(DEFAULT_KNOWLEDGE_BASE))
     arguments = parser.parse_args(argv)
 
     try:
-        report = scan_path(arguments.path, arguments.max_file_bytes)
+        report = scan_path(
+            arguments.path, arguments.max_file_bytes, arguments.knowledge_base
+        )
         report.validate()
     except (OSError, ValueError) as error:
         print(str(error), file=sys.stderr)

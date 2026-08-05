@@ -26,6 +26,16 @@ pub enum CommandMode {
 #[derive(Subcommand, Debug)]
 pub enum MigrateCommand {
     Scan(ScanArgs),
+    Map(MapArgs),
+}
+
+#[derive(Args, Debug)]
+pub struct MapArgs {
+    pub api: String,
+    #[arg(long)]
+    pub knowledge_base: Option<PathBuf>,
+    #[arg(long)]
+    pub pretty: bool,
 }
 
 #[derive(Args, Debug)]
@@ -41,6 +51,8 @@ pub struct ScanArgs {
     pub force: bool,
     #[arg(long, default_value_t = 2 * 1024 * 1024)]
     pub max_file_bytes: u64,
+    #[arg(long)]
+    pub knowledge_base: Option<PathBuf>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]

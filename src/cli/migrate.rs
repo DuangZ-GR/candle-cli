@@ -1,5 +1,5 @@
-use crate::cli::args::{MigrateCommand, ScanArgs, ScanOutputFormat};
-use crate::migration::ScanReport;
+use crate::cli::args::{MapArgs, MigrateCommand, ScanArgs, ScanOutputFormat};
+use crate::migration::{MappingResolution, ScanReport};
 use std::ffi::OsString;
 use std::io::{Error, ErrorKind, Result, Write};
 use std::path::{Path, PathBuf};
@@ -8,7 +8,47 @@ use std::process::{Command, Output};
 pub fn run_migrate(command: MigrateCommand) -> Result<()> {
     match command {
         MigrateCommand::Scan(arguments) => run_scan(arguments),
+        MigrateCommand::Map(arguments) => run_map(arguments),
     }
+}
+
+fn run_map(arguments: MapArgs) -> Result<()> {
+    let python_root = python_root();
+    let mut command = python_command(&python_root)?;
+    command
+        .args(["-m", "migration.mapping"])
+        .arg(&arguments.api);
+    if arguments.pretty {
+        command.arg("--pretty");
+    }
+    if let Some(path) = &arguments.knowledge_base {
+        command.arg("--knowledge-base").arg(path);
+    }
+    let output = command.output().map_err(|error| {
+        Error::new(
+            error.kind(),
+            format!("failed to start mapping query: {error}"),
+        )
+    })?;
+    if !output.status.success() {
+        return Err(Error::other(
+            String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        ));
+    }
+    let resolution: MappingResolution =
+        serde_json::from_slice(&output.stdout).map_err(|error| {
+            Error::new(
+                ErrorKind::InvalidData,
+                format!("mapping query returned invalid JSON: {error}"),
+            )
+        })?;
+    resolution.validate().map_err(|error| {
+        Error::new(
+            ErrorKind::InvalidData,
+            format!("mapping query returned an invalid result: {error}"),
+        )
+    })?;
+    write_report(None, &output.stdout)
 }
 
 fn run_scan(arguments: ScanArgs) -> Result<()> {
@@ -66,6 +106,7 @@ fn render_markdown(report: &ScanReport) -> String {
         format!("- Python files scanned: {}", report.files_scanned),
         format!("- Findings: {}", report.summary.finding_count),
         format!("- Unique APIs: {}", report.summary.unique_api_count),
+        format!("- Mapping status: {:?}", report.summary.mapping_counts),
         format!("- Issues: {}", report.summary.issue_count),
         String::new(),
         "## Findings".to_string(),
@@ -74,17 +115,18 @@ fn render_markdown(report: &ScanReport) -> String {
     if report.findings.is_empty() {
         lines.push("No PyTorch API calls were detected.".to_string());
     } else {
-        lines.push("| ID | Location | API | Kind | Confidence | Risk | Expression |".to_string());
-        lines.push("| --- | --- | --- | --- | ---: | --- | --- |".to_string());
+        lines.push("| ID | Location | PyTorch API | MindSpore API | Mapping | Confidence | Risk | Expression |".to_string());
+        lines.push("| --- | --- | --- | --- | --- | ---: | --- | --- |".to_string());
         for finding in &report.findings {
             lines.push(format!(
-                "| `{}` | `{}:{}:{}` | `{}` | `{}` | {:.2} | `{}` | `{}` |",
+                "| `{}` | `{}:{}:{}` | `{}` | `{}` | `{}` | {:.2} | `{}` | `{}` |",
                 escape_markdown(&finding.finding_id),
                 escape_markdown(&finding.location.file),
                 finding.location.line,
                 finding.location.column,
                 escape_markdown(&finding.api),
-                finding.call_kind.as_str(),
+                escape_markdown(finding.mapping.target_api.as_deref().unwrap_or("-")),
+                finding.mapping.status.as_str(),
                 finding.confidence,
                 finding.risk_level.as_str(),
                 escape_markdown(&finding.expression),
@@ -127,29 +169,18 @@ fn escape_markdown(value: &str) -> String {
 }
 
 fn execute_scanner(arguments: &ScanArgs) -> Result<Output> {
-    let python = std::env::var("CANDLE_CLI_PYTHON").unwrap_or_else(|_| {
-        if cfg!(windows) {
-            "python".to_string()
-        } else {
-            "python3".to_string()
-        }
-    });
-    let python_root = std::env::var_os("CANDLE_CLI_PYTHON_ROOT")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("python"));
-    let python_path = prepend_python_path(&python_root)?;
-
-    let mut command = Command::new(python);
+    let python_root = python_root();
+    let mut command = python_command(&python_root)?;
     command
         .args(["-m", "migration.scanner"])
         .arg(&arguments.path)
         .arg("--max-file-bytes")
-        .arg(arguments.max_file_bytes.to_string())
-        .env("PYTHONPATH", python_path)
-        .env("PYTHONUTF8", "1")
-        .env("PYTHONIOENCODING", "utf-8");
+        .arg(arguments.max_file_bytes.to_string());
     if arguments.pretty {
         command.arg("--pretty");
+    }
+    if let Some(path) = &arguments.knowledge_base {
+        command.arg("--knowledge-base").arg(path);
     }
     command.output().map_err(|error| {
         Error::new(
@@ -157,6 +188,30 @@ fn execute_scanner(arguments: &ScanArgs) -> Result<Output> {
             format!("failed to start migration scanner: {error}"),
         )
     })
+}
+
+fn python_root() -> PathBuf {
+    std::env::var_os("CANDLE_CLI_PYTHON_ROOT")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("python"))
+}
+
+fn python_command(python_root: &Path) -> Result<Command> {
+    let python = std::env::var("CANDLE_CLI_PYTHON").unwrap_or_else(|_| {
+        if cfg!(windows) {
+            "python".to_string()
+        } else {
+            "python3".to_string()
+        }
+    });
+    let python_path = prepend_python_path(python_root)?;
+
+    let mut command = Command::new(python);
+    command
+        .env("PYTHONPATH", python_path)
+        .env("PYTHONUTF8", "1")
+        .env("PYTHONIOENCODING", "utf-8");
+    Ok(command)
 }
 
 fn prepend_python_path(python_root: &Path) -> Result<OsString> {

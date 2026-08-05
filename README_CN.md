@@ -67,6 +67,7 @@ cargo run -- prompt "你好，介绍一下你自己"
 | `cargo run -- harness` | 运行自动化场景评测 |
 | `cargo run -- doctor` | 打印运行时状态 |
 | `cargo run -- migrate scan <path>` | 扫描 PyTorch API 并输出版本化 JSON 报告 |
+| `cargo run -- migrate map <api>` | 查询带框架版本与官方证据的 MindSpore 映射 |
 
 ### PyTorch→MindSpore 迁移扫描
 
@@ -79,9 +80,14 @@ cargo run -- migrate scan ./project --format markdown --output scan-report.md
 
 # 确认替换已有报告
 cargo run -- migrate scan ./project --format markdown --output scan-report.md --force
+
+# 单独查询一个 API
+cargo run -- migrate map torch.arange --pretty
 ```
 
-扫描器只使用 Python 标准库 AST，不导入也不执行待扫描工程。它支持 `import torch as t`、`from torch.nn.functional import relu` 等别名形式，并对可静态确认的 Tensor Method 和动态 `getattr` 调用分级标记。单文件默认限制为 2 MiB，可通过 `--max-file-bytes` 调整。
+扫描器只使用 Python 标准库 AST，不导入也不执行待扫描工程。它支持 `import torch as t`、`from torch.nn.functional import relu` 等别名形式，并对可静态确认的 Tensor Method 和动态 `getattr` 调用分级标记。每条 finding 自动附带目标 API、PyTorch/MindSpore 版本、映射快照版本、差异类型和官方证据。单文件默认限制为 2 MiB，可通过 `--max-file-bytes` 调整。
+
+当前映射快照基于 PyTorch 2.1 与 MindSpore 2.9.0 官方映射表，收录 37 条经过证据校验的记录。在固定扫描集的 36 个唯一 API 上覆盖 27 个（75%）：25 个一致映射、2 个差异映射、9 个保持 unknown。未收录只表示当前快照未知，不代表 MindSpore 不支持。
 
 固定的 `torch2ms-scanner-v1` 语法覆盖集包含 50 个任务。当前版本在该公开、随仓库发布的开发评测集上为 50/50 精确匹配、precision 100%、recall 100%。该结果仅说明这些已收录语法模式通过，不能代表未知真实项目的总体准确率；后续将另建独立真实项目测试集。
 
