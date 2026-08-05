@@ -7,7 +7,6 @@ use std::time::{Duration, Instant};
 
 pub fn run(command: &str, workspace_root: &Path, timeout: Duration) -> Result<String, String> {
     let sandbox = std::env::var("CANDLE_CLI_SANDBOX").unwrap_or_default();
-    let supervised_command = supervise_background_jobs(command);
 
     let mut child_command = match sandbox.as_str() {
         "docker" => {
@@ -24,7 +23,7 @@ pub fn run(command: &str, workspace_root: &Path, timeout: Duration) -> Result<St
                 "alpine:latest",
                 "sh",
                 "-c",
-                &supervised_command,
+                command,
             ]);
             command_builder
         }
@@ -32,7 +31,7 @@ pub fn run(command: &str, workspace_root: &Path, timeout: Duration) -> Result<St
             let mut command_builder = Command::new("sh");
             command_builder
                 .arg("-c")
-                .arg(&supervised_command)
+                .arg(command)
                 .current_dir(workspace_root);
             command_builder
         }
@@ -87,12 +86,6 @@ pub fn run(command: &str, workspace_root: &Path, timeout: Duration) -> Result<St
 
         thread::sleep(Duration::from_millis(50));
     }
-}
-
-fn supervise_background_jobs(command: &str) -> String {
-    format!(
-        "cleanup_candle_cli_jobs() {{ for pid in $(jobs -p); do kill -KILL \"$pid\" 2>/dev/null; done; wait 2>/dev/null; }}; trap cleanup_candle_cli_jobs EXIT; {command}"
-    )
 }
 
 fn spawn_reader<R>(mut reader: R) -> JoinHandle<Result<Vec<u8>, String>>
