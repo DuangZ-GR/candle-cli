@@ -109,6 +109,8 @@ cargo run -- migrate rollback \
 
 确定性重写默认只预览。它解析 import 别名，只修改已接受映射的调用名称及其内部受支持的 `dtype=` 常量，不重排周边代码或注释；标记为 `difference` 的映射必须显式传入 `--include-differences`。应用前会校验预览时的源码哈希，随后在同一项目的 `.candle-cli/backups` 中保存备份和事务清单。验证命令失败或超时时会自动恢复全部源码；未提供 `--validate-program` 的应用结果会明确标记为 `verified: false`。固定的 `rewrite-cases-v1` 合成开发集包含 14 个案例，当前精确 Patch、安全跳过和语法有效率均为 100%；这不是 held-out 或真实项目评测结果。
 
+固定的 `real-projects-v1` 增加了真实项目覆盖审计，包含 PyTorch Examples、nanoGPT、DETR 的 25 个文件与 4,436 行代码。在知识库快照 `ms2.9.0-pt2.1-2026-08-05.1` 下，25/25 文件扫描无问题，但当前只映射 132/545 个调用发现（24.22%）和 21/162 个唯一 API（12.96%）。exact-only 策略在 18 个文件中产生 71 个调用改写，18/18 个预览保持语法有效。这些是静态覆盖与语法指标，不是运行时迁移准确率，详见 `docs/M6_REAL_PROJECT_BASELINE.md`。
+
 ### REPL 命令
 
 | 命令 | 别名 | 用途 |

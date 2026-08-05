@@ -121,6 +121,8 @@ Runtime comparison accepts canonical traces produced by the lightweight `TraceRe
 
 Rewriting is preview-only by default. The rewriter resolves import aliases and changes only mapped call names plus supported `dtype=` constants inside accepted calls; comments and surrounding formatting remain untouched. Mappings marked `difference` require `--include-differences`. Apply verifies preview hashes, writes same-filesystem backups and a transaction manifest, and automatically restores all changed sources if the validator fails or times out. An apply without `--validate-program` is deliberately reported as `verified: false`. The fixed `rewrite-cases-v1` synthetic development set contains 14 cases and currently has 100% exact-patch, safe-skip, and syntax-valid rates; this is not a held-out or real-project benchmark.
 
+The pinned `real-projects-v1` corpus adds an out-of-sample coverage audit over 25 files and 4,436 lines from PyTorch Examples, nanoGPT, and DETR. With knowledge snapshot `ms2.9.0-pt2.1-2026-08-05.1`, all 25 files scan without issues, while only 132/545 findings (24.22%) and 21/162 unique APIs (12.96%) are mapped. Exact-only rewriting finds 71 call edits across 18 files and all 18 previews remain syntactically valid. These are static coverage and syntax metrics, not runtime migration accuracy; see `docs/M6_REAL_PROJECT_BASELINE.md`.
+
 ### REPL commands
 
 | Command | Alias | Purpose |
