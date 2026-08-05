@@ -6,7 +6,9 @@
   "oneOf": [
     { "$ref": "#/$defs/apiTrace" },
     { "$ref": "#/$defs/diagnostic" },
-    { "$ref": "#/$defs/scanReport" }
+    { "$ref": "#/$defs/scanReport" },
+    { "$ref": "#/$defs/traceComparison" },
+    { "$ref": "#/$defs/msprobeImportReport" }
   ],
   "$defs": {
     "schemaVersion": {
@@ -255,6 +257,76 @@
           "items": { "$ref": "#/$defs/scanIssue" }
         },
         "summary": { "$ref": "#/$defs/scanSummary" }
+      }
+    },
+    "traceComparison": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "record_kind",
+        "source_count",
+        "target_count",
+        "aligned_count",
+        "equivalent",
+        "diagnostic"
+      ],
+      "properties": {
+        "schema_version": { "$ref": "#/$defs/schemaVersion" },
+        "record_kind": { "const": "trace_comparison" },
+        "source_count": { "type": "integer", "minimum": 1 },
+        "target_count": { "type": "integer", "minimum": 1 },
+        "aligned_count": { "type": "integer", "minimum": 0 },
+        "equivalent": { "type": "boolean" },
+        "diagnostic": {
+          "oneOf": [
+            { "$ref": "#/$defs/diagnostic" },
+            { "type": "null" }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "equivalent": { "const": true } } },
+          "then": { "properties": { "diagnostic": { "type": "null" } } },
+          "else": { "properties": { "diagnostic": { "$ref": "#/$defs/diagnostic" } } }
+        }
+      ]
+    },
+    "msprobeImportReport": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "record_kind",
+        "framework",
+        "framework_version",
+        "run_id",
+        "input",
+        "output",
+        "records_imported",
+        "records_skipped",
+        "skipped"
+      ],
+      "properties": {
+        "schema_version": { "$ref": "#/$defs/schemaVersion" },
+        "record_kind": { "const": "msprobe_import_report" },
+        "framework": { "enum": ["pytorch", "mindspore"] },
+        "framework_version": { "type": "string", "minLength": 1 },
+        "run_id": { "type": "string", "minLength": 1 },
+        "input": { "type": "string", "minLength": 1 },
+        "output": { "type": "string", "minLength": 1 },
+        "records_imported": { "type": "integer", "minimum": 1 },
+        "records_skipped": { "type": "integer", "minimum": 0 },
+        "skipped": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["key", "reason"],
+            "properties": {
+              "key": { "type": "string", "minLength": 1 },
+              "reason": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
       }
     },
     "diagnostic": {

@@ -1,6 +1,6 @@
 use candle_cli::migration::{
     ensure_compatible_schema, ApiTraceRecord, DiagnosticCategory, DiagnosticRecord, Framework,
-    RecordKind, SCHEMA_VERSION,
+    RecordKind, TraceComparisonResult, SCHEMA_VERSION,
 };
 
 const API_TRACE_FIXTURE: &str = include_str!("../fixtures/migration/api_trace_v1.json");
@@ -126,4 +126,38 @@ fn verified_diagnostic_requires_diff_validation_evidence() {
 
     let error = record.validate().unwrap_err();
     assert!(error.to_string().contains("diff_validation"));
+}
+
+#[test]
+fn equivalent_trace_comparison_validates() {
+    let comparison: TraceComparisonResult = serde_json::from_value(serde_json::json!({
+        "schema_version": SCHEMA_VERSION,
+        "record_kind": "trace_comparison",
+        "source_count": 2,
+        "target_count": 2,
+        "aligned_count": 2,
+        "equivalent": true,
+        "diagnostic": null
+    }))
+    .unwrap();
+
+    comparison.validate().unwrap();
+    assert_eq!(comparison.record_kind, RecordKind::TraceComparison);
+}
+
+#[test]
+fn divergent_trace_comparison_requires_a_diagnostic() {
+    let comparison: TraceComparisonResult = serde_json::from_value(serde_json::json!({
+        "schema_version": SCHEMA_VERSION,
+        "record_kind": "trace_comparison",
+        "source_count": 1,
+        "target_count": 1,
+        "aligned_count": 1,
+        "equivalent": false,
+        "diagnostic": null
+    }))
+    .unwrap();
+
+    let error = comparison.validate().unwrap_err();
+    assert!(error.to_string().contains("must include it"));
 }

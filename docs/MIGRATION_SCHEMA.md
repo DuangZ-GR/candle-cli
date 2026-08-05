@@ -10,7 +10,7 @@
 - 未知枚举值降级为 `unknown`，但原始值可保存在 `metadata` 中供排查。
 - JSON 文件使用 UTF-8；流式轨迹使用一行一条记录的 JSON Lines。
 
-Rust 实现在 `src/migration/schema.rs`，Python 实现在 `python/migration/schema.py`。两端共同读取 `tests/fixtures/migration` 中的固定样例，防止字段名或枚举编码发生漂移。协议当前包含 `api_trace`、`diagnostic` 和 `scan_report` 三种记录。
+Rust 实现在 `src/migration/schema.rs`，Python 实现在 `python/migration/schema.py`。两端共同读取 `tests/fixtures/migration` 中的固定样例，防止字段名或枚举编码发生漂移。协议当前包含 `api_trace`、`diagnostic`、`scan_report`、`trace_comparison` 和 `msprobe_import_report` 五种记录。
 
 ## 坐标约定
 
@@ -29,6 +29,14 @@ Rust 实现在 `src/migration/schema.rs`，Python 实现在 `python/migration/sc
 - `output` 或 `error`，且二者只能存在一个。
 
 动态或无法确定的 shape 维度使用 `null`，不能使用 `-1`，从而避免把真实的负值与未知值混淆。`preview` 只保存经过长度限制和脱敏的样例，不用于完整张量传输。
+
+## 轨迹比较结果
+
+`trace_comparison` 汇总源轨迹数、目标轨迹数、对齐数和等价性。等价结果不能包含诊断；非等价结果必须包含一条经过 `diff_validation` 验证的诊断。由此保证正常的“发现差异”仍是一次成功执行，调用方应读取 `equivalent`，而不是把进程退出码当成模型等价性。
+
+## msprobe 导入报告
+
+`msprobe_import_report` 记录框架版本、运行 ID、输入输出产物、成功导入数和跳过原因。导入器只处理 API 级前向记录，并把官方 `dump.json` 中的 dtype、shape、Max、Min、Mean 统计量转换为标准轨迹；模块、反向和无法识别的记录不会静默丢弃，而是进入 `skipped`。
 
 ## 扫描报告
 
@@ -51,4 +59,5 @@ Rust 实现在 `src/migration/schema.rs`，Python 实现在 `python/migration/sc
 
 - 默认只记录 dtype、shape、统计量和截断预览，不保存完整输入、输出或模型权重。
 - traceback 和预览在写入报告前需要执行路径与密钥脱敏。
+- 轨迹源码位置相对于项目根目录保存；项目外文件只保留文件名。
 - `metadata` 用于可选实验信息，不应存放令牌、认证头或用户隐私数据。

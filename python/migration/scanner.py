@@ -17,6 +17,7 @@ from typing import Any, Iterable
 from migration.schema import SCHEMA_VERSION
 from migration.schema import SchemaError, ensure_compatible_schema
 from migration.mapping import DEFAULT_KNOWLEDGE_BASE, MappingKnowledgeBase, MappingResolution
+from migration.cli_io import configure_utf8_stdio
 
 DEFAULT_MAX_FILE_BYTES = 2 * 1024 * 1024
 IGNORED_DIRECTORIES = {
@@ -581,6 +582,7 @@ def scan_path(
 
 
 def main(argv: list[str] | None = None) -> int:
+    configure_utf8_stdio()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("path", help="Python file or project directory to scan")
     parser.add_argument(

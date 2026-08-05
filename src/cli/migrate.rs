@@ -1,5 +1,7 @@
-use crate::cli::args::{MapArgs, MigrateCommand, ScanArgs, ScanOutputFormat};
-use crate::migration::{MappingResolution, ScanReport};
+use crate::cli::args::{
+    CompareArgs, ImportMsprobeArgs, MapArgs, MigrateCommand, ScanArgs, ScanOutputFormat,
+};
+use crate::migration::{MappingResolution, MsprobeImportReport, ScanReport, TraceComparisonResult};
 use std::ffi::OsString;
 use std::io::{Error, ErrorKind, Result, Write};
 use std::path::{Path, PathBuf};
@@ -9,7 +11,105 @@ pub fn run_migrate(command: MigrateCommand) -> Result<()> {
     match command {
         MigrateCommand::Scan(arguments) => run_scan(arguments),
         MigrateCommand::Map(arguments) => run_map(arguments),
+        MigrateCommand::Compare(arguments) => run_compare(arguments),
+        MigrateCommand::ImportMsprobe(arguments) => run_import_msprobe(arguments),
     }
+}
+
+fn run_import_msprobe(arguments: ImportMsprobeArgs) -> Result<()> {
+    if arguments.output_path.exists() && !arguments.force {
+        return Err(Error::new(
+            ErrorKind::AlreadyExists,
+            "output trace already exists; pass --force to replace it",
+        ));
+    }
+    let python_root = python_root();
+    let mut command = python_command(&python_root)?;
+    command
+        .args(["-m", "migration.msprobe_import"])
+        .arg(&arguments.dump_path)
+        .arg(&arguments.output_path)
+        .arg("--framework")
+        .arg(&arguments.framework)
+        .arg("--framework-version")
+        .arg(&arguments.framework_version);
+    if let Some(run_id) = &arguments.run_id {
+        command.arg("--run-id").arg(run_id);
+    }
+    if arguments.force {
+        command.arg("--force");
+    }
+    if arguments.pretty {
+        command.arg("--pretty");
+    }
+    let output = command.output().map_err(|error| {
+        Error::new(
+            error.kind(),
+            format!("failed to start msprobe import: {error}"),
+        )
+    })?;
+    if !output.status.success() {
+        return Err(Error::other(
+            String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        ));
+    }
+    let report: MsprobeImportReport = serde_json::from_slice(&output.stdout).map_err(|error| {
+        Error::new(
+            ErrorKind::InvalidData,
+            format!("msprobe import returned invalid JSON: {error}"),
+        )
+    })?;
+    report.validate().map_err(|error| {
+        Error::new(
+            ErrorKind::InvalidData,
+            format!("msprobe import returned an invalid report: {error}"),
+        )
+    })?;
+    write_report(None, &output.stdout)
+}
+
+fn run_compare(arguments: CompareArgs) -> Result<()> {
+    let python_root = python_root();
+    let mut command = python_command(&python_root)?;
+    command
+        .args(["-m", "migration.trace_compare"])
+        .arg(&arguments.source_trace)
+        .arg(&arguments.target_trace)
+        .arg("--relative-tolerance")
+        .arg(arguments.relative_tolerance.to_string())
+        .arg("--absolute-tolerance")
+        .arg(arguments.absolute_tolerance.to_string());
+    if arguments.pretty {
+        command.arg("--pretty");
+    }
+    if let Some(path) = &arguments.knowledge_base {
+        command.arg("--knowledge-base").arg(path);
+    }
+    let output = command.output().map_err(|error| {
+        Error::new(
+            error.kind(),
+            format!("failed to start trace comparison: {error}"),
+        )
+    })?;
+    if !output.status.success() {
+        return Err(Error::other(
+            String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        ));
+    }
+    let result: TraceComparisonResult =
+        serde_json::from_slice(&output.stdout).map_err(|error| {
+            Error::new(
+                ErrorKind::InvalidData,
+                format!("trace comparison returned invalid JSON: {error}"),
+            )
+        })?;
+    result.validate().map_err(|error| {
+        Error::new(
+            ErrorKind::InvalidData,
+            format!("trace comparison returned an invalid result: {error}"),
+        )
+    })?;
+    write_report(None, &output.stdout)
 }
 
 fn run_map(arguments: MapArgs) -> Result<()> {

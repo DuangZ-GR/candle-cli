@@ -69,6 +69,8 @@ cargo run -- prompt "Hello, introduce yourself"
 | `cargo run -- doctor` | Print runtime status |
 | `cargo run -- migrate scan <path>` | Scan PyTorch APIs and emit a versioned JSON report |
 | `cargo run -- migrate map <api>` | Query a versioned MindSpore mapping with official evidence |
+| `cargo run -- migrate import-msprobe ...` | Normalize an msprobe `dump.json` into canonical JSONL |
+| `cargo run -- migrate compare <pt.jsonl> <ms.jsonl>` | Align traces and locate the first observable divergence |
 
 ### PyTorch-to-MindSpore migration scan
 
@@ -84,6 +86,15 @@ cargo run -- migrate scan ./project --format markdown --output scan-report.md --
 
 # Query one API directly
 cargo run -- migrate map torch.arange --pretty
+
+# Import API-level msprobe statistics from both framework runs
+cargo run -- migrate import-msprobe torch_dump/dump.json torch.jsonl \
+  --framework pytorch --framework-version 2.1 --run-id experiment-001
+cargo run -- migrate import-msprobe ms_dump/dump.json mindspore.jsonl \
+  --framework mindspore --framework-version 2.9.0 --run-id experiment-001
+
+# Compare the saved artifacts; a valid divergence is reported as JSON, not a process failure
+cargo run -- migrate compare torch.jsonl mindspore.jsonl --pretty
 ```
 
 The scanner uses only Python's standard-library AST and never imports or executes the target project. It resolves common import aliases, records source spans and arguments, infers statically identifiable Tensor methods, and flags dynamic `getattr` calls. Each finding includes the target API, framework versions, knowledge snapshot, difference categories, and official evidence when known. The default per-file limit is 2 MiB and can be changed with `--max-file-bytes`.
@@ -91,6 +102,8 @@ The scanner uses only Python's standard-library AST and never imports or execute
 The current snapshot is grounded in the official PyTorch 2.1 to MindSpore 2.9.0 mapping table and contains 37 validated records. It covers 27 of 36 unique APIs (75%) in the fixed scanner suite: 25 exact, 2 different, and 9 unknown. An absent entry means the snapshot does not know; it does not claim that MindSpore lacks the API.
 
 The checked-in `torch2ms-scanner-v1` syntax suite contains 50 tasks. This version exactly matches 50/50 cases with 100% precision and recall on that public development suite. These numbers demonstrate coverage of the included syntax patterns only; they are not an estimate for unseen real-world projects. A separate held-out project suite is planned.
+
+Runtime comparison accepts canonical traces produced by the lightweight `TraceRecorder` or imported from current msprobe API-level `dump.json` statistics. Calls are aligned through the versioned mapping snapshot and compared in order by runtime error, return structure, dtype, shape, NaN/Inf counts, and numerical summaries. The fixed `trace-defects-v1` suite contains 10 synthetic cases and currently reaches 100% classification accuracy and 100% Top-1 localization on its 8 injected defects. This is a reproducible development-set result, not a real-world generalization claim; see `docs/M4_VERIFICATION.md` for scope and limitations.
 
 ### REPL commands
 

@@ -3,6 +3,22 @@ use serde_json::Value;
 use std::fs;
 use tempfile::tempdir;
 
+fn trace_record(framework: &str, api: &str, dtype: &str) -> String {
+    serde_json::json!({
+        "schema_version": "1.0",
+        "record_kind": "api_trace",
+        "run_id": "run-cli-compare",
+        "framework": framework,
+        "framework_version": if framework == "pytorch" { "2.1" } else { "2.9.0" },
+        "execution_mode": if framework == "pytorch" { "eager" } else { "py_native" },
+        "location": { "file": "model.py", "line": 1, "column": 0 },
+        "api": api,
+        "call_index": 0,
+        "output": { "kind": "tensor", "dtype": dtype, "shape": [2] }
+    })
+    .to_string()
+}
+
 fn test_python() -> String {
     std::env::var("CANDLE_CLI_TEST_PYTHON").unwrap_or_else(|_| {
         if cfg!(windows) {
@@ -188,4 +204,123 @@ fn migrate_scan_includes_mapping_and_updates_risk() {
     assert_eq!(findings[0]["risk_level"], "low");
     assert_eq!(findings[1]["mapping"]["status"], "difference");
     assert_eq!(findings[1]["risk_level"], "medium");
+}
+
+#[test]
+fn migrate_compare_reports_equivalent_traces() {
+    let directory = tempdir().unwrap();
+    let source = directory.path().join("torch.jsonl");
+    let target = directory.path().join("mindspore.jsonl");
+    fs::write(&source, trace_record("pytorch", "torch.sum", "float32")).unwrap();
+    fs::write(
+        &target,
+        trace_record("mindspore", "mindspore.mint.sum", "float32"),
+    )
+    .unwrap();
+
+    let output = Command::cargo_bin("candle-cli")
+        .unwrap()
+        .env("CANDLE_CLI_PYTHON", test_python())
+        .args(["migrate", "compare"])
+        .arg(source)
+        .arg(target)
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let result: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(result["equivalent"], true);
+    assert!(result["diagnostic"].is_null());
+}
+
+#[test]
+fn migrate_compare_reports_a_verified_dtype_divergence() {
+    let directory = tempdir().unwrap();
+    let source = directory.path().join("torch.jsonl");
+    let target = directory.path().join("mindspore.jsonl");
+    fs::write(&source, trace_record("pytorch", "torch.sum", "float32")).unwrap();
+    fs::write(
+        &target,
+        trace_record("mindspore", "mindspore.mint.sum", "bool"),
+    )
+    .unwrap();
+
+    let output = Command::cargo_bin("candle-cli")
+        .unwrap()
+        .env("CANDLE_CLI_PYTHON", test_python())
+        .args(["migrate", "compare"])
+        .arg(source)
+        .arg(target)
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let result: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(result["equivalent"], false);
+    assert_eq!(result["diagnostic"]["category"], "dtype_mismatch");
+    assert_eq!(result["diagnostic"]["verified"], true);
+}
+
+#[test]
+fn migrate_import_msprobe_writes_a_valid_canonical_trace() {
+    let directory = tempdir().unwrap();
+    let dump_path = directory.path().join("dump.json");
+    let trace_path = directory.path().join("trace.jsonl");
+    fs::write(
+        &dump_path,
+        serde_json::json!({
+            "Mint.add.0.forward": {
+                "input_args": [],
+                "input_kwargs": {},
+                "output": [{
+                    "type": "mindspore.Tensor",
+                    "dtype": "Float32",
+                    "shape": [2],
+                    "Max": 2.0,
+                    "Min": 1.0,
+                    "Mean": 1.5
+                }]
+            }
+        })
+        .to_string(),
+    )
+    .unwrap();
+
+    let output = Command::cargo_bin("candle-cli")
+        .unwrap()
+        .env("CANDLE_CLI_PYTHON", test_python())
+        .args(["migrate", "import-msprobe"])
+        .arg(&dump_path)
+        .arg(&trace_path)
+        .args([
+            "--framework",
+            "mindspore",
+            "--framework-version",
+            "2.9.0",
+            "--run-id",
+            "run-msprobe-cli",
+        ])
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["record_kind"], "msprobe_import_report");
+    assert_eq!(report["records_imported"], 1);
+    let trace = fs::read_to_string(trace_path).unwrap();
+    let record: Value = serde_json::from_str(trace.trim()).unwrap();
+    assert_eq!(record["api"], "mindspore.mint.add");
+    assert_eq!(record["output"]["dtype"], "float32");
 }

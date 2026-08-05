@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from migration.scanner import scan_path
+from migration.cli_io import configure_utf8_stdio
 
 DEFAULT_MANIFEST = (
     Path(__file__).parents[2] / "benchmarks" / "manifests" / "scanner_v1.json"
@@ -69,6 +70,7 @@ def run_benchmark(manifest_path: str | Path = DEFAULT_MANIFEST) -> dict[str, Any
 
 
 def main(argv: list[str] | None = None) -> int:
+    configure_utf8_stdio()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", default=str(DEFAULT_MANIFEST))
     parser.add_argument("--min-precision", type=float, default=0.95)

@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from migration.schema import SCHEMA_VERSION, SchemaError, ensure_compatible_schema
+from migration.cli_io import configure_utf8_stdio
 
 DEFAULT_KNOWLEDGE_BASE = (
     Path(__file__).parents[2]
@@ -164,6 +165,7 @@ class MappingKnowledgeBase:
 
 
 def main(argv: list[str] | None = None) -> int:
+    configure_utf8_stdio()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("api")
     parser.add_argument("--knowledge-base", default=str(DEFAULT_KNOWLEDGE_BASE))

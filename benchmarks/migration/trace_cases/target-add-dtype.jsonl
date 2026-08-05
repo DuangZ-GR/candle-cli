@@ -1,0 +1,1 @@
+{"schema_version":"1.0","record_kind":"api_trace","run_id":"benchmark-add","framework":"mindspore","framework_version":"2.9.0","execution_mode":"py_native","location":{"file":"case_ms.py","line":1,"column":0},"api":"mindspore.mint.add","call_index":0,"output":{"kind":"tensor","dtype":"bool","shape":[2]}}

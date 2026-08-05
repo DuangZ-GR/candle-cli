@@ -52,3 +52,57 @@ fn parses_migrate_map_mode() {
         other => panic!("unexpected command: {other:?}"),
     }
 }
+
+#[test]
+fn parses_migrate_compare_mode() {
+    let cli = Cli::parse_from([
+        "candle-cli",
+        "migrate",
+        "compare",
+        "torch.jsonl",
+        "mindspore.jsonl",
+        "--relative-tolerance",
+        "0.001",
+    ]);
+
+    match cli.command {
+        Some(CommandMode::Migrate {
+            command: MigrateCommand::Compare(arguments),
+        }) => {
+            assert_eq!(arguments.source_trace.to_string_lossy(), "torch.jsonl");
+            assert_eq!(arguments.target_trace.to_string_lossy(), "mindspore.jsonl");
+            assert_eq!(arguments.relative_tolerance, 0.001);
+        }
+        other => panic!("unexpected command: {other:?}"),
+    }
+}
+
+#[test]
+fn parses_migrate_import_msprobe_mode() {
+    let cli = Cli::parse_from([
+        "candle-cli",
+        "migrate",
+        "import-msprobe",
+        "dump.json",
+        "trace.jsonl",
+        "--framework",
+        "mindspore",
+        "--framework-version",
+        "2.9.0",
+        "--run-id",
+        "run-1",
+    ]);
+
+    match cli.command {
+        Some(CommandMode::Migrate {
+            command: MigrateCommand::ImportMsprobe(arguments),
+        }) => {
+            assert_eq!(arguments.dump_path.to_string_lossy(), "dump.json");
+            assert_eq!(arguments.output_path.to_string_lossy(), "trace.jsonl");
+            assert_eq!(arguments.framework, "mindspore");
+            assert_eq!(arguments.framework_version, "2.9.0");
+            assert_eq!(arguments.run_id.as_deref(), Some("run-1"));
+        }
+        other => panic!("unexpected command: {other:?}"),
+    }
+}

@@ -21,13 +21,15 @@ def load_fixture(name: str) -> dict:
     return json.loads((FIXTURES / name).read_text(encoding="utf-8"))
 
 
-def test_machine_schema_is_valid_json_and_declares_both_record_types():
+def test_machine_schema_is_valid_json_and_declares_all_record_types():
     schema = json.loads(MACHINE_SCHEMA.read_text(encoding="utf-8"))
 
     assert schema["$schema"] == "https://json-schema.org/draft/2020-12/schema"
     assert "apiTrace" in schema["$defs"]
     assert "diagnostic" in schema["$defs"]
     assert "scanReport" in schema["$defs"]
+    assert "traceComparison" in schema["$defs"]
+    assert "msprobeImportReport" in schema["$defs"]
 
 
 def test_api_trace_fixture_validates_and_round_trips():

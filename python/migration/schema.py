@@ -32,6 +32,8 @@ class StringEnum(str, Enum):
 class RecordKind(StringEnum):
     API_TRACE = "api_trace"
     DIAGNOSTIC = "diagnostic"
+    TRACE_COMPARISON = "trace_comparison"
+    MSPROBE_IMPORT_REPORT = "msprobe_import_report"
     UNKNOWN = "unknown"
 
 

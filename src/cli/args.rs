@@ -27,6 +27,8 @@ pub enum CommandMode {
 pub enum MigrateCommand {
     Scan(ScanArgs),
     Map(MapArgs),
+    Compare(CompareArgs),
+    ImportMsprobe(ImportMsprobeArgs),
 }
 
 #[derive(Args, Debug)]
@@ -34,6 +36,36 @@ pub struct MapArgs {
     pub api: String,
     #[arg(long)]
     pub knowledge_base: Option<PathBuf>,
+    #[arg(long)]
+    pub pretty: bool,
+}
+
+#[derive(Args, Debug)]
+pub struct CompareArgs {
+    pub source_trace: PathBuf,
+    pub target_trace: PathBuf,
+    #[arg(long)]
+    pub knowledge_base: Option<PathBuf>,
+    #[arg(long, default_value_t = 1e-5)]
+    pub relative_tolerance: f64,
+    #[arg(long, default_value_t = 1e-8)]
+    pub absolute_tolerance: f64,
+    #[arg(long)]
+    pub pretty: bool,
+}
+
+#[derive(Args, Debug)]
+pub struct ImportMsprobeArgs {
+    pub dump_path: PathBuf,
+    pub output_path: PathBuf,
+    #[arg(long, value_parser = ["pytorch", "mindspore"])]
+    pub framework: String,
+    #[arg(long)]
+    pub framework_version: String,
+    #[arg(long)]
+    pub run_id: Option<String>,
+    #[arg(long)]
+    pub force: bool,
     #[arg(long)]
     pub pretty: bool,
 }

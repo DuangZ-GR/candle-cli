@@ -53,6 +53,8 @@ pub enum RecordKind {
     ApiTrace,
     Diagnostic,
     ScanReport,
+    TraceComparison,
+    MsprobeImportReport,
     #[serde(other)]
     Unknown,
 }
@@ -190,6 +192,107 @@ pub struct ScanReport {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub issues: Vec<ScanIssue>,
     pub summary: ScanSummary,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TraceComparisonResult {
+    pub schema_version: String,
+    pub record_kind: RecordKind,
+    pub source_count: u64,
+    pub target_count: u64,
+    pub aligned_count: u64,
+    pub equivalent: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub diagnostic: Option<DiagnosticRecord>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MsprobeImportIssue {
+    pub key: String,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MsprobeImportReport {
+    pub schema_version: String,
+    pub record_kind: RecordKind,
+    pub framework: Framework,
+    pub framework_version: String,
+    pub run_id: String,
+    pub input: String,
+    pub output: String,
+    pub records_imported: u64,
+    pub records_skipped: u64,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub skipped: Vec<MsprobeImportIssue>,
+}
+
+impl MsprobeImportReport {
+    pub fn validate(&self) -> Result<(), SchemaError> {
+        ensure_compatible_schema(&self.schema_version)?;
+        if self.record_kind != RecordKind::MsprobeImportReport {
+            return Err(SchemaError::new(
+                "record_kind must be msprobe_import_report",
+            ));
+        }
+        if !matches!(self.framework, Framework::PyTorch | Framework::MindSpore) {
+            return Err(SchemaError::new(
+                "msprobe import framework must be pytorch or mindspore",
+            ));
+        }
+        validate_non_empty("framework_version", &self.framework_version)?;
+        validate_non_empty("run_id", &self.run_id)?;
+        validate_non_empty("input", &self.input)?;
+        validate_non_empty("output", &self.output)?;
+        if self.records_imported == 0 {
+            return Err(SchemaError::new(
+                "msprobe import must contain at least one imported record",
+            ));
+        }
+        if self.records_skipped != self.skipped.len() as u64 {
+            return Err(SchemaError::new(
+                "records_skipped must match the skipped issue count",
+            ));
+        }
+        for issue in &self.skipped {
+            validate_non_empty("skipped key", &issue.key)?;
+            validate_non_empty("skipped reason", &issue.reason)?;
+        }
+        Ok(())
+    }
+}
+
+impl TraceComparisonResult {
+    pub fn validate(&self) -> Result<(), SchemaError> {
+        ensure_compatible_schema(&self.schema_version)?;
+        if self.record_kind != RecordKind::TraceComparison {
+            return Err(SchemaError::new("record_kind must be trace_comparison"));
+        }
+        if self.source_count == 0 || self.target_count == 0 {
+            return Err(SchemaError::new(
+                "trace comparison requires non-empty source and target traces",
+            ));
+        }
+        if self.aligned_count > self.source_count || self.aligned_count > self.target_count {
+            return Err(SchemaError::new(
+                "aligned_count must not exceed either trace count",
+            ));
+        }
+        if self.equivalent == self.diagnostic.is_some() {
+            return Err(SchemaError::new(
+                "equivalent comparison must omit diagnostic; divergent comparison must include it",
+            ));
+        }
+        if let Some(diagnostic) = &self.diagnostic {
+            diagnostic.validate()?;
+            if !diagnostic.verified {
+                return Err(SchemaError::new(
+                    "trace comparison diagnostic must be verified",
+                ));
+            }
+        }
+        Ok(())
+    }
 }
 
 impl ScanReport {

@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from migration.mapping import DEFAULT_KNOWLEDGE_BASE, MappingKnowledgeBase
+from migration.cli_io import configure_utf8_stdio
 
 DEFAULT_MANIFEST = (
     Path(__file__).parents[2] / "benchmarks" / "manifests" / "scanner_v1.json"
@@ -42,6 +43,7 @@ def run_benchmark(
 
 
 def main(argv: list[str] | None = None) -> int:
+    configure_utf8_stdio()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", default=str(DEFAULT_MANIFEST))
     parser.add_argument("--knowledge-base", default=str(DEFAULT_KNOWLEDGE_BASE))
