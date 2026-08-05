@@ -1,4 +1,5 @@
 use candle_cli::cli::args::{Cli, CommandMode};
+use candle_cli::cli::context_harness::run_context_harness;
 use candle_cli::cli::harness::run_harness;
 use candle_cli::cli::migrate::run_migrate;
 use candle_cli::cli::repl::{run_prompt, run_repl};
@@ -24,6 +25,7 @@ fn main() -> std::io::Result<()> {
         Some(CommandMode::Prompt { input }) => run_prompt(session_dir, input),
         Some(CommandMode::Harness) => run_harness(session_dir),
         Some(CommandMode::SecurityHarness) => run_security_harness(),
+        Some(CommandMode::ContextHarness) => run_context_harness(),
         Some(CommandMode::Doctor) => {
             render_line(&format_status_line("runtime", "mock"));
             render_line(&format_status_line(

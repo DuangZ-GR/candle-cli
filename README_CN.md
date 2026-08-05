@@ -67,6 +67,7 @@ cargo run -- prompt "你好，介绍一下你自己"
 | `cargo run --` | 交互式 REPL（含 readline 编辑、流式输出） |
 | `cargo run -- harness` | 运行自动化场景评测 |
 | `cargo run -- security-harness` | 运行确定性的路径/权限安全回归基准 |
+| `cargo run -- context-harness` | 测量确定性轮次裁切的 Token 减少与完整性 |
 | `cargo run -- doctor` | 打印运行时状态 |
 | `cargo run -- migrate scan <path>` | 扫描 PyTorch API 并输出版本化 JSON 报告 |
 | `cargo run -- migrate map <api>` | 查询带框架版本与官方证据的 MindSpore 映射 |
@@ -117,6 +118,8 @@ cargo run -- migrate rollback \
 带版本门禁的 `runtime-parity-v1` 微基准可分别在 PyTorch 2.1 与 MindSpore 2.9 环境采集 5 条确定性 API 链，再通过公共轨迹比较器核对返回结构、dtype、shape、NaN/Inf 和数值摘要。当前机器只有 PyTorch 2.13、没有 MindSpore，因此只完成了非正式的源端 5/5 冒烟采集，没有声称任何运行一致率，详见 `docs/M7_RUNTIME_PARITY.md`。
 
 随仓库固定的 `security-regression-v1` 在不执行危险 Shell 的情况下测试 12 个本地路径/权限攻击样例和 10 个正常样例：12/12 被介入（10 个硬拦截、2 个确认门禁），10/10 正常样例放行。该数据只适用于当前确定性回归集，不能外推到未知攻击、容器逃逸、提示注入或网络外传，详见 `docs/M8_SECURITY_BENCHMARK.md`。
+
+`context-compaction-v1` 在四类确定性会话中把序列化消息的估算 Token 从 4,434 降至 1,395，减少 68.54%，同时保持系统消息和工具调用/结果配对完整。该指标使用启发式估算，不是 Provider 计费数据；当前也无法观测 Provider 缓存，因此缓存命中率明确为 `null`，详见 `docs/M9_CONTEXT_BENCHMARK.md`。
 
 ### REPL 命令
 

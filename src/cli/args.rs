@@ -17,6 +17,7 @@ pub enum CommandMode {
     },
     Harness,
     SecurityHarness,
+    ContextHarness,
     Doctor,
     Migrate {
         #[command(subcommand)]

@@ -20,6 +20,12 @@ fn parses_security_harness_mode() {
 }
 
 #[test]
+fn parses_context_harness_mode() {
+    let cli = Cli::parse_from(["candle-cli", "context-harness"]);
+    assert!(matches!(cli.command, Some(CommandMode::ContextHarness)));
+}
+
+#[test]
 fn parses_migrate_scan_mode() {
     let cli = Cli::parse_from([
         "candle-cli",

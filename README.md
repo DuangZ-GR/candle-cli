@@ -68,6 +68,7 @@ cargo run -- prompt "Hello, introduce yourself"
 | `cargo run --` | Interactive REPL with readline editing |
 | `cargo run -- harness` | Run automated scenario benchmark |
 | `cargo run -- security-harness` | Run deterministic path/permission security regression benchmark |
+| `cargo run -- context-harness` | Measure deterministic turn-compaction reduction and integrity |
 | `cargo run -- doctor` | Print runtime status |
 | `cargo run -- migrate scan <path>` | Scan PyTorch APIs and emit a versioned JSON report |
 | `cargo run -- migrate map <api>` | Query a versioned MindSpore mapping with official evidence |
@@ -129,6 +130,8 @@ After evidence-backed expansion to snapshot `.3`, mapped call coverage reaches 2
 The version-gated `runtime-parity-v1` microbenchmark captures five deterministic API chains in separate PyTorch 2.1 and MindSpore 2.9 environments, then evaluates return structure, dtype, shape, NaN/Inf and numeric summaries through the common trace comparator. The current machine has PyTorch 2.13 but no MindSpore, so only a non-canonical 5/5 source-side smoke capture was run and no runtime parity percentage is claimed. See `docs/M7_RUNTIME_PARITY.md`.
 
 The checked-in `security-regression-v1` suite exercises 12 local path/permission attacks and 10 benign controls without running dangerous shell commands. All 12 attacks were intercepted (10 hard blocks and 2 confirmation gates), while 10/10 benign cases were allowed. These figures apply only to this deterministic regression set, not unknown attacks, container escape, prompt injection, or network exfiltration; see `docs/M8_SECURITY_BENCHMARK.md`.
+
+The `context-compaction-v1` suite reduces estimated serialized-message tokens from 4,434 to 1,395 (68.54%) across four deterministic conversations while preserving system messages and tool-call/result integrity. This is a heuristic compaction metric, not provider billing data. Provider cache metrics are not currently observable, so cache hit rate is explicitly `null`; see `docs/M9_CONTEXT_BENCHMARK.md`.
 
 ### REPL commands
 
