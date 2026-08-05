@@ -7,6 +7,8 @@
 
 `candle-cli` 是面向 PyTorch→MindSpore 工程迁移的 Rust-first 智能诊断 CLI：当前提供确定性 AST 扫描与安全 Agent 基础设施，目标是结合双框架运行证据定位首个语义偏差，并生成经过验证的修复。
 
+项目的一句话定位、可复现指标、推荐简历表述与能力边界见 [`docs/RESUME_PROJECT_SUMMARY_CN.md`](docs/RESUME_PROJECT_SUMMARY_CN.md)。
+
 ## 核心特性
 
 - **Agentic 工具循环** — 有界多步执行，支持子 Agent 任务委派
