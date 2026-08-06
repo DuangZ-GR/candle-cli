@@ -13,6 +13,7 @@ from python.model_config import (
     ENV_ALLOW_STUB_FALLBACK,
     ENV_API_BASE_URL,
     ENV_API_KEY,
+    ENV_API_STYLE,
     ENV_INCLUDE_USAGE,
     ENV_LOCAL_FILES_ONLY,
     ENV_MAX_NEW_TOKENS,
@@ -36,6 +37,7 @@ def _clear_env():
         ENV_VERBOSE,
         ENV_API_BASE_URL,
         ENV_API_KEY,
+        ENV_API_STYLE,
         ENV_ALLOW_STUB_FALLBACK,
         ENV_INCLUDE_USAGE,
         "CANDLE_CLI_MODEL_CONFIG",
@@ -64,6 +66,7 @@ def test_model_config_defaults():
     assert config.verbose is False
     assert config.api_base_url == ""
     assert config.api_key == ""
+    assert config.api_style == "openai"
     assert config.allow_stub_fallback is False
     assert config.include_usage is True
     assert config.use_api is False
@@ -124,6 +127,12 @@ def test_env_top_p():
     os.environ[ENV_TOP_P] = "0.5"
     config = ModelConfig()
     assert config.top_p == 0.5
+
+
+def test_env_api_style_is_normalized():
+    os.environ[ENV_API_STYLE] = " OLLAMA-NATIVE "
+    config = ModelConfig()
+    assert config.api_style == "ollama-native"
 
 
 def test_env_verbose():
@@ -410,6 +419,58 @@ def _mock_api_response_from_chunks(*chunks: str) -> mock.MagicMock:
     return resp
 
 
+def _mock_ollama_native_response(*contents: str) -> mock.MagicMock:
+    lines = [
+        json.dumps({"message": {"content": content}, "done": False}).encode("utf-8")
+        for content in contents
+    ]
+    lines.append(
+        json.dumps(
+            {
+                "message": {"content": ""},
+                "done": True,
+                "prompt_eval_count": 10,
+                "eval_count": 2,
+            }
+        ).encode("utf-8")
+    )
+    resp = mock.MagicMock()
+    resp.__enter__.return_value = resp
+    resp.__iter__.return_value = iter(lines)
+    return resp
+
+
+def test_generate_turn_via_ollama_native_disables_thinking_and_reports_usage():
+    config = ModelConfig()
+    config.api_base_url = "http://localhost:11434"
+    config.api_style = "ollama-native"
+    config.model_id = "qwen3:8b"
+    runtime = BridgeRuntime(config=config)
+
+    with mock.patch(
+        "urllib.request.urlopen",
+        return_value=_mock_ollama_native_response("native ", "answer"),
+    ) as mock_urlopen:
+        result = runtime.generate_turn(
+            {
+                "messages_json": json.dumps(
+                    [{"role": "User", "blocks": [{"Text": {"text": "hello"}}]}]
+                )
+            }
+        )
+
+    assert result["result"]["final_text"] == "native answer"
+    assert result["result"]["usage"]["prompt_tokens"] == 10
+    assert result["result"]["usage"]["completion_tokens"] == 2
+    assert result["result"]["usage"]["total_tokens"] == 12
+    request = mock_urlopen.call_args[0][0]
+    assert request.full_url == "http://localhost:11434/api/chat"
+    body = json.loads(request.data.decode("utf-8"))
+    assert body["think"] is False
+    assert body["stream"] is True
+    assert body["options"]["num_predict"] == 512
+
+
 def test_generate_turn_via_api():
     config = ModelConfig()
     config.api_base_url = "http://localhost:8080/v1"
@@ -441,6 +502,49 @@ def test_generate_turn_via_api():
     assert body["messages"][0]["content"] == "hello"
     assert body["max_tokens"] == 512
     assert body["stream_options"] == {"include_usage": True}
+
+
+def test_generate_turn_passes_remaining_budget_to_provider_timeout():
+    config = ModelConfig()
+    config.api_base_url = "http://localhost:8080/v1"
+    runtime = BridgeRuntime(config=config)
+
+    with mock.patch(
+        "urllib.request.urlopen", return_value=_mock_api_response("ok")
+    ) as mock_urlopen, mock.patch("python.bridge_runtime.time.time", return_value=100.0):
+        runtime.generate_turn(
+            {
+                "messages_json": json.dumps(
+                    [{"role": "User", "blocks": [{"Text": {"text": "hello"}}]}]
+                ),
+                "timeout_ms": 2500,
+                "deadline_unix_ms": 101500,
+            }
+        )
+
+    timeout = mock_urlopen.call_args.kwargs["timeout"]
+    assert 0 < timeout <= 1.5
+
+
+def test_generate_turn_stops_stream_when_shared_deadline_expires():
+    config = ModelConfig()
+    config.api_base_url = "http://localhost:8080/v1"
+    runtime = BridgeRuntime(config=config)
+
+    with mock.patch(
+        "urllib.request.urlopen", return_value=_mock_api_response("late")
+    ), mock.patch(
+        "python.bridge_runtime.time.monotonic", side_effect=[0.0, 0.0, 1.1]
+    ):
+        with pytest.raises(RuntimeError, match="provider request timed out"):
+            runtime.generate_turn(
+                {
+                    "messages_json": json.dumps(
+                        [{"role": "User", "blocks": [{"Text": {"text": "hello"}}]}]
+                    ),
+                    "timeout_ms": 1000,
+                }
+            )
 
 
 def test_generate_turn_via_api_with_system_prompt():
@@ -562,7 +666,10 @@ def test_generate_turn_via_api_collects_deepseek_cache_usage_chunk():
         "total_tokens": 105,
         "cached_prompt_tokens": 80,
         "cache_miss_prompt_tokens": 20,
+        "retry_count": 0,
+        "provider_latency_ms": result["result"]["usage"]["provider_latency_ms"],
     }
+    assert result["result"]["usage"]["provider_latency_ms"] >= 0
 
 
 def test_generate_turn_via_api_collects_openai_nested_cached_tokens():
@@ -662,6 +769,8 @@ def test_generate_turn_retries_on_5xx_and_succeeds():
 
     assert call_count[0] == 3
     assert result["result"]["final_text"] == "recovered"
+    assert result["result"]["usage"]["retry_count"] == 2
+    assert result["result"]["usage"]["provider_latency_ms"] >= 0
 
 
 def test_generate_turn_does_not_retry_on_4xx():

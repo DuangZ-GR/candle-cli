@@ -1,4 +1,5 @@
-use candle_cli::agent::r#loop::run_single_turn;
+use candle_cli::agent::r#loop::{run_single_turn, run_single_turn_with_budget};
+use candle_cli::agent::state::AgentRunBudget;
 use candle_cli::model::runtime::CandleTargetRuntime;
 use candle_cli::model::types::{
     RuntimeCapabilities, RuntimeHealth, TokenUsage, TurnRequest, TurnResult,
@@ -325,4 +326,86 @@ fn agent_loop_emits_verbose_trace_lines_to_stderr_only() {
     assert!(!session_dump.contains("[tool step"));
     assert!(!session_dump.contains("[tool result]"));
     assert!(!session_dump.contains("[tool parse error]"));
+}
+
+#[test]
+fn task_subagent_shares_parent_workspace_and_global_budget() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("evidence.txt"), "dtype=float32\n").unwrap();
+    let task_call = wrapped_tool_call(
+        "call-task",
+        "task",
+        serde_json::json!({"description": "Read evidence.txt and report its dtype"}),
+    );
+    let read_call = wrapped_tool_call(
+        "call-read",
+        "read",
+        serde_json::json!({"file_path": "evidence.txt"}),
+    );
+    let mut runtime = ScriptedRuntime::new(vec![
+        &task_call,
+        &read_call,
+        "dtype=float32",
+        "The delegated result is dtype=float32.",
+    ]);
+    let tools = ToolRegistry::read_only(dir.path());
+    let policy = PermissionPolicy::new(PermissionMode::ReadOnlyWithTask);
+    let mut session = Session::new(dir.path().display().to_string());
+    session.messages.push(Message {
+        role: MessageRole::User,
+        blocks: vec![ContentBlock::Text {
+            text: "Delegate the evidence inspection.".to_string(),
+        }],
+    });
+    let mut budget = AgentRunBudget::new(4, 2);
+
+    let result =
+        run_single_turn_with_budget(&mut session, &mut runtime, &tools, &policy, 8, &mut budget)
+            .unwrap();
+
+    assert_eq!(result.final_text, "The delegated result is dtype=float32.");
+    assert_eq!(result.usage.request_count, 4);
+    assert_eq!(budget.model_requests_used(), 4);
+    assert_eq!(budget.tool_steps_used(), 2);
+    assert_eq!(budget.subagent_invocations(), 1);
+    assert!(runtime
+        .requests
+        .iter()
+        .any(|request| request.messages_json.contains("dtype=float32")));
+}
+
+#[test]
+fn shared_budget_stops_parent_and_subagent_at_the_same_request_limit() {
+    let task_call = wrapped_tool_call(
+        "call-task",
+        "task",
+        serde_json::json!({"description": "Inspect the workspace"}),
+    );
+    let read_call = wrapped_tool_call(
+        "call-read",
+        "read",
+        serde_json::json!({"file_path": "Cargo.toml"}),
+    );
+    let mut runtime = ScriptedRuntime::new(vec![&task_call, &read_call, "unused"]);
+    let tools = ToolRegistry::read_only(".");
+    let policy = PermissionPolicy::new(PermissionMode::ReadOnlyWithTask);
+    let mut session = Session::new(".".to_string());
+    session.messages.push(Message {
+        role: MessageRole::User,
+        blocks: vec![ContentBlock::Text {
+            text: "Delegate this task.".to_string(),
+        }],
+    });
+    let mut budget = AgentRunBudget::new(2, 2);
+
+    let result =
+        run_single_turn_with_budget(&mut session, &mut runtime, &tools, &policy, 8, &mut budget)
+            .unwrap();
+
+    assert!(result.final_text.contains("shared model request budget"));
+    assert_eq!(result.usage.request_count, 2);
+    assert_eq!(budget.model_requests_used(), 2);
+    assert_eq!(budget.tool_steps_used(), 2);
+    assert_eq!(budget.subagent_invocations(), 1);
+    assert_eq!(runtime.requests.len(), 2);
 }

@@ -31,6 +31,8 @@ fn bridge_runtime_returns_turn_result() {
             system_prompt: "sys".into(),
             messages_json: "[]".into(),
             tools_json: "[]".into(),
+            timeout_ms: None,
+            deadline_unix_ms: None,
         })
         .unwrap();
     assert_eq!(result.final_text, "bridge turn 1");
@@ -56,6 +58,8 @@ fn bridge_runtime_reuses_worker_for_multiple_turns() {
             system_prompt: "sys".into(),
             messages_json: messages_json.into(),
             tools_json: "[]".into(),
+            timeout_ms: None,
+            deadline_unix_ms: None,
         })
         .unwrap();
     let second = runtime
@@ -63,6 +67,8 @@ fn bridge_runtime_reuses_worker_for_multiple_turns() {
             system_prompt: "sys".into(),
             messages_json: messages_json.into(),
             tools_json: "[]".into(),
+            timeout_ms: None,
+            deadline_unix_ms: None,
         })
         .unwrap();
     assert_eq!(first.final_text, "bridge turn 1");
@@ -77,6 +83,8 @@ fn bridge_runtime_returns_fixture_output_without_runtime_fallback() {
             system_prompt: "sys".into(),
             messages_json: r#"[{"role":"User","blocks":[{"Text":{"text":"abc"}}]}]"#.into(),
             tools_json: "[]".into(),
+            timeout_ms: None,
+            deadline_unix_ms: None,
         })
         .unwrap();
     assert_eq!(result.final_text, "bridge turn 1");
@@ -91,6 +99,8 @@ fn bridge_runtime_preserves_unicode_json_lines_on_windows() {
             messages_json:
                 r#"[{"role":"User","blocks":[{"Text":{"text":"读取源码并定位首个差异"}}]}]"#.into(),
             tools_json: "[]".into(),
+            timeout_ms: None,
+            deadline_unix_ms: None,
         })
         .unwrap();
 

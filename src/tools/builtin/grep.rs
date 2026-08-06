@@ -23,12 +23,17 @@ pub fn run(pattern: &str, path: Option<&str>) -> Result<String, String> {
 }
 
 fn collect_files(path: &Path, files: &mut Vec<PathBuf>) -> Result<(), String> {
-    if path.is_file() {
+    let metadata = fs::symlink_metadata(path)
+        .map_err(|error| format!("failed to inspect {}: {error}", path.display()))?;
+    if metadata.file_type().is_symlink() {
+        return Ok(());
+    }
+    if metadata.is_file() {
         files.push(path.to_path_buf());
         return Ok(());
     }
 
-    if !path.exists() {
+    if !metadata.is_dir() {
         return Err(format!("path does not exist: {}", path.display()));
     }
 
@@ -37,9 +42,14 @@ fn collect_files(path: &Path, files: &mut Vec<PathBuf>) -> Result<(), String> {
     {
         let entry = entry.map_err(|err| err.to_string())?;
         let child = entry.path();
-        if child.is_dir() {
+        let metadata = fs::symlink_metadata(&child)
+            .map_err(|error| format!("failed to inspect {}: {error}", child.display()))?;
+        if metadata.file_type().is_symlink() {
+            continue;
+        }
+        if metadata.is_dir() {
             collect_files(&child, files)?;
-        } else if child.is_file() {
+        } else if metadata.is_file() {
             files.push(child);
         }
     }

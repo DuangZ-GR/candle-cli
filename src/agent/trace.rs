@@ -98,6 +98,10 @@ impl ExecutionTrace {
             "Provider usage: {}/{} requests reported",
             self.usage.usage_reported_request_count, self.usage.request_count
         ));
+        lines.push(format!(
+            "- retries: {} provider latency: {}ms",
+            self.usage.retry_count, self.usage.provider_latency_ms
+        ));
         if self.usage.usage_complete() {
             lines.push(format!(
                 "- tokens: prompt={} completion={} total={}",

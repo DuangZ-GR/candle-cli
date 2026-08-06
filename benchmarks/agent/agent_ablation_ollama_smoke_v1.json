@@ -1,0 +1,151 @@
+{
+  "schema_version": "1.0",
+  "benchmark_version": "agent-ablation-v1",
+  "experiment_status": "ready",
+  "provider": {
+    "name": "ollama-local",
+    "model": "qwen2:0.5b",
+    "temperature": 0.0
+  },
+  "pricing": {
+    "price_date": "2026-08-06",
+    "input_per_million_tokens": 0.0,
+    "output_per_million_tokens": 0.0,
+    "cached_input_per_million_tokens": null
+  },
+  "repetitions": 3,
+  "budgets": {
+    "max_model_requests": 4,
+    "max_tool_steps": 4,
+    "timeout_ms": 60000
+  },
+  "arms": [
+    {
+      "id": "single",
+      "task_tool_enabled": false
+    },
+    {
+      "id": "delegated",
+      "task_tool_enabled": true,
+      "subagent_permissions": "read_only",
+      "subagent_max_steps": 3
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "dtype-bool-drift",
+      "goal": "Inspect python/migration/trace_capture.py and its tests. Explain the exact guard that prevents Python bool values from being summarized as integers and name the boolean ValueKind.",
+      "evidence_paths": [
+        "python/migration/trace_capture.py",
+        "python/migration/schema.py"
+      ],
+      "required_evidence": [
+        "isinstance(value, bool)",
+        "ValueKind.BOOLEAN"
+      ]
+    },
+    {
+      "id": "missing-operator",
+      "goal": "Inspect the migration mapping and scanner code. Explain how an API with no MindSpore mapping is represented without inventing an operator.",
+      "evidence_paths": [
+        "python/migration/mapping.py"
+      ],
+      "required_evidence": [
+        "status=\"unknown\"",
+        "target_api=None"
+      ]
+    },
+    {
+      "id": "shape-broadcast",
+      "goal": "Inspect python/migration/trace_compare.py. Explain how the first tensor shape divergence is classified and reported.",
+      "evidence_paths": [
+        "python/migration/trace_compare.py",
+        "python/migration/schema.py"
+      ],
+      "required_evidence": [
+        "shape_mismatch",
+        "source_call_index"
+      ]
+    },
+    {
+      "id": "graph-compile",
+      "goal": "Inspect python/migration/advanced_training.py. Explain how GRAPH_MODE compile failures are distinguished from runtime failures.",
+      "evidence_paths": [
+        "python/migration/advanced_training.py",
+        "python/migration/schema.py"
+      ],
+      "required_evidence": [
+        "graph_compile_failure",
+        "runtime_error"
+      ]
+    },
+    {
+      "id": "optimizer-state",
+      "goal": "Inspect the advanced-training evaluator and checked-in result. Identify the AdamW failure category without claiming a framework bug.",
+      "evidence_paths": [
+        "python/migration/advanced_training.py",
+        "benchmarks/results/advanced_training_v1.json"
+      ],
+      "required_evidence": [
+        "optimizer_state_mismatch",
+        "AdamW"
+      ]
+    },
+    {
+      "id": "checkpoint-restore",
+      "goal": "Inspect the advanced-training checkpoint validation. State how the report proves that save and restore happened in different processes.",
+      "evidence_paths": [
+        "python/migration/advanced_training.py"
+      ],
+      "required_evidence": [
+        "producer_pid",
+        "consumer_pid"
+      ]
+    },
+    {
+      "id": "pipeline-randomness",
+      "goal": "Inspect python/migration/data_pipeline.py. Distinguish deterministic sequence equality from statistical distribution equivalence.",
+      "evidence_paths": [
+        "python/migration/data_pipeline.py"
+      ],
+      "required_evidence": [
+        "deterministic",
+        "statistical"
+      ]
+    },
+    {
+      "id": "trace-first-divergence",
+      "goal": "Inspect the trace comparison implementation and explain which field identifies the earliest semantic mismatch.",
+      "evidence_paths": [
+        "python/migration/trace_compare.py"
+      ],
+      "required_evidence": [
+        "source_call_index",
+        "target_call_index"
+      ]
+    },
+    {
+      "id": "rewrite-rollback",
+      "goal": "Inspect the migration workflow rollback path. Explain which report field confirms that recovery completed successfully.",
+      "evidence_paths": [
+        "python/migration/workflow.py"
+      ],
+      "required_evidence": [
+        "rollback_succeeded",
+        "validation_status"
+      ]
+    },
+    {
+      "id": "real-model-migration",
+      "goal": "Inspect the real-model dual-runtime benchmark summary. Distinguish automatic from manual patch accounting.",
+      "evidence_paths": [
+        "python/migration/workflow.py",
+        "benchmarks/results/real_model_dual_runtime_v1.json"
+      ],
+      "required_evidence": [
+        "automatic_patch_count",
+        "manual_patch_count"
+      ]
+    }
+  ]
+}

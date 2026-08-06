@@ -2,6 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 ![Rust Edition](https://img.shields.io/badge/Rust-2021-orange.svg)
+[![CI](https://github.com/DuangZ-GR/candle-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/DuangZ-GR/candle-cli/actions/workflows/ci.yml)
 
 [English](README.md) | [中文](README_CN.md)
 
@@ -36,6 +37,15 @@ cd candle-cli
 cargo build
 ```
 
+仓库安装脚本默认只安装 Rust CLI，不强制下载框架依赖：
+
+```bash
+sh scripts/install.sh                # Linux/macOS
+.\scripts\install.ps1               # Windows PowerShell
+```
+
+仅在需要 Bridge/双框架能力时，Linux 增加 `--with-python`，Windows 增加 `-InstallPythonDependencies`。`sh scripts/demo.sh` 与 `scripts/demo.ps1` 提供离线 doctor、映射查询、扫描、Patch 预览和冻结安全留出集演示，不修改示例源码。
+
 ### 推荐方式：DeepSeek API
 
 ```bash
@@ -54,7 +64,8 @@ cargo run --
 ollama pull qwen2:0.5b
 
 export CANDLE_CLI_RUNTIME="bridge"
-export CANDLE_CLI_API_BASE_URL="http://localhost:11434/v1"
+export CANDLE_CLI_API_STYLE="ollama-native"
+export CANDLE_CLI_API_BASE_URL="http://localhost:11434"
 export CANDLE_CLI_API_KEY="ollama"
 export CANDLE_CLI_MODEL_ID="qwen2:0.5b"
 
@@ -71,8 +82,9 @@ cargo run -- prompt "你好，介绍一下你自己"
 | `cargo run --` | 交互式 REPL（含 readline 编辑、流式输出） |
 | `cargo run -- harness` | 运行自动化场景评测 |
 | `cargo run -- security-harness` | 运行确定性的路径/权限安全回归基准 |
+| `cargo run -- security-heldout` | 运行与 M8 开发集分离的 M18 冻结安全留出集 |
 | `cargo run -- context-harness` | 测量确定性轮次裁切的 Token 减少与完整性 |
-| `cargo run -- doctor` | 打印运行时状态 |
+| `cargo run -- doctor [--json]` | 检查 Rust、Python、双框架、Docker、Bridge、Provider 与双环境配置 |
 | `cargo run -- migrate scan <path>` | 扫描 PyTorch API 并输出版本化 JSON 报告 |
 | `cargo run -- migrate run <path>` | 执行扫描、改写、验证、Trace 对比和回滚闭环 |
 | `cargo run -- migrate map <api>` | 查询带框架版本与官方证据的 MindSpore 映射 |
@@ -151,7 +163,9 @@ cargo run -- migrate rollback \
 
 随仓库固定的 `security-regression-v1` 在不执行危险 Shell 的情况下测试 12 个本地路径/权限攻击样例和 10 个正常样例：12/12 被介入（10 个硬拦截、2 个确认门禁），10/10 正常样例放行。该数据只适用于当前确定性回归集，不能外推到未知攻击、容器逃逸、提示注入或网络外传，详见 `docs/M8_SECURITY_BENCHMARK.md`。
 
-`context-compaction-v1` 在四类确定性会话中把序列化消息的估算 Token 从 4,434 降至 1,395，减少 68.54%，同时保持系统消息和工具调用/结果配对完整。该指标使用启发式估算，不是 Provider 计费数据。Bridge 现已能在 Provider 返回字段时采集真实 Token/Cache usage，但仓库尚未固化真实 Provider 评测，因此确定性上下文报告仍将缓存命中率记为 `null`，详见 `docs/M9_CONTEXT_BENCHMARK.md` 与 `docs/M10_PROVIDER_USAGE.md`。
+M18 新增独立冻结的 `security-heldout-v1`。Linux 上 15 个攻击项中有 12 个可实际评估，12/12 被硬拦截或进入确认门禁；8/8 正常任务被放行或按预期确认，误拦截率为 0%。压缩包逃逸（项目无解压入口）、真正的 symlink 竞态安全和 Windows junction 三项明确标为 `not_applicable`，不计入拦截率。实现同时修复递归搜索跟随外部符号链接、web_search 查询拼接执行、联网无需确认，以及大文件/Shell 输出无内存上限等问题。详见 `docs/M18_RELEASE_SECURITY_CI.md` 与 `docs/FINAL_BENCHMARK_REPORT_CN.md`。
+
+`context-fact-retention-v2` 在 20 个冻结迁移会话中采用“近期原文 + 结构化任务状态 + 可校验来源摘要”，将估算 Token 从 23,146 降至 4,221，减少 81.76%；文件、命令、错误、待办和决策事实保留 20/20，历史事实任务可回答 20/20，来源摘要校验 20/20。该结果仍是确定性启发式估算，不是 Provider 计费 Token。Bridge 已能采集 Provider 返回的 Token/Cache usage；Agent 消融提供不可用于正式结论的 `--smoke` 能力门禁，现有 `qwen2:0.5b` 未通过工具调用冒烟，因此正式 Provider 消融尚未运行、缓存命中率继续为 `null`，详见 `docs/M17_CONTEXT_AGENT_ABLATION.md`。
 
 ### REPL 命令
 
@@ -197,13 +211,14 @@ cargo run -- migrate rollback \
 | 模式 | 行为 |
 |------|------|
 | `read-only` | 仅允许 `pwd`、`read`、`glob`、`grep` |
+| `read-only-with-task` | 在只读工具之外允许 `task` 委派，不开放 Shell/写入 |
 | `workspace-write`（默认） | 工作区文件修改无需确认；宿主机 Shell 命令必须确认 |
 | `prompt` | 只读工具自动允许；修改工具交互式确认 |
 | `danger-full-access` | 所有工具（包括宿主机 Shell）均无需确认 |
 
 ### 多 Agent 协同
 
-`task` 工具以只读权限和 3 步有界循环创建子 Agent，主 Agent 将子任务委派给独立子 Agent 并获得结构化结果。
+`task` 工具以只读权限和 3 步有界循环创建子 Agent，主 Agent 将子任务委派给独立子 Agent 并获得结构化结果。主/子 Agent 共享模型请求数与工具步数预算，子 Agent 继承父工作目录，避免消融时获得额外预算或读取错误目录。
 
 ### 分层记忆
 
@@ -241,7 +256,7 @@ cargo run -- harness
 | 后端 | `CANDLE_CLI_API_BASE_URL` | `CANDLE_CLI_API_KEY` | `CANDLE_CLI_MODEL_ID` |
 |------|---------------------------|----------------------|-----------------------|
 | DeepSeek | `https://api.deepseek.com/v1` | `YOUR_DEEPSEEK_API_KEY` | `deepseek-v4-flash` |
-| Ollama | `http://localhost:11434/v1` | `ollama` | `qwen2:0.5b` |
+| Ollama 原生 | `http://localhost:11434` | `ollama` | `qwen2:0.5b` |
 | vLLM | `http://localhost:8000/v1` | `not-needed` | `Qwen/Qwen2-0.5B-Instruct` |
 | OpenAI | `https://api.openai.com/v1` | `sk-xxx` | `gpt-4o-mini` |
 
@@ -259,6 +274,7 @@ cargo run -- harness
 | `CANDLE_CLI_LOCAL_FILES_ONLY` | `true` | 仅使用本地文件 |
 | `CANDLE_CLI_API_BASE_URL` | 空 | API 基础地址 |
 | `CANDLE_CLI_API_KEY` | 空 | API 密钥 |
+| `CANDLE_CLI_API_STYLE` | `openai` | `openai` 或 `ollama-native`；原生模式支持 Ollama `think=false` |
 | `CANDLE_CLI_MAX_NEW_TOKENS` | `512` | 每轮最大生成 token 数 |
 | `CANDLE_CLI_TEMPERATURE` | `0.7` | 采样温度 |
 | `CANDLE_CLI_TOP_P` | `0.9` | Top-p 采样 |
@@ -267,6 +283,8 @@ cargo run -- harness
 | `CANDLE_CLI_PERMISSION` | `workspace-write` | 权限模式 |
 | `CANDLE_CLI_PERMISSION_RESPONSE` | 空 | 预设交互确认响应 |
 | `CANDLE_CLI_SHELL_TIMEOUT_SECS` | `30` | Shell 超时（秒） |
+| `CANDLE_CLI_MAX_SHELL_OUTPUT_BYTES` | `1048576` | Shell stdout/stderr 各自最多保留的字节数 |
+| `CANDLE_CLI_MAX_READ_BYTES` | `2097152` | read 工具允许读取的 UTF-8 文件大小上限 |
 | `CANDLE_CLI_MAX_TOOL_OUTPUT_CHARS` | `65536` | 模型和会话上下文中保留的工具结果最大字符数 |
 | `CANDLE_CLI_ALLOW_STUB_FALLBACK` | `false` | 仅为演示/测试启用回显桩；真实 Agent 任务禁止开启 |
 | `CANDLE_CLI_INCLUDE_USAGE` | `true` | 请求流式 API 返回 usage；不兼容的本地后端可关闭 |

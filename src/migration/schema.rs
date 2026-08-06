@@ -729,18 +729,17 @@ impl RewriteApplyReport {
                 "rewrite verified flag does not match validation status",
             ));
         }
-        if self.verified {
-            if self.validation.command.is_empty()
+        if self.verified
+            && (self.validation.command.is_empty()
                 || self.validation.return_code != Some(0)
                 || self
                     .validation
                     .duration_ms
-                    .is_none_or(|duration| !duration.is_finite() || duration < 0.0)
-            {
-                return Err(SchemaError::new(
-                    "verified rewrite requires a successful validation command",
-                ));
-            }
+                    .is_none_or(|duration| !duration.is_finite() || duration < 0.0))
+        {
+            return Err(SchemaError::new(
+                "verified rewrite requires a successful validation command",
+            ));
         }
         Ok(())
     }

@@ -11,6 +11,9 @@
 3. 统一采集 `prompt_tokens`、`completion_tokens` 和 `total_tokens`。
 4. DeepSeek 的 `prompt_cache_hit_tokens` / `prompt_cache_miss_tokens` 和 OpenAI-compatible 的 `prompt_tokens_details.cached_tokens` 归一化为统一字段。
 5. Rust Bridge 对字段做非负整数校验，多步 Agent Loop 与三步有界子 Agent 的调用量一并累计到 `/trace --json`。
+6. M17 增加每次 Provider 请求的 `retry_count` 和端到端 `provider_latency_ms`；即使 Provider 不返回 Token usage，重试与延迟仍能保留，而 Token/Cache 继续为未知。
+7. M17 增加 `ollama-native` API 风格，直接从 `/api/chat` 的 `prompt_eval_count` 和 `eval_count` 采集真实 usage；Ollama 未提供缓存拆分时继续报告未知。
+8. M17 把实验绝对截止时间传递到 Python Worker、流式读取和重试退避，Provider 调用不再绕过 Agent 的墙钟预算。
 
 Provider 给出的 `total_tokens` 必须等于 prompt 与 completion 之和；cached token 不能超过 prompt token，DeepSeek 同时提供 hit/miss 时二者之和必须等于 prompt token。主 usage 不合法时整次 usage 降级为未知；只有缓存拆分不合法时仅禁用缓存指标，不影响模型回复和主 Token 统计。
 
@@ -20,6 +23,8 @@ Trace 中的关键字段包括：
 {
   "usage": {
     "request_count": 2,
+    "retry_count": 1,
+    "provider_latency_ms": 1840,
     "usage_reported_request_count": 2,
     "usage_complete": true,
     "prompt_tokens": 150,
@@ -37,7 +42,7 @@ Trace 中的关键字段包括：
 
 ## 当前结果边界
 
-本阶段完成的是采集、归一化、聚合和完整性门禁，不产生虚假的 Provider 基准值。当前仓库没有提交真实 API Key，也没有固定某个账号、模型和请求前缀做联网评测，因此简历中仍不能写具体缓存命中率或账单节省率。
+本阶段完成的是采集、归一化、聚合和完整性门禁，不产生虚假的 Provider 基准值。M17 已补充冻结 Provider/单多 Agent 实验协议、共享预算与重试/延迟遥测，但当前仓库仍没有提交真实 API Key，也没有完成固定账号、模型和请求集的联网评测，因此简历中仍不能写具体缓存命中率或账单节省率。
 
 本地自动化验收：Rust 142/142、Python 287/287 全量测试通过，其中 Bridge 专项 36/36 通过。全量 Rust 首轮曾有既有的 Windows Shell 后台进程清理时序用例超过 3 秒门槛；该用例随后连续三次约 0.37、0.37、0.33 秒通过，完整套件复跑通过，未放宽门槛或隐藏该过程。
 
@@ -48,6 +53,8 @@ Trace 中的关键字段包括：
 - Provider 缓存命中率；
 - 请求延迟与失败/重试率；
 - 按当时官方价格计算的估算成本，并注明价格日期。
+
+对应的执行器为 `candle-cli agent-experiment`，严格拒绝 `TO_BE_SELECTED` 模板；原始记录由 `python/agent_experiment.py` 校验和聚合。完整设计与当前进度见 `docs/M17_CONTEXT_AGENT_ABLATION.md`。
 
 ## 官方协议依据
 

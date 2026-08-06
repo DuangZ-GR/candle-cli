@@ -1,7 +1,10 @@
+pub mod agent_experiment;
 pub mod args;
 pub mod commands;
 pub mod context_harness;
+pub mod doctor;
 pub mod harness;
 pub mod migrate;
 pub mod repl;
 pub mod security_harness;
+pub mod security_heldout;

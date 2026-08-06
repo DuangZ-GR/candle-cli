@@ -41,6 +41,11 @@ pub struct Session {
     pub messages: Vec<Message>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "crate::context::state::StructuredTaskState::is_empty"
+    )]
+    pub task_state: crate::context::state::StructuredTaskState,
 }
 
 impl Session {
@@ -50,6 +55,7 @@ impl Session {
             workspace_root,
             messages: Vec::new(),
             label: None,
+            task_state: crate::context::state::StructuredTaskState::default(),
         }
     }
 }

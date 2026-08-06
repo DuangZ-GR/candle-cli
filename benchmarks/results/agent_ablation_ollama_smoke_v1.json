@@ -1,0 +1,76 @@
+{
+  "schema_version": "1.0",
+  "benchmark_version": "agent-ablation-v1",
+  "provider": "ollama-local",
+  "model": "qwen2:0.5b",
+  "temperature": 0.0,
+  "run_mode": "smoke",
+  "claim_eligible": false,
+  "execution_order": "paired_alternating_by_scenario_and_trial",
+  "runs": [
+    {
+      "scenario_id": "dtype-bool-drift",
+      "arm_id": "delegated",
+      "trial": 1,
+      "passed": false,
+      "elapsed_ms": 31017,
+      "tool_steps": 0,
+      "model_requests": 1,
+      "subagent_invocations": 0,
+      "human_interventions": 0,
+      "failure_type": "missing_evidence",
+      "missing_evidence": [
+        "isinstance(value, bool)",
+        "ValueKind.BOOLEAN"
+      ],
+      "final_answer_digest": "fnv1a64:fc96531c30974080",
+      "usage": {
+        "cache_metrics_complete": false,
+        "cache_metrics_reported_request_count": 0,
+        "cache_miss_prompt_tokens": null,
+        "cached_prompt_tokens": null,
+        "completion_tokens": 256,
+        "prompt_tokens": 1039,
+        "provider_cache_hit_rate": null,
+        "provider_latency_ms": 17741,
+        "request_count": 1,
+        "retry_count": 0,
+        "total_tokens": 1295,
+        "usage_complete": true,
+        "usage_reported_request_count": 1
+      }
+    },
+    {
+      "scenario_id": "dtype-bool-drift",
+      "arm_id": "single",
+      "trial": 1,
+      "passed": false,
+      "elapsed_ms": 4979,
+      "tool_steps": 0,
+      "model_requests": 1,
+      "subagent_invocations": 0,
+      "human_interventions": 0,
+      "failure_type": "missing_evidence",
+      "missing_evidence": [
+        "isinstance(value, bool)",
+        "ValueKind.BOOLEAN"
+      ],
+      "final_answer_digest": "fnv1a64:455d081ceba4f614",
+      "usage": {
+        "cache_metrics_complete": false,
+        "cache_metrics_reported_request_count": 0,
+        "cache_miss_prompt_tokens": null,
+        "cached_prompt_tokens": null,
+        "completion_tokens": 256,
+        "prompt_tokens": 1092,
+        "provider_cache_hit_rate": null,
+        "provider_latency_ms": 4916,
+        "request_count": 1,
+        "retry_count": 0,
+        "total_tokens": 1348,
+        "usage_complete": true,
+        "usage_reported_request_count": 1
+      }
+    }
+  ]
+}

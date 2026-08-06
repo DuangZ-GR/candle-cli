@@ -45,6 +45,10 @@ impl ToolRegistry {
         ]
     }
 
+    pub fn workspace_root(&self) -> &Path {
+        &self.workspace_root
+    }
+
     pub fn execute(&self, name: &str, input_json: &str) -> ToolResult {
         match name {
             "pwd" => Ok(pwd::run()),
@@ -88,6 +92,7 @@ impl ToolRegistry {
                     safe_path
                         .to_str()
                         .ok_or_else(|| "non-utf8 path".to_string())?,
+                    self.max_read_bytes(),
                 )
             }
             "web_search" => {
@@ -168,6 +173,14 @@ impl ToolRegistry {
             .filter(|v| *v > 0)
             .unwrap_or(30);
         Duration::from_secs(secs)
+    }
+
+    fn max_read_bytes(&self) -> u64 {
+        std::env::var("CANDLE_CLI_MAX_READ_BYTES")
+            .ok()
+            .and_then(|value| value.parse::<u64>().ok())
+            .filter(|value| *value > 0)
+            .unwrap_or(2 * 1024 * 1024)
     }
 
     fn resolve_existing_path(&self, raw: &str) -> Result<PathBuf, String> {

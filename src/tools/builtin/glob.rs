@@ -46,9 +46,14 @@ fn collect_by_extension(
     {
         let entry = entry.map_err(|err| err.to_string())?;
         let path = entry.path();
-        if path.is_dir() {
+        let metadata = fs::symlink_metadata(&path)
+            .map_err(|error| format!("failed to inspect {}: {error}", path.display()))?;
+        if metadata.file_type().is_symlink() {
+            continue;
+        }
+        if metadata.is_dir() {
             collect_by_extension(&path, extension, matches)?;
-        } else if has_extension(&path, extension) {
+        } else if metadata.is_file() && has_extension(&path, extension) {
             matches.push(path.display().to_string());
         }
     }
@@ -69,7 +74,12 @@ fn collect_direct_by_extension(
     {
         let entry = entry.map_err(|err| err.to_string())?;
         let path = entry.path();
-        if path.is_file() && has_extension(&path, extension) {
+        let metadata = fs::symlink_metadata(&path)
+            .map_err(|error| format!("failed to inspect {}: {error}", path.display()))?;
+        if metadata.is_file()
+            && !metadata.file_type().is_symlink()
+            && has_extension(&path, extension)
+        {
             matches.push(path.display().to_string());
         }
     }
@@ -90,7 +100,12 @@ fn collect_direct_by_suffix(
     {
         let entry = entry.map_err(|err| err.to_string())?;
         let path = entry.path();
-        if path.is_file() && path.to_string_lossy().ends_with(suffix) {
+        let metadata = fs::symlink_metadata(&path)
+            .map_err(|error| format!("failed to inspect {}: {error}", path.display()))?;
+        if metadata.is_file()
+            && !metadata.file_type().is_symlink()
+            && path.to_string_lossy().ends_with(suffix)
+        {
             matches.push(path.display().to_string());
         }
     }

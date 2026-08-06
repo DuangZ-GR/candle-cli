@@ -11,14 +11,29 @@ pub struct Cli {
 }
 
 #[derive(Subcommand, Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum CommandMode {
     Prompt {
         input: String,
     },
     Harness,
     SecurityHarness,
+    SecurityHeldout,
     ContextHarness,
-    Doctor,
+    AgentExperiment {
+        #[arg(long)]
+        config: PathBuf,
+        #[arg(long)]
+        output: PathBuf,
+        /// Run only the first scenario once for both arms. Smoke reports are
+        /// never eligible for formal aggregation or resume claims.
+        #[arg(long)]
+        smoke: bool,
+    },
+    Doctor {
+        #[arg(long)]
+        json: bool,
+    },
     Migrate {
         #[command(subcommand)]
         command: MigrateCommand,

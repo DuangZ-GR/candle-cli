@@ -47,6 +47,7 @@ class BridgeRuntime:
             if self._config.use_api:
                 self._log("API mode active, skipping local model load")
                 self._log(f"  api_base_url: {self._config.api_base_url}")
+                self._log(f"  api_style: {self._config.api_style}")
             else:
                 self._load_model()
             self._initialized = True
@@ -229,6 +230,42 @@ class BridgeRuntime:
             }
         }
 
+    @staticmethod
+    def _with_request_metrics(
+        usage: dict | None, *, attempts: int, started_at: float
+    ) -> dict:
+        measured = dict(usage or {})
+        measured["retry_count"] = max(0, attempts - 1)
+        measured["provider_latency_ms"] = max(
+            0, round((time.monotonic() - started_at) * 1000)
+        )
+        return measured
+
+    @staticmethod
+    def _provider_timeout_seconds(request: dict) -> float:
+        deadline_unix_ms = request.get("deadline_unix_ms")
+        if (
+            isinstance(deadline_unix_ms, int)
+            and not isinstance(deadline_unix_ms, bool)
+            and deadline_unix_ms >= 0
+        ):
+            return max(0.001, deadline_unix_ms / 1000.0 - time.time())
+        timeout_ms = request.get("timeout_ms")
+        if (
+            isinstance(timeout_ms, int)
+            and not isinstance(timeout_ms, bool)
+            and timeout_ms >= 0
+        ):
+            return max(0.001, timeout_ms / 1000.0)
+        return 120.0
+
+    @staticmethod
+    def _remaining_timeout_seconds(deadline: float, label: str) -> float:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise RuntimeError(f"{label} timed out")
+        return max(0.001, remaining)
+
     def _generate_via_api(self, request: dict) -> dict:
         messages_json = request.get("messages_json", "[]")
         chat_messages = build_chat_messages(messages_json)
@@ -268,7 +305,11 @@ class BridgeRuntime:
         max_retries = 3
         raw = None
         response_usage = None
+        request_started_at = time.monotonic()
+        deadline = request_started_at + self._provider_timeout_seconds(request)
+        attempts_used = 0
         for attempt in range(1, max_retries + 1):
+            attempts_used = attempt
             t0 = time.time()
             try:
                 req = urllib.request.Request(
@@ -277,9 +318,13 @@ class BridgeRuntime:
                     headers=headers,
                     method="POST",
                 )
-                with urllib.request.urlopen(req, timeout=120) as resp:
+                with urllib.request.urlopen(
+                    req,
+                    timeout=self._remaining_timeout_seconds(deadline, "provider request"),
+                ) as resp:
                     content_chunks: list[str] = []
                     for line_bytes in resp:
+                        self._remaining_timeout_seconds(deadline, "provider request")
                         line = line_bytes.decode("utf-8", errors="ignore").strip()
                         if not line or not line.startswith("data:"):
                             continue
@@ -298,12 +343,14 @@ class BridgeRuntime:
                             token = delta.get("content", "")
                             if token:
                                 content_chunks.append(token)
-                                print(token, end="", file=sys.stderr, flush=True)
+                                if self._verbose:
+                                    print(token, end="", file=sys.stderr, flush=True)
                         except json.JSONDecodeError:
                             continue
                     raw = None
                     self._log(f"  response in {time.time() - t0:.1f}s")
-                    print(file=sys.stderr, flush=True)
+                    if self._verbose:
+                        print(file=sys.stderr, flush=True)
                 break
             except urllib.error.HTTPError as exc:
                 try:
@@ -317,10 +364,11 @@ class BridgeRuntime:
                     raise RuntimeError(
                         f"API request failed with HTTP {exc.code}: {err_body}"
                     ) from exc
+                self._remaining_timeout_seconds(deadline, "provider request")
                 if attempt < max_retries:
                     wait = 2 ** (attempt - 1)
                     self._log(f"  retrying in {wait}s (attempt {attempt}/{max_retries})")
-                    time.sleep(wait)
+                    time.sleep(min(wait, self._remaining_timeout_seconds(deadline, "provider request")))
                 else:
                     raise RuntimeError(
                         f"API request failed after {max_retries} attempts "
@@ -329,10 +377,11 @@ class BridgeRuntime:
             except RuntimeError:
                 raise
             except Exception as exc:
+                self._remaining_timeout_seconds(deadline, "provider request")
                 if attempt < max_retries:
                     wait = 2 ** (attempt - 1)
                     self._log(f"  network error, retrying in {wait}s (attempt {attempt}/{max_retries})")
-                    time.sleep(wait)
+                    time.sleep(min(wait, self._remaining_timeout_seconds(deadline, "provider request")))
                 else:
                     self._log("  API request failed after all retries")
                     raise RuntimeError(
@@ -343,7 +392,14 @@ class BridgeRuntime:
             if content_chunks:
                 content = "".join(content_chunks)
                 self._log(f"  response length: {len(content)} chars")
-                return self._result(content, response_usage)
+                return self._result(
+                    content,
+                    self._with_request_metrics(
+                        response_usage,
+                        attempts=attempts_used,
+                        started_at=request_started_at,
+                    ),
+                )
             data = json.loads(raw or "{}")
             content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
             if not content:
@@ -354,10 +410,147 @@ class BridgeRuntime:
                     f"  tokens: prompt={response_usage['prompt_tokens']} completion={response_usage['completion_tokens']} total={response_usage['total_tokens']}"
                 )
             self._log(f"  response length: {len(content)} chars")
-            return self._result(content, response_usage)
+            return self._result(
+                content,
+                self._with_request_metrics(
+                    response_usage,
+                    attempts=attempts_used,
+                    started_at=request_started_at,
+                ),
+            )
         except (KeyError, IndexError, json.JSONDecodeError) as exc:
             self._log(f"  failed to parse API response: {exc}")
             raise RuntimeError(f"failed to parse API response: {exc}") from exc
+
+    def _generate_via_ollama_native(self, request: dict) -> dict:
+        messages_json = request.get("messages_json", "[]")
+        chat_messages = build_chat_messages(messages_json)
+        if not chat_messages:
+            return self._result("")
+
+        api_messages: list[dict] = []
+        system_prompt = request.get("system_prompt", "")
+        if system_prompt:
+            api_messages.append({"role": "system", "content": system_prompt})
+        api_messages.extend(chat_messages)
+        body = {
+            "model": self._config.model_id,
+            "messages": api_messages,
+            "stream": True,
+            "think": False,
+            "options": {
+                "num_predict": self._config.max_new_tokens,
+                "temperature": self._config.temperature,
+                "top_p": self._config.top_p,
+            },
+        }
+        url = self._config.api_base_url.rstrip("/") + "/api/chat"
+        headers = {"Content-Type": "application/json"}
+        request_started_at = time.monotonic()
+        deadline = request_started_at + self._provider_timeout_seconds(request)
+        max_retries = 3
+
+        for attempt in range(1, max_retries + 1):
+            try:
+                req = urllib.request.Request(
+                    url,
+                    data=json.dumps(body).encode("utf-8"),
+                    headers=headers,
+                    method="POST",
+                )
+                content_chunks: list[str] = []
+                response_usage = None
+                with urllib.request.urlopen(
+                    req,
+                    timeout=self._remaining_timeout_seconds(
+                        deadline, "Ollama native request"
+                    ),
+                ) as resp:
+                    for line_bytes in resp:
+                        self._remaining_timeout_seconds(
+                            deadline, "Ollama native request"
+                        )
+                        line = line_bytes.decode("utf-8", errors="replace").strip()
+                        if not line:
+                            continue
+                        chunk = json.loads(line)
+                        message = chunk.get("message")
+                        if isinstance(message, dict):
+                            token = message.get("content", "")
+                            if isinstance(token, str) and token:
+                                content_chunks.append(token)
+                                if self._verbose:
+                                    print(token, end="", file=sys.stderr, flush=True)
+                        if chunk.get("done") is True:
+                            prompt = chunk.get("prompt_eval_count")
+                            completion = chunk.get("eval_count")
+                            if (
+                                isinstance(prompt, int)
+                                and not isinstance(prompt, bool)
+                                and prompt >= 0
+                                and isinstance(completion, int)
+                                and not isinstance(completion, bool)
+                                and completion >= 0
+                            ):
+                                response_usage = {
+                                    "prompt_tokens": prompt,
+                                    "completion_tokens": completion,
+                                    "total_tokens": prompt + completion,
+                                    "cached_prompt_tokens": None,
+                                    "cache_miss_prompt_tokens": None,
+                                }
+                content = "".join(content_chunks).strip()
+                if not content:
+                    raise RuntimeError("Ollama native response content missing")
+                return self._result(
+                    content,
+                    self._with_request_metrics(
+                        response_usage,
+                        attempts=attempt,
+                        started_at=request_started_at,
+                    ),
+                )
+            except urllib.error.HTTPError as exc:
+                try:
+                    err_body = exc.read().decode("utf-8", errors="replace")[:200]
+                except Exception:
+                    err_body = "(unable to read error body)"
+                if exc.code and 400 <= exc.code < 500:
+                    raise RuntimeError(
+                        f"Ollama native request failed with HTTP {exc.code}: {err_body}"
+                    ) from exc
+                self._remaining_timeout_seconds(deadline, "Ollama native request")
+                if attempt == max_retries:
+                    raise RuntimeError(
+                        f"Ollama native request failed after {max_retries} attempts "
+                        f"with HTTP {exc.code}: {err_body}"
+                    ) from exc
+            except (json.JSONDecodeError, RuntimeError) as exc:
+                if isinstance(exc, RuntimeError):
+                    raise
+                raise RuntimeError(f"failed to parse Ollama native response: {exc}") from exc
+            except Exception as exc:
+                self._remaining_timeout_seconds(deadline, "Ollama native request")
+                if attempt == max_retries:
+                    raise RuntimeError(
+                        f"Ollama native request failed after {max_retries} attempts: {exc}"
+                    ) from exc
+
+            wait = 2 ** (attempt - 1)
+            self._log(
+                f"  Ollama native request retrying in {wait}s "
+                f"(attempt {attempt}/{max_retries})"
+            )
+            time.sleep(
+                min(
+                    wait,
+                    self._remaining_timeout_seconds(
+                        deadline, "Ollama native request"
+                    ),
+                )
+            )
+
+        raise RuntimeError("Ollama native request failed")
 
     # ── local model generation ───────────────────────────────────────────
 
@@ -429,7 +622,13 @@ class BridgeRuntime:
 
         # API mode
         if self._config.use_api:
-            return self._generate_via_api(request)
+            if self._config.api_style == "openai":
+                return self._generate_via_api(request)
+            if self._config.api_style == "ollama-native":
+                return self._generate_via_ollama_native(request)
+            raise RuntimeError(
+                "unsupported CANDLE_CLI_API_STYLE; expected openai or ollama-native"
+            )
 
         # A missing local backend is an error by default. An echo stub remains
         # available only when explicitly enabled for demos and protocol tests.

@@ -42,10 +42,10 @@ flowchart LR
 | 真实模型自动双运行时 | PyTorch Examples MNIST 分类器头 3/3 场景通过；1/1 等价迁移；2/2 字节级回滚；自动 Patch 6/7 | 25 行离线切片，不是完整 141 行程序或未知项目成功率 |
 | 数据流水线与随机性 | 18/18 真实双框架案例；8/8 故障类别与首差异 Top-1；7/7 确定性、3/3 统计等价 | 固定小型数组与故障注入；随机案例 128–4096 样本，不代表未知分布 |
 | Graph 与高级训练状态 | 13/13 分类正确；4/4 三模式组件；2/3 多步优化器等价并定位 1 个真实 AdamW 差异；3/3 跨进程 Checkpoint 恢复 | CPU 小网络、3–5 步短轨迹；不代表完整收敛或加速卡结果 |
-| 安全回归 | 12/12 攻击样例被硬拦截或进入确认门禁；10/10 正常样例放行 | 当前路径/权限回归集，不覆盖未知攻击 |
-| 上下文裁切 | 估算 Token 4,434→1,395，减少 68.54%；系统消息与工具链完整 | 启发式估算，不是 Provider 计费 Token |
+| 安全回归与冻结留出 | M8 开发集 12/12 攻击被拦截/门禁、10/10 正常放行；M18 Linux 留出集 12/12 可评估攻击被拦截/门禁、8/8 正常项无误拦 | M18 共 15 个攻击项，压缩包入口、symlink 竞态和 Windows junction 三项明确不适用且不计入分母；不代表未知攻击防御率 |
+| 上下文事实保留 | 20/20 文件/命令/错误/待办/决策事实保留；20/20 历史事实任务可回答；估算 Token 23,146→4,221，减少 81.76% | 冻结确定性会话与启发式 Token，不是 Provider 计费数据或未知会话泛化率 |
 | Provider 缓存 | Bridge 已支持采集并设置完整性门禁；已发布基准仍为 `null` | 尚未固定真实 Provider 请求集，不能声称具体缓存命中率 |
-| 当前全量测试 | Rust 152/152；Python 338/338 | Linux 隔离测试目录；双框架组件、训练步、真实模型、数据流水线与 Graph 高级训练已真实验收 |
+| 当前全量测试 | Rust 177/177；Python 350/350；Clippy `-D warnings` 通过 | Linux 隔离测试目录与 `zgr` Python；托管 Ubuntu/Windows CI 需在 PR 后取得首次结果 |
 
 机器可读结果和完整限制分别位于 `benchmarks/results`、`docs/M6_REAL_PROJECT_RESULTS.md`、`docs/M7_RUNTIME_PARITY.md`、`docs/M8_SECURITY_BENCHMARK.md`、`docs/M9_CONTEXT_BENCHMARK.md`、`docs/M11_COMPONENT_PARITY.md`、`docs/M12_TRAINING_PARITY.md`、`docs/M13_END_TO_END_WORKFLOW.md`、`docs/M14_REAL_MODEL_DUAL_RUNTIME.md`、`docs/M15_DATA_PIPELINE_RANDOMNESS.md` 与 `docs/M16_GRAPH_ADVANCED_TRAINING.md`。
 
@@ -63,8 +63,8 @@ flowchart LR
 
 - **迁移诊断闭环：** 基于 Python AST 构建不执行目标代码的 PyTorch API 扫描器，以版本化 Schema 串联官方映射、dtype/shape/返回结构/数据流水线/梯度/优化器状态与首差异诊断；在 PyTorch 2.6/MindSpore 2.9 环境完成 18 个数据随机性案例和 13 个高级训练案例，数据故障 8/8、训练阶段故障 5/5 Top-1 正确，4/4 组件通过 PYNATIVE/GRAPH，并在 3–5 步轨迹中验证 2/3 优化器等价、定位 1 个真实 AdamW 状态差异及 3/3 跨进程恢复。
 - **真实项目与安全修复：** 在 PyTorch Examples、nanoGPT、DETR 共 25 个文件、4,436 行真实代码上将调用映射覆盖率由 24.22% 提升至 44.77%，冻结规则后在 Segment Anything 留出集达到 41.98%；实现 `migrate run` 统一状态机串联扫描、Patch、验证、Trace 比较与回滚，并在 PyTorch Examples MNIST 分类器头完成 3/3 双运行时场景、1/1 等价迁移、2/2 字节级回滚和 6/7 自动 Patch。
-- **Rust/Python Agent 架构：** 使用 Rust trait 隔离运行时，Rust 负责 Agent Loop、工具注册、权限和结构化协议，持久化 Python JSONL Worker 负责 OpenAI-compatible API/本地模型与迁移分析；支持工具调用纠错、子 Agent 三步有界只读委派、超时控制和会话级运行时复用。
-- **安全、上下文与评测工程：** 将路径边界和权限决策放在工具执行层，固定回归集 12/12 攻击样例被拦截或门禁、10/10 正常样例放行；按完整用户轮次裁切上下文，在四类确定性会话中将估算 Token 减少 68.54% 并保持工具调用链完整，所有指标以版本化清单、机器可读结果和自动化防漂移测试固化。
+- **Rust/Python Agent 架构：** 使用 Rust trait 隔离运行时，Rust 负责 Agent Loop、工具注册、权限和结构化协议，持久化 Python JSONL Worker 负责 OpenAI-compatible/Ollama 原生 API、本地模型与迁移分析；支持工具调用纠错、子 Agent 三步有界只读委派、主子 Agent 共享墙钟截止时间和会话级运行时复用。
+- **安全、上下文与评测工程：** 将路径边界和权限决策放在工具执行层，修复递归 symlink 逃逸、web_search 命令拼接与无确认联网，并为 read/Shell 输出增加资源上限；M8 开发集 12/12、M18 Linux 留出集 12/12 可评估攻击均被拦截或门禁，正常项误拦截为 0/8，同时披露 3 个不适用项。构建“近期原文 + 结构化任务状态 + 可校验来源摘要”，在 20 个冻结迁移会话中保留 20/20 历史事实与可回答性，估算 Token 减少 81.76%。
 
 如果简历空间有限，优先保留前两条，再从后两条中选择一条与目标岗位最相关的内容。
 
@@ -73,7 +73,7 @@ flowchart LR
 - 不把 `CandleRuntime` 描述为已实现；当前生产可用路径是 Rust + Python Bridge。
 - 不把合成集的 100% 写成“真实项目迁移准确率 100%”。
 - 不把 Patch 语法有效率写成 MindSpore 运行成功率。
-- 不把 68.54% 上下文裁切率写成缓存命中率或实际账单节省率。
+- 不把 81.76% 启发式上下文压缩率写成缓存命中率、Provider Token 节省或实际账单节省率。
 - 不把当前 12 个安全样例的结果外推为“可防御所有攻击”。
 - 不把 PyTorch 2.6/MindSpore 2.9 的 5 个基础 API 链 100% 一致率外推为真实项目端到端迁移准确率。
 - 不把 7 个组件/固定缺陷的 100% 分类与 Top-1 写成未知项目泛化准确率；其中两个案例是明确标注的故障注入。
@@ -87,10 +87,9 @@ flowchart LR
 
 ## 下一轮最有价值的开发
 
-1. **升级上下文系统：** 从直接丢弃旧轮次升级为“近期原文 + 结构化任务状态 + 可验证摘要”，同时评测 Token、任务成功率和事实保留率。
-2. **运行真实 Token/Cache 评测：** Bridge 已能聚合 input/output/cached input tokens；下一步固定 Provider、模型、请求集和价格日期，补充请求延迟、重试率、成本与缓存指标。
-3. **单/多 Agent 消融：** 在相同任务、预算和超时下比较通过率、工具步数、Token、耗时与人工介入次数。
-4. **完成发布闭环：** 增加 Linux/Windows CI、固定 Benchmark 门禁、安装包、版本号、Changelog 和一键复现实验。
-5. **继续拆解 AdamW 差异：** 对偏置修正、权重衰减、学习率序列和状态槽逐项消融，形成可执行迁移建议。
+1. **运行真实 Token/Cache 评测：** Bridge 已能聚合 input/output/cached input tokens，实验协议也已冻结；下一步选择 Provider、模型和价格日期，完成真实配对运行。
+2. **完成单/多 Agent 消融：** 共享预算机制和 10 个迁移任务已就绪，需在相同请求、工具和超时预算下完成三次重复并决定是否存在可写入简历的收益。
+3. **验证并发布候选版本：** CI、安装脚本、Changelog、证据聚合和 Release dry run 已实现；下一步在 PR 上取得 Ubuntu/Windows 托管结果，再由用户确认版本号、Tag 与 Release。
+4. **继续拆解 AdamW 差异：** 对偏置修正、权重衰减、学习率序列和状态槽逐项消融，形成可执行迁移建议。
 
-项目已经完成真实模型、数据流水线、Graph Mode 和多步训练状态的可审计验证；下一步应完成真实上下文/Token/Cache 与单多 Agent 消融，再通过 CI 和正式发布形成完整工程闭环。
+项目已经完成真实模型、数据流水线、Graph Mode、多步训练状态和确定性上下文事实保留的可审计验证；下一步应完成真实 Provider Token/Cache 与单多 Agent 配对运行，再通过 CI 和正式发布形成完整工程闭环。

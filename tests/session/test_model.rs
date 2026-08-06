@@ -13,3 +13,18 @@ fn session_ids_are_unique_for_back_to_back_sessions() {
     let second = Session::new("/tmp/workspace".into());
     assert_ne!(first.session_id, second.session_id);
 }
+
+#[test]
+fn sessions_saved_before_structured_task_state_remain_compatible() {
+    let legacy = serde_json::json!({
+        "session_id": "session-legacy",
+        "workspace_root": "/tmp/workspace",
+        "messages": [],
+        "label": null
+    });
+
+    let session: Session = serde_json::from_value(legacy).unwrap();
+
+    assert!(session.task_state.is_empty());
+    assert!(session.task_state.evidence_valid());
+}
