@@ -116,6 +116,12 @@ cargo run -- migrate run ./project --apply \
   --validate-program /path/to/mindspore/python \
   --validate-arg=-m --validate-arg=pytest
 
+# Let a versioned manifest collect both traces, compare them, and roll back on failure
+export CANDLE_CLI_PYTORCH_PYTHON=/path/to/pytorch/python
+export CANDLE_CLI_MINDSPORE_PYTHON=/path/to/mindspore/python
+cargo run -- migrate run ./project/model.py --apply \
+  --runtime-manifest ./project/runtime_manifest.json
+
 # Apply only exact mappings and run a validator without a shell
 cargo run -- migrate rewrite ./project --apply \
   --validate-program python --validate-arg=-m --validate-arg=pytest
@@ -146,6 +152,8 @@ The version-gated runtime parity microbenchmark captures five deterministic API 
 `runtime-training-v1` extends validation to a minimal training step: forward output, MSE loss, parameter gradients, and parameter snapshots after one SGD update. A pinned Linux run on PyTorch 2.6.0+cu124 and MindSpore 2.9.0 captured 3/3 cases and 12/12 call records on each side: both equivalent training cases passed, and the frozen learning-rate fault was localized Top-1 at the optimizer update stage. This remains a small deterministic training-step benchmark, not evidence for multi-step convergence, Adam, mixed precision, distributed training, or whole-project migration accuracy. See `docs/M12_TRAINING_PARITY.md`.
 
 `workflow-e2e-v1` exercises the unified `migrate run` state machine across scanning, rewriting, program execution, trace comparison, and rollback. On PyTorch 2.6.0+cu124 and MindSpore 2.9.0, all 4 frozen scenarios matched expectations: the real cross-framework apply passed, both injected failures restored the original bytes, and the dtype fault was localized Top-1 before rollback. The suite contains one executable two-operator fixture and two labelled faults, so it demonstrates workflow control and recovery rather than whole-project migration accuracy. See `docs/M13_END_TO_END_WORKFLOW.md`.
+
+`real-model-dual-runtime-v1` pins the 141-line PyTorch Examples MNIST source and builds a 25-line offline executable slice from its classifier head. The workflow launches PyTorch 2.6.0+cu124 and MindSpore 2.9.0, captures both traces, applies six automatic edits, and reports one manual functional adaptation separately. All 3 frozen scenarios passed: the normal migration was equivalent and both injected failures restored the original bytes, for a 6/7 (85.7143%) automatic-patch adoption rate. The slice maps all 5 runtime findings, but this is not a success-rate claim for the full upstream program or unseen projects. See `docs/M14_REAL_MODEL_DUAL_RUNTIME.md`.
 
 The checked-in `security-regression-v1` suite exercises 12 local path/permission attacks and 10 benign controls without running dangerous shell commands. All 12 attacks were intercepted (10 hard blocks and 2 confirmation gates), while 10/10 benign cases were allowed. These figures apply only to this deterministic regression set, not unknown attacks, container escape, prompt injection, or network exfiltration; see `docs/M8_SECURITY_BENCHMARK.md`.
 

@@ -16,7 +16,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from migration.mapping import DEFAULT_KNOWLEDGE_BASE, MappingKnowledgeBase
 from migration.cli_io import configure_utf8_stdio
@@ -342,6 +342,7 @@ def apply_plan(
     *,
     allow_partial: bool = False,
     validation_command: list[str] | None = None,
+    validation_runner: Callable[[], dict[str, Any]] | None = None,
     validation_timeout: float = DEFAULT_VALIDATION_TIMEOUT_SECONDS,
 ) -> dict[str, Any]:
     """Atomically apply a previewed plan and persist rollback material."""
@@ -354,6 +355,8 @@ def apply_plan(
         raise ValueError("validation_timeout must be greater than zero")
     if validation_command is not None and not validation_command:
         raise ValueError("validation_command must not be empty")
+    if validation_command is not None and validation_runner is not None:
+        raise ValueError("validation_command and validation_runner are mutually exclusive")
     root = plan.root.resolve()
     for rewrite in plan.files:
         current = rewrite.path.read_bytes()
@@ -410,6 +413,17 @@ def apply_plan(
             manifest["validation"] = _run_validation(
                 validation_command, root, validation_timeout
             )
+        elif validation_runner is not None:
+            manifest["validation"] = validation_runner()
+            if not isinstance(manifest["validation"], dict):
+                raise ValueError("validation_runner must return an object")
+            if manifest["validation"].get("status") not in {
+                "passed",
+                "failed",
+                "timed_out",
+            }:
+                raise ValueError("validation_runner returned an invalid status")
+        if validation_command is not None or validation_runner is not None:
             if manifest["validation"]["status"] != "passed":
                 raise RewriteValidationError(
                     "rewrite validation failed; all source changes were rolled back"

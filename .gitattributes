@@ -1,0 +1,2 @@
+benchmarks/migration/model_slices/pytorch_examples_mnist/upstream_main.py text eol=lf whitespace=-trailing-space
+benchmarks/migration/model_slices/pytorch_examples_mnist/UPSTREAM_LICENSE text eol=lf

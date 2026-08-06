@@ -6,7 +6,7 @@ pub use schema::{
     MigrationRunArtifacts, MigrationRunError, MigrationRunReport, MigrationRunStep,
     MigrationRunSummary, MsprobeImportIssue, MsprobeImportReport, NumericSummary, RecordKind,
     RewriteApplyReport, RewriteEdit, RewriteFile, RewriteIssue, RewritePlanReport,
-    RewriteRollbackReport, RewriteValidationReport, RiskLevel, RuntimeError, ScanCallKind,
-    ScanFinding, ScanIssue, ScanReport, ScanSummary, SchemaError, Severity, SourceLocation,
-    TraceComparisonResult, ValueKind, ValueSummary, SCHEMA_VERSION,
+    RewriteRollbackReport, RewriteValidationReport, RiskLevel, RuntimeCollectionSummary,
+    RuntimeError, ScanCallKind, ScanFinding, ScanIssue, ScanReport, ScanSummary, SchemaError,
+    Severity, SourceLocation, TraceComparisonResult, ValueKind, ValueSummary, SCHEMA_VERSION,
 };

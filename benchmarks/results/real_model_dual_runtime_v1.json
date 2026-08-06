@@ -1,0 +1,801 @@
+{
+  "benchmark_version": "real-model-dual-runtime-v1",
+  "cases": [
+    {
+      "case_id": "verified-apply",
+      "expected_status": "verified",
+      "fault": "none",
+      "final_sha256": "fd50d4f6061e739a4eedccf7bac11481127865ad44f66dca855a077ea62177ca",
+      "original_sha256": "b29bde683e5650a9e5d207e419f56dbc5efbc8b8024eb12cce83c3903b91168b",
+      "passed": true,
+      "source_restored": false,
+      "workflow": {
+        "artifacts": {
+          "runtime_manifest": "/tmp/candle-cli-real-model-8ss1cl8f/verified-apply/runtime_manifest.json",
+          "source_trace": "/tmp/candle-cli-real-model-8ss1cl8f/verified-apply/.candle-cli/traces/migration-20260806T124046.598766Z-f34aa73a-pytorch.jsonl",
+          "target_trace": "/tmp/candle-cli-real-model-8ss1cl8f/verified-apply/.candle-cli/traces/migration-20260806T124046.598766Z-f34aa73a-mindspore.jsonl",
+          "transaction_manifest": "/tmp/candle-cli-real-model-8ss1cl8f/verified-apply/.candle-cli/backups/20260806T124100.169057Z-ecaf4905/manifest.json"
+        },
+        "duration_ms": 27064.597,
+        "error": null,
+        "mode": "apply",
+        "project_root": "/tmp/candle-cli-real-model-8ss1cl8f/verified-apply/executable_slice.py",
+        "record_kind": "migration_run_report",
+        "run_id": "migration-20260806T124046.598766Z-f34aa73a",
+        "schema_version": "1.0",
+        "started_at": "2026-08-06T12:40:46.598766+00:00",
+        "status": "verified",
+        "steps": [
+          {
+            "details": {
+              "files_discovered": 1,
+              "files_scanned": 1,
+              "finding_count": 5,
+              "issue_count": 0
+            },
+            "duration_ms": 20.82,
+            "name": "scan",
+            "status": "passed"
+          },
+          {
+            "details": {
+              "manifest_id": "pytorch-examples-mnist-dual-runtime-v1",
+              "manual_patch_count": 1,
+              "metadata": {
+                "commit": "acc295dc7b90714f1bf47f06004fc19a7fe235c4",
+                "license": "BSD-3-Clause",
+                "limitations": "The convolutional stem, dataset pipeline, optimizer, and convergence are outside this M14 runtime slice.",
+                "provenance": "PROVENANCE.json",
+                "repository": "https://github.com/pytorch/examples.git",
+                "runtime_scope": "Net.forward classifier head with fixed synthetic features",
+                "source_path": "mnist/main.py",
+                "source_sha256": "30a3359d1911d2d859dd090ce20be7ed132a33f508dc389f40366010b3e9ecc8"
+              },
+              "workflow_version": "dual-runtime-v1"
+            },
+            "duration_ms": 6.064,
+            "name": "runtime_manifest",
+            "status": "passed"
+          },
+          {
+            "details": {
+              "edit_count": 6,
+              "files_changed": 1,
+              "issue_count": 0
+            },
+            "duration_ms": 13.63,
+            "name": "rewrite_preview",
+            "status": "passed"
+          },
+          {
+            "details": {
+              "command": [
+                "/home/mseco/miniconda3/envs/zgr/bin/python3.10",
+                "/tmp/candle-cli-real-model-8ss1cl8f/verified-apply/runtime_runner.py",
+                "--framework",
+                "pytorch",
+                "--slice",
+                "executable_slice.py",
+                "--trace",
+                "/tmp/candle-cli-real-model-8ss1cl8f/verified-apply/.candle-cli/traces/migration-20260806T124046.598766Z-f34aa73a-pytorch.jsonl"
+              ],
+              "duration_ms": 13522.039,
+              "framework": "pytorch",
+              "python": "/home/mseco/miniconda3/envs/zgr/bin/python3.10",
+              "python_version": "3.10.20",
+              "resource_limits": {
+                "cpu_seconds": 60,
+                "enforced": true,
+                "memory_mb": 8192
+              },
+              "return_code": 0,
+              "status": "passed",
+              "stderr": "",
+              "stderr_truncated": false,
+              "stdout": "",
+              "stdout_truncated": false,
+              "timeout_seconds": 120.0,
+              "trace_bytes": 697,
+              "trace_path": "/tmp/candle-cli-real-model-8ss1cl8f/verified-apply/.candle-cli/traces/migration-20260806T124046.598766Z-f34aa73a-pytorch.jsonl"
+            },
+            "duration_ms": 13527.744,
+            "name": "source_runtime",
+            "status": "passed"
+          },
+          {
+            "details": {
+              "command": [
+                "/home/mseco/miniconda3/envs/zgr/bin/python3.10",
+                "/tmp/candle-cli-real-model-8ss1cl8f/verified-apply/runtime_runner.py",
+                "--framework",
+                "mindspore",
+                "--slice",
+                "executable_slice.py",
+                "--trace",
+                "/tmp/candle-cli-real-model-8ss1cl8f/verified-apply/.candle-cli/traces/migration-20260806T124046.598766Z-f34aa73a-mindspore.jsonl",
+                "--fault",
+                "none"
+              ],
+              "duration_ms": 13465.364,
+              "framework": "mindspore",
+              "python": "/home/mseco/miniconda3/envs/zgr/bin/python3.10",
+              "python_version": "3.10.20",
+              "resource_limits": {
+                "cpu_seconds": 60,
+                "enforced": true,
+                "memory_mb": 8192
+              },
+              "return_code": 0,
+              "status": "passed",
+              "stderr": "",
+              "stderr_truncated": false,
+              "stdout": "",
+              "stdout_truncated": false,
+              "timeout_seconds": 120.0,
+              "trace_bytes": 708,
+              "trace_path": "/tmp/candle-cli-real-model-8ss1cl8f/verified-apply/.candle-cli/traces/migration-20260806T124046.598766Z-f34aa73a-mindspore.jsonl"
+            },
+            "duration_ms": 13487.34,
+            "name": "target_runtime",
+            "status": "passed"
+          },
+          {
+            "details": {
+              "files_changed": 1,
+              "transaction_id": "20260806T124100.169057Z-ecaf4905",
+              "validation": {
+                "command": [
+                  "/home/mseco/miniconda3/envs/zgr/bin/python3.10",
+                  "/tmp/candle-cli-real-model-8ss1cl8f/verified-apply/runtime_runner.py",
+                  "--framework",
+                  "mindspore",
+                  "--slice",
+                  "executable_slice.py",
+                  "--trace",
+                  "/tmp/candle-cli-real-model-8ss1cl8f/verified-apply/.candle-cli/traces/migration-20260806T124046.598766Z-f34aa73a-mindspore.jsonl",
+                  "--fault",
+                  "none"
+                ],
+                "duration_ms": 13465.364,
+                "framework": "mindspore",
+                "python": "/home/mseco/miniconda3/envs/zgr/bin/python3.10",
+                "python_version": "3.10.20",
+                "resource_limits": {
+                  "cpu_seconds": 60,
+                  "enforced": true,
+                  "memory_mb": 8192
+                },
+                "return_code": 0,
+                "status": "passed",
+                "stderr": "",
+                "stderr_truncated": false,
+                "stdout": "",
+                "stdout_truncated": false,
+                "timeout_seconds": 120.0,
+                "trace_bytes": 708,
+                "trace_path": "/tmp/candle-cli-real-model-8ss1cl8f/verified-apply/.candle-cli/traces/migration-20260806T124046.598766Z-f34aa73a-mindspore.jsonl"
+              },
+              "verified": true
+            },
+            "duration_ms": 13487.548,
+            "name": "apply_and_validate",
+            "status": "passed"
+          },
+          {
+            "details": {
+              "aligned_count": 1,
+              "diagnostic": null,
+              "equivalent": true,
+              "record_kind": "trace_comparison",
+              "schema_version": "1.0",
+              "source_count": 1,
+              "target_count": 1
+            },
+            "duration_ms": 7.9,
+            "name": "trace_compare",
+            "status": "passed"
+          }
+        ],
+        "summary": {
+          "edit_count": 6,
+          "files_changed": 1,
+          "files_discovered": 1,
+          "files_scanned": 1,
+          "finding_count": 5,
+          "first_divergence_category": null,
+          "mapping_counts": {
+            "exact": 5
+          },
+          "rewrite_issue_count": 0,
+          "runtime_collection": {
+            "automatic_patch_count": 6,
+            "manifest_id": "pytorch-examples-mnist-dual-runtime-v1",
+            "manual_patch_count": 1,
+            "mapping_coverage": 1.0,
+            "metadata": {
+              "commit": "acc295dc7b90714f1bf47f06004fc19a7fe235c4",
+              "license": "BSD-3-Clause",
+              "limitations": "The convolutional stem, dataset pipeline, optimizer, and convergence are outside this M14 runtime slice.",
+              "provenance": "PROVENANCE.json",
+              "repository": "https://github.com/pytorch/examples.git",
+              "runtime_scope": "Net.forward classifier head with fixed synthetic features",
+              "source_path": "mnist/main.py",
+              "source_sha256": "30a3359d1911d2d859dd090ce20be7ed132a33f508dc389f40366010b3e9ecc8"
+            },
+            "patch_adoption_rate": 0.857143,
+            "rollback_performed": false,
+            "rollback_succeeded": null,
+            "source_file_count": 2,
+            "source_line_count": 166,
+            "source_status": "passed",
+            "source_trace_calls": 1,
+            "target_status": "passed",
+            "target_trace_calls": 1,
+            "trace_equivalence_rate": 1.0,
+            "unknown_api_count": 0,
+            "workflow_version": "dual-runtime-v1"
+          },
+          "scan_issue_count": 0,
+          "trace_equivalent": true,
+          "validation_status": "passed"
+        },
+        "verified": true
+      }
+    },
+    {
+      "case_id": "target-runtime-rollback",
+      "expected_status": "rolled_back",
+      "fault": "runtime",
+      "final_sha256": "b29bde683e5650a9e5d207e419f56dbc5efbc8b8024eb12cce83c3903b91168b",
+      "original_sha256": "b29bde683e5650a9e5d207e419f56dbc5efbc8b8024eb12cce83c3903b91168b",
+      "passed": true,
+      "source_restored": true,
+      "workflow": {
+        "artifacts": {
+          "runtime_manifest": "/tmp/candle-cli-real-model-8ss1cl8f/target-runtime-rollback/runtime_manifest.json",
+          "source_trace": "/tmp/candle-cli-real-model-8ss1cl8f/target-runtime-rollback/.candle-cli/traces/migration-20260806T124113.671161Z-5685a336-pytorch.jsonl",
+          "target_trace": null,
+          "transaction_manifest": "/tmp/candle-cli-real-model-8ss1cl8f/target-runtime-rollback/.candle-cli/backups/20260806T124127.284161Z-f39eb069/manifest.json"
+        },
+        "duration_ms": 13968.802,
+        "error": {
+          "message": "rewrite validation failed; all source changes were rolled back",
+          "stage": "validation",
+          "type": "RewriteValidationError"
+        },
+        "mode": "apply",
+        "project_root": "/tmp/candle-cli-real-model-8ss1cl8f/target-runtime-rollback/executable_slice.py",
+        "record_kind": "migration_run_report",
+        "run_id": "migration-20260806T124113.671161Z-5685a336",
+        "schema_version": "1.0",
+        "started_at": "2026-08-06T12:41:13.671161+00:00",
+        "status": "rolled_back",
+        "steps": [
+          {
+            "details": {
+              "files_discovered": 1,
+              "files_scanned": 1,
+              "finding_count": 5,
+              "issue_count": 0
+            },
+            "duration_ms": 19.017,
+            "name": "scan",
+            "status": "passed"
+          },
+          {
+            "details": {
+              "manifest_id": "pytorch-examples-mnist-dual-runtime-v1",
+              "manual_patch_count": 1,
+              "metadata": {
+                "commit": "acc295dc7b90714f1bf47f06004fc19a7fe235c4",
+                "license": "BSD-3-Clause",
+                "limitations": "The convolutional stem, dataset pipeline, optimizer, and convergence are outside this M14 runtime slice.",
+                "provenance": "PROVENANCE.json",
+                "repository": "https://github.com/pytorch/examples.git",
+                "runtime_scope": "Net.forward classifier head with fixed synthetic features",
+                "source_path": "mnist/main.py",
+                "source_sha256": "30a3359d1911d2d859dd090ce20be7ed132a33f508dc389f40366010b3e9ecc8"
+              },
+              "workflow_version": "dual-runtime-v1"
+            },
+            "duration_ms": 5.959,
+            "name": "runtime_manifest",
+            "status": "passed"
+          },
+          {
+            "details": {
+              "edit_count": 6,
+              "files_changed": 1,
+              "issue_count": 0
+            },
+            "duration_ms": 12.742,
+            "name": "rewrite_preview",
+            "status": "passed"
+          },
+          {
+            "details": {
+              "command": [
+                "/home/mseco/miniconda3/envs/zgr/bin/python3.10",
+                "/tmp/candle-cli-real-model-8ss1cl8f/target-runtime-rollback/runtime_runner.py",
+                "--framework",
+                "pytorch",
+                "--slice",
+                "executable_slice.py",
+                "--trace",
+                "/tmp/candle-cli-real-model-8ss1cl8f/target-runtime-rollback/.candle-cli/traces/migration-20260806T124113.671161Z-5685a336-pytorch.jsonl"
+              ],
+              "duration_ms": 13567.709,
+              "framework": "pytorch",
+              "python": "/home/mseco/miniconda3/envs/zgr/bin/python3.10",
+              "python_version": "3.10.20",
+              "resource_limits": {
+                "cpu_seconds": 60,
+                "enforced": true,
+                "memory_mb": 8192
+              },
+              "return_code": 0,
+              "status": "passed",
+              "stderr": "",
+              "stderr_truncated": false,
+              "stdout": "",
+              "stdout_truncated": false,
+              "timeout_seconds": 120.0,
+              "trace_bytes": 697,
+              "trace_path": "/tmp/candle-cli-real-model-8ss1cl8f/target-runtime-rollback/.candle-cli/traces/migration-20260806T124113.671161Z-5685a336-pytorch.jsonl"
+            },
+            "duration_ms": 13573.214,
+            "name": "source_runtime",
+            "status": "passed"
+          },
+          {
+            "details": {
+              "command": [
+                "/home/mseco/miniconda3/envs/zgr/bin/python3.10",
+                "/tmp/candle-cli-real-model-8ss1cl8f/target-runtime-rollback/runtime_runner.py",
+                "--framework",
+                "mindspore",
+                "--slice",
+                "executable_slice.py",
+                "--trace",
+                "/tmp/candle-cli-real-model-8ss1cl8f/target-runtime-rollback/.candle-cli/traces/migration-20260806T124113.671161Z-5685a336-mindspore.jsonl",
+                "--fault",
+                "runtime"
+              ],
+              "duration_ms": 328.996,
+              "framework": "mindspore",
+              "python": "/home/mseco/miniconda3/envs/zgr/bin/python3.10",
+              "python_version": "3.10.20",
+              "resource_limits": {
+                "cpu_seconds": 60,
+                "enforced": true,
+                "memory_mb": 8192
+              },
+              "return_code": 1,
+              "status": "failed",
+              "stderr": "Traceback (most recent call last):\n  File \"/tmp/candle-cli-real-model-8ss1cl8f/target-runtime-rollback/runtime_runner.py\", line 123, in <module>\n    raise SystemExit(main())\n  File \"/tmp/candle-cli-real-model-8ss1cl8f/target-runtime-rollback/runtime_runner.py\", line 107, in main\n    raise RuntimeError(\"injected target runtime failure\")\nRuntimeError: injected target runtime failure\n",
+              "stderr_truncated": false,
+              "stdout": "",
+              "stdout_truncated": false,
+              "timeout_seconds": 120.0,
+              "trace_bytes": 0,
+              "trace_path": "/tmp/candle-cli-real-model-8ss1cl8f/target-runtime-rollback/.candle-cli/traces/migration-20260806T124113.671161Z-5685a336-mindspore.jsonl"
+            },
+            "duration_ms": 356.864,
+            "name": "target_runtime",
+            "status": "failed"
+          },
+          {
+            "details": {
+              "validation": {
+                "command": [
+                  "/home/mseco/miniconda3/envs/zgr/bin/python3.10",
+                  "/tmp/candle-cli-real-model-8ss1cl8f/target-runtime-rollback/runtime_runner.py",
+                  "--framework",
+                  "mindspore",
+                  "--slice",
+                  "executable_slice.py",
+                  "--trace",
+                  "/tmp/candle-cli-real-model-8ss1cl8f/target-runtime-rollback/.candle-cli/traces/migration-20260806T124113.671161Z-5685a336-mindspore.jsonl",
+                  "--fault",
+                  "runtime"
+                ],
+                "duration_ms": 328.996,
+                "framework": "mindspore",
+                "python": "/home/mseco/miniconda3/envs/zgr/bin/python3.10",
+                "python_version": "3.10.20",
+                "resource_limits": {
+                  "cpu_seconds": 60,
+                  "enforced": true,
+                  "memory_mb": 8192
+                },
+                "return_code": 1,
+                "status": "failed",
+                "stderr": "Traceback (most recent call last):\n  File \"/tmp/candle-cli-real-model-8ss1cl8f/target-runtime-rollback/runtime_runner.py\", line 123, in <module>\n    raise SystemExit(main())\n  File \"/tmp/candle-cli-real-model-8ss1cl8f/target-runtime-rollback/runtime_runner.py\", line 107, in main\n    raise RuntimeError(\"injected target runtime failure\")\nRuntimeError: injected target runtime failure\n",
+                "stderr_truncated": false,
+                "stdout": "",
+                "stdout_truncated": false,
+                "timeout_seconds": 120.0,
+                "trace_bytes": 0,
+                "trace_path": "/tmp/candle-cli-real-model-8ss1cl8f/target-runtime-rollback/.candle-cli/traces/migration-20260806T124113.671161Z-5685a336-mindspore.jsonl"
+              }
+            },
+            "duration_ms": 356.909,
+            "name": "apply_and_validate",
+            "status": "rolled_back"
+          }
+        ],
+        "summary": {
+          "edit_count": 6,
+          "files_changed": 1,
+          "files_discovered": 1,
+          "files_scanned": 1,
+          "finding_count": 5,
+          "first_divergence_category": null,
+          "mapping_counts": {
+            "exact": 5
+          },
+          "rewrite_issue_count": 0,
+          "runtime_collection": {
+            "automatic_patch_count": 6,
+            "manifest_id": "pytorch-examples-mnist-dual-runtime-v1",
+            "manual_patch_count": 1,
+            "mapping_coverage": 1.0,
+            "metadata": {
+              "commit": "acc295dc7b90714f1bf47f06004fc19a7fe235c4",
+              "license": "BSD-3-Clause",
+              "limitations": "The convolutional stem, dataset pipeline, optimizer, and convergence are outside this M14 runtime slice.",
+              "provenance": "PROVENANCE.json",
+              "repository": "https://github.com/pytorch/examples.git",
+              "runtime_scope": "Net.forward classifier head with fixed synthetic features",
+              "source_path": "mnist/main.py",
+              "source_sha256": "30a3359d1911d2d859dd090ce20be7ed132a33f508dc389f40366010b3e9ecc8"
+            },
+            "patch_adoption_rate": 0.857143,
+            "rollback_performed": true,
+            "rollback_succeeded": true,
+            "source_file_count": 2,
+            "source_line_count": 166,
+            "source_status": "passed",
+            "source_trace_calls": 1,
+            "target_status": "failed",
+            "target_trace_calls": 0,
+            "trace_equivalence_rate": null,
+            "unknown_api_count": 0,
+            "workflow_version": "dual-runtime-v1"
+          },
+          "scan_issue_count": 0,
+          "trace_equivalent": null,
+          "validation_status": "failed"
+        },
+        "verified": false
+      }
+    },
+    {
+      "case_id": "target-dtype-rollback",
+      "expected_status": "rolled_back",
+      "fault": "dtype",
+      "final_sha256": "b29bde683e5650a9e5d207e419f56dbc5efbc8b8024eb12cce83c3903b91168b",
+      "original_sha256": "b29bde683e5650a9e5d207e419f56dbc5efbc8b8024eb12cce83c3903b91168b",
+      "passed": true,
+      "source_restored": true,
+      "workflow": {
+        "artifacts": {
+          "runtime_manifest": "/tmp/candle-cli-real-model-8ss1cl8f/target-dtype-rollback/runtime_manifest.json",
+          "source_trace": "/tmp/candle-cli-real-model-8ss1cl8f/target-dtype-rollback/.candle-cli/traces/migration-20260806T124127.647732Z-ce3182fb-pytorch.jsonl",
+          "target_trace": "/tmp/candle-cli-real-model-8ss1cl8f/target-dtype-rollback/.candle-cli/traces/migration-20260806T124127.647732Z-ce3182fb-mindspore.jsonl",
+          "transaction_manifest": "/tmp/candle-cli-real-model-8ss1cl8f/target-dtype-rollback/.candle-cli/backups/20260806T124141.277650Z-4a3e84e9/manifest.json"
+        },
+        "duration_ms": 27267.117,
+        "error": {
+          "message": "source and target traces are not equivalent",
+          "stage": "trace_compare",
+          "type": "RuntimeError"
+        },
+        "mode": "apply",
+        "project_root": "/tmp/candle-cli-real-model-8ss1cl8f/target-dtype-rollback/executable_slice.py",
+        "record_kind": "migration_run_report",
+        "run_id": "migration-20260806T124127.647732Z-ce3182fb",
+        "schema_version": "1.0",
+        "started_at": "2026-08-06T12:41:27.647732+00:00",
+        "status": "rolled_back",
+        "steps": [
+          {
+            "details": {
+              "files_discovered": 1,
+              "files_scanned": 1,
+              "finding_count": 5,
+              "issue_count": 0
+            },
+            "duration_ms": 19.405,
+            "name": "scan",
+            "status": "passed"
+          },
+          {
+            "details": {
+              "manifest_id": "pytorch-examples-mnist-dual-runtime-v1",
+              "manual_patch_count": 1,
+              "metadata": {
+                "commit": "acc295dc7b90714f1bf47f06004fc19a7fe235c4",
+                "license": "BSD-3-Clause",
+                "limitations": "The convolutional stem, dataset pipeline, optimizer, and convergence are outside this M14 runtime slice.",
+                "provenance": "PROVENANCE.json",
+                "repository": "https://github.com/pytorch/examples.git",
+                "runtime_scope": "Net.forward classifier head with fixed synthetic features",
+                "source_path": "mnist/main.py",
+                "source_sha256": "30a3359d1911d2d859dd090ce20be7ed132a33f508dc389f40366010b3e9ecc8"
+              },
+              "workflow_version": "dual-runtime-v1"
+            },
+            "duration_ms": 5.89,
+            "name": "runtime_manifest",
+            "status": "passed"
+          },
+          {
+            "details": {
+              "edit_count": 6,
+              "files_changed": 1,
+              "issue_count": 0
+            },
+            "duration_ms": 13.923,
+            "name": "rewrite_preview",
+            "status": "passed"
+          },
+          {
+            "details": {
+              "command": [
+                "/home/mseco/miniconda3/envs/zgr/bin/python3.10",
+                "/tmp/candle-cli-real-model-8ss1cl8f/target-dtype-rollback/runtime_runner.py",
+                "--framework",
+                "pytorch",
+                "--slice",
+                "executable_slice.py",
+                "--trace",
+                "/tmp/candle-cli-real-model-8ss1cl8f/target-dtype-rollback/.candle-cli/traces/migration-20260806T124127.647732Z-ce3182fb-pytorch.jsonl"
+              ],
+              "duration_ms": 13583.053,
+              "framework": "pytorch",
+              "python": "/home/mseco/miniconda3/envs/zgr/bin/python3.10",
+              "python_version": "3.10.20",
+              "resource_limits": {
+                "cpu_seconds": 60,
+                "enforced": true,
+                "memory_mb": 8192
+              },
+              "return_code": 0,
+              "status": "passed",
+              "stderr": "",
+              "stderr_truncated": false,
+              "stdout": "",
+              "stdout_truncated": false,
+              "timeout_seconds": 120.0,
+              "trace_bytes": 697,
+              "trace_path": "/tmp/candle-cli-real-model-8ss1cl8f/target-dtype-rollback/.candle-cli/traces/migration-20260806T124127.647732Z-ce3182fb-pytorch.jsonl"
+            },
+            "duration_ms": 13588.553,
+            "name": "source_runtime",
+            "status": "passed"
+          },
+          {
+            "details": {
+              "command": [
+                "/home/mseco/miniconda3/envs/zgr/bin/python3.10",
+                "/tmp/candle-cli-real-model-8ss1cl8f/target-dtype-rollback/runtime_runner.py",
+                "--framework",
+                "mindspore",
+                "--slice",
+                "executable_slice.py",
+                "--trace",
+                "/tmp/candle-cli-real-model-8ss1cl8f/target-dtype-rollback/.candle-cli/traces/migration-20260806T124127.647732Z-ce3182fb-mindspore.jsonl",
+                "--fault",
+                "dtype"
+              ],
+              "duration_ms": 13593.861,
+              "framework": "mindspore",
+              "python": "/home/mseco/miniconda3/envs/zgr/bin/python3.10",
+              "python_version": "3.10.20",
+              "resource_limits": {
+                "cpu_seconds": 60,
+                "enforced": true,
+                "memory_mb": 8192
+              },
+              "return_code": 0,
+              "status": "passed",
+              "stderr": "",
+              "stderr_truncated": false,
+              "stdout": "",
+              "stdout_truncated": false,
+              "timeout_seconds": 120.0,
+              "trace_bytes": 705,
+              "trace_path": "/tmp/candle-cli-real-model-8ss1cl8f/target-dtype-rollback/.candle-cli/traces/migration-20260806T124127.647732Z-ce3182fb-mindspore.jsonl"
+            },
+            "duration_ms": 13618.317,
+            "name": "target_runtime",
+            "status": "passed"
+          },
+          {
+            "details": {
+              "files_changed": 1,
+              "transaction_id": "20260806T124141.277650Z-4a3e84e9",
+              "validation": {
+                "command": [
+                  "/home/mseco/miniconda3/envs/zgr/bin/python3.10",
+                  "/tmp/candle-cli-real-model-8ss1cl8f/target-dtype-rollback/runtime_runner.py",
+                  "--framework",
+                  "mindspore",
+                  "--slice",
+                  "executable_slice.py",
+                  "--trace",
+                  "/tmp/candle-cli-real-model-8ss1cl8f/target-dtype-rollback/.candle-cli/traces/migration-20260806T124127.647732Z-ce3182fb-mindspore.jsonl",
+                  "--fault",
+                  "dtype"
+                ],
+                "duration_ms": 13593.861,
+                "framework": "mindspore",
+                "python": "/home/mseco/miniconda3/envs/zgr/bin/python3.10",
+                "python_version": "3.10.20",
+                "resource_limits": {
+                  "cpu_seconds": 60,
+                  "enforced": true,
+                  "memory_mb": 8192
+                },
+                "return_code": 0,
+                "status": "passed",
+                "stderr": "",
+                "stderr_truncated": false,
+                "stdout": "",
+                "stdout_truncated": false,
+                "timeout_seconds": 120.0,
+                "trace_bytes": 705,
+                "trace_path": "/tmp/candle-cli-real-model-8ss1cl8f/target-dtype-rollback/.candle-cli/traces/migration-20260806T124127.647732Z-ce3182fb-mindspore.jsonl"
+              },
+              "verified": true
+            },
+            "duration_ms": 13618.377,
+            "name": "apply_and_validate",
+            "status": "passed"
+          },
+          {
+            "details": {
+              "aligned_count": 1,
+              "diagnostic": {
+                "category": "dtype_mismatch",
+                "confidence": 1.0,
+                "diagnostic_id": "76fdf6c91789692a",
+                "evidence": [
+                  {
+                    "data": {
+                      "path": "output",
+                      "source_dtype": "float32",
+                      "target_dtype": "bool"
+                    },
+                    "kind": "diff_validation",
+                    "location": {
+                      "column": 11,
+                      "end_column": null,
+                      "end_line": null,
+                      "file": "executable_slice.py",
+                      "line": 26
+                    },
+                    "message": "PyTorch 与 MindSpore 归一化轨迹的确定性比较结果。"
+                  }
+                ],
+                "explanation": "首个可观测偏差位于 output 的 dtype。",
+                "location": {
+                  "column": 11,
+                  "end_column": null,
+                  "end_line": null,
+                  "file": "executable_slice.py",
+                  "line": 26
+                },
+                "metadata": {
+                  "absolute_tolerance": 1e-08,
+                  "relative_tolerance": 1e-05,
+                  "source_call_index": 0,
+                  "source_framework_version": "2.6.0+cu124",
+                  "target_call_index": 0,
+                  "target_framework_version": "2.9.0"
+                },
+                "record_kind": "diagnostic",
+                "run_id": "pytorch-examples-mnist-pytorch",
+                "schema_version": "1.0",
+                "severity": "high",
+                "source_api": "torch.add",
+                "suggested_action": "检查该调用的映射差异、输入转换、dtype 和默认参数。",
+                "summary": "输出 dtype 不一致",
+                "target_api": "mindspore.mint.add",
+                "verified": true
+              },
+              "equivalent": false,
+              "record_kind": "trace_comparison",
+              "schema_version": "1.0",
+              "source_count": 1,
+              "target_count": 1
+            },
+            "duration_ms": 9.965,
+            "name": "trace_compare",
+            "status": "divergent"
+          },
+          {
+            "details": {
+              "files_restored": 1,
+              "record_kind": "rewrite_rollback_report",
+              "schema_version": "1.0",
+              "status": "rolled_back",
+              "transaction_id": "20260806T124141.277650Z-4a3e84e9"
+            },
+            "duration_ms": 9.976,
+            "name": "rollback",
+            "status": "passed"
+          }
+        ],
+        "summary": {
+          "edit_count": 6,
+          "files_changed": 1,
+          "files_discovered": 1,
+          "files_scanned": 1,
+          "finding_count": 5,
+          "first_divergence_category": "dtype_mismatch",
+          "mapping_counts": {
+            "exact": 5
+          },
+          "rewrite_issue_count": 0,
+          "runtime_collection": {
+            "automatic_patch_count": 6,
+            "manifest_id": "pytorch-examples-mnist-dual-runtime-v1",
+            "manual_patch_count": 1,
+            "mapping_coverage": 1.0,
+            "metadata": {
+              "commit": "acc295dc7b90714f1bf47f06004fc19a7fe235c4",
+              "license": "BSD-3-Clause",
+              "limitations": "The convolutional stem, dataset pipeline, optimizer, and convergence are outside this M14 runtime slice.",
+              "provenance": "PROVENANCE.json",
+              "repository": "https://github.com/pytorch/examples.git",
+              "runtime_scope": "Net.forward classifier head with fixed synthetic features",
+              "source_path": "mnist/main.py",
+              "source_sha256": "30a3359d1911d2d859dd090ce20be7ed132a33f508dc389f40366010b3e9ecc8"
+            },
+            "patch_adoption_rate": 0.857143,
+            "rollback_performed": true,
+            "rollback_succeeded": true,
+            "source_file_count": 2,
+            "source_line_count": 166,
+            "source_status": "passed",
+            "source_trace_calls": 1,
+            "target_status": "passed",
+            "target_trace_calls": 1,
+            "trace_equivalence_rate": 0.0,
+            "unknown_api_count": 0,
+            "workflow_version": "dual-runtime-v1"
+          },
+          "scan_issue_count": 0,
+          "trace_equivalent": false,
+          "validation_status": "passed"
+        },
+        "verified": false
+      }
+    }
+  ],
+  "dataset_kind": "pinned_external_model_slice_dual_runtime_cases",
+  "environment": {
+    "mindspore_python": "/home/mseco/miniconda3/envs/zgr/bin/python3.10",
+    "mindspore_version": "2.9.0",
+    "pytorch_python": "/home/mseco/miniconda3/envs/zgr/bin/python3.10",
+    "pytorch_version": "2.6.0+cu124"
+  },
+  "generated_at": "2026-08-06T12:41:54.925425+00:00",
+  "limitations": [
+    "The runtime scope is the MNIST classifier head, not the dataset pipeline or full training loop.",
+    "One manual functional adaptation is reported separately from automatic API edits.",
+    "A single pinned slice does not estimate whole-project migration accuracy."
+  ],
+  "record_kind": "real_model_dual_runtime_benchmark",
+  "schema_version": "1.0",
+  "summary": {
+    "case_count": 3,
+    "pass_rate": 1.0,
+    "passed_count": 3,
+    "rollback_case_count": 2,
+    "rollback_success_count": 2,
+    "rollback_success_rate": 1.0
+  }
+}

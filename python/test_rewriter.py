@@ -228,6 +228,39 @@ def test_apply_creates_backup_manifest_and_rollback_restores_source(tmp_path):
     assert json.loads(open(manifest_path, encoding="utf-8").read())["status"] == "rolled_back"
 
 
+def test_apply_accepts_a_bounded_validation_runner(tmp_path):
+    path = write_source(tmp_path, "import torch\ny = torch.add(x, 1)\n")
+
+    report = apply_plan(
+        plan_rewrite(path),
+        validation_runner=lambda: {
+            "status": "passed",
+            "return_code": 0,
+            "duration_ms": 1.5,
+        },
+    )
+
+    assert report["verified"] is True
+    assert report["validation"]["duration_ms"] == 1.5
+
+
+def test_apply_rolls_back_when_bounded_validation_runner_fails(tmp_path):
+    path = write_source(tmp_path, "import torch\ny = torch.add(x, 1)\n")
+    original = path.read_bytes()
+
+    with pytest.raises(RewriteValidationError):
+        apply_plan(
+            plan_rewrite(path),
+            validation_runner=lambda: {
+                "status": "failed",
+                "return_code": 7,
+                "duration_ms": 1.5,
+            },
+        )
+
+    assert path.read_bytes() == original
+
+
 def test_apply_rejects_stale_preview_without_changing_source(tmp_path):
     path = write_source(tmp_path, "import torch\ny = torch.add(x, 1)\n")
     plan = plan_rewrite(path)

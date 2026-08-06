@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0",
+  "slice_id": "pytorch-examples-mnist-v1",
+  "repository": "https://github.com/pytorch/examples.git",
+  "commit": "acc295dc7b90714f1bf47f06004fc19a7fe235c4",
+  "source_path": "mnist/main.py",
+  "source_line_count": 141,
+  "source_sha256": "30a3359d1911d2d859dd090ce20be7ed132a33f508dc389f40366010b3e9ecc8",
+  "license": "BSD-3-Clause",
+  "license_path": "LICENSE",
+  "license_sha256": "7e5dc9b5cf276166c4a0678d33e53b14e3d7ef47eee9356ab786c4ba45414efd",
+  "data_policy": "The benchmark uses fixed synthetic tensors and never downloads MNIST.",
+  "runtime_scope": "The executable slice covers Net.forward with deterministic parameters; train, test, dataset, and CLI code remain provenance-only."
+}

@@ -71,7 +71,7 @@ pub struct MigrationRunStep {
     pub details: Value,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MigrationRunSummary {
     pub files_discovered: u64,
     pub files_scanned: u64,
@@ -84,11 +84,40 @@ pub struct MigrationRunSummary {
     pub validation_status: String,
     pub trace_equivalent: Option<bool>,
     pub first_divergence_category: Option<String>,
+    #[serde(default)]
+    pub runtime_collection: Option<RuntimeCollectionSummary>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RuntimeCollectionSummary {
+    pub manifest_id: String,
+    pub workflow_version: String,
+    pub source_file_count: u64,
+    pub source_line_count: u64,
+    pub mapping_coverage: f64,
+    pub unknown_api_count: u64,
+    pub automatic_patch_count: u64,
+    pub manual_patch_count: u64,
+    pub patch_adoption_rate: Option<f64>,
+    pub source_status: String,
+    pub target_status: String,
+    pub source_trace_calls: u64,
+    pub target_trace_calls: u64,
+    pub trace_equivalence_rate: Option<f64>,
+    pub rollback_performed: bool,
+    pub rollback_succeeded: Option<bool>,
+    pub metadata: Value,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MigrationRunArtifacts {
     pub transaction_manifest: Option<String>,
+    #[serde(default)]
+    pub runtime_manifest: Option<String>,
+    #[serde(default)]
+    pub source_trace: Option<String>,
+    #[serde(default)]
+    pub target_trace: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -123,17 +152,13 @@ impl MigrationRunReport {
     pub fn validate(&self) -> Result<(), SchemaError> {
         ensure_compatible_schema(&self.schema_version)?;
         if self.record_kind != RecordKind::MigrationRunReport {
-            return Err(SchemaError::new(
-                "record_kind must be migration_run_report",
-            ));
+            return Err(SchemaError::new("record_kind must be migration_run_report"));
         }
         validate_non_empty("migration run_id", &self.run_id)?;
         validate_non_empty("migration project_root", &self.project_root)?;
         validate_non_empty("migration started_at", &self.started_at)?;
         if !matches!(self.mode_name.as_str(), "preview" | "apply") {
-            return Err(SchemaError::new(
-                "migration mode must be preview or apply",
-            ));
+            return Err(SchemaError::new("migration mode must be preview or apply"));
         }
         if !matches!(
             self.status.as_str(),
@@ -163,9 +188,7 @@ impl MigrationRunReport {
                 ));
             }
             if !step_names.insert(&step.name) {
-                return Err(SchemaError::new(
-                    "migration step names must be unique",
-                ));
+                return Err(SchemaError::new("migration step names must be unique"));
             }
         }
         if self.summary.files_scanned > self.summary.files_discovered {
@@ -177,6 +200,41 @@ impl MigrationRunReport {
             "migration validation_status",
             &self.summary.validation_status,
         )?;
+        if let Some(runtime) = &self.summary.runtime_collection {
+            validate_non_empty("runtime manifest_id", &runtime.manifest_id)?;
+            validate_non_empty("runtime workflow_version", &runtime.workflow_version)?;
+            if !runtime.mapping_coverage.is_finite()
+                || !(0.0..=1.0).contains(&runtime.mapping_coverage)
+            {
+                return Err(SchemaError::new(
+                    "runtime mapping_coverage must be between zero and one",
+                ));
+            }
+            for (name, value) in [
+                ("patch_adoption_rate", runtime.patch_adoption_rate),
+                ("trace_equivalence_rate", runtime.trace_equivalence_rate),
+            ] {
+                if value.is_some_and(|item| !item.is_finite() || !(0.0..=1.0).contains(&item)) {
+                    return Err(SchemaError::new(format!(
+                        "runtime {name} must be between zero and one"
+                    )));
+                }
+            }
+            if !matches!(
+                runtime.source_status.as_str(),
+                "not_run" | "passed" | "failed" | "timed_out"
+            ) || !matches!(
+                runtime.target_status.as_str(),
+                "not_run" | "passed" | "failed" | "timed_out"
+            ) {
+                return Err(SchemaError::new("runtime status is invalid"));
+            }
+            if runtime.rollback_succeeded.is_some() && !runtime.rollback_performed {
+                return Err(SchemaError::new(
+                    "runtime rollback result requires rollback_performed=true",
+                ));
+            }
+        }
         if self.summary.trace_equivalent != Some(false)
             && self.summary.first_divergence_category.is_some()
         {
