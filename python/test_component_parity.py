@@ -5,6 +5,8 @@ import pytest
 
 from migration.component_parity import (
     CASE_DEFINITIONS,
+    DEFAULT_TRAINING_MANIFEST,
+    TRAINING_CASE_DEFINITIONS,
     capture_framework,
     evaluate_benchmark,
     load_manifest,
@@ -79,6 +81,12 @@ def write_case(root, framework, case):
                 and framework == Framework.MINDSPORE
             ):
                 output = FakeTensor([2.0, 4.0])
+            elif (
+                case.case_id == "learning-rate-mismatch"
+                and framework == Framework.MINDSPORE
+                and index == 3
+            ):
+                output = FakeTensor([0.5, 0.7])
             else:
                 output = FakeTensor([1.0, 3.0])
             recorder.call(api, lambda result=output: result, trace_metadata=metadata)
@@ -105,6 +113,35 @@ def test_component_manifest_rejects_operation_drift(tmp_path):
 
     with pytest.raises(SchemaError, match="does not match built-in case"):
         load_manifest(changed)
+
+
+def test_training_manifest_is_frozen_and_split():
+    manifest = load_manifest(DEFAULT_TRAINING_MANIFEST)
+
+    assert manifest.benchmark_version == "runtime-training-v1"
+    assert manifest.dataset_kind == "cross_framework_training_cases"
+    assert {case.case_id for case in manifest.cases} == set(
+        TRAINING_CASE_DEFINITIONS
+    )
+    assert sum(case.split == "development" for case in manifest.cases) == 2
+    assert sum(case.split == "heldout" for case in manifest.cases) == 1
+
+
+def test_synthetic_training_report_validates_step_and_optimizer_localization(tmp_path):
+    manifest = load_manifest(DEFAULT_TRAINING_MANIFEST)
+    for case in manifest.cases:
+        write_case(tmp_path, Framework.PYTORCH, case)
+        write_case(tmp_path, Framework.MINDSPORE, case)
+
+    report = evaluate_benchmark(tmp_path, DEFAULT_TRAINING_MANIFEST)
+
+    assert report["complete"] is True
+    assert report["passed"] is True
+    assert report["classification_accuracy"] == 1.0
+    assert report["first_divergence_top1_accuracy"] == 1.0
+    assert report["training_step_parity_rate"] == 1.0
+    assert report["optimizer_defect_top1_accuracy"] == 1.0
+    assert report["first_divergence_categories"] == {"value_mismatch": 1}
 
 
 def test_synthetic_component_report_validates_parity_and_top1_localization(tmp_path):

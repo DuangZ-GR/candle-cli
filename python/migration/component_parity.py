@@ -1,4 +1,4 @@
-"""Capture and evaluate PyTorch/MindSpore component-level parity cases."""
+"""Capture and evaluate PyTorch/MindSpore component and training parity cases."""
 
 from __future__ import annotations
 
@@ -25,7 +25,14 @@ DEFAULT_MANIFEST = (
     / "migration"
     / "runtime_components_v1.json"
 )
-DATASET_KIND = "cross_framework_component_cases"
+DEFAULT_TRAINING_MANIFEST = (
+    Path(__file__).parents[2]
+    / "benchmarks"
+    / "migration"
+    / "runtime_training_v1.json"
+)
+COMPONENT_DATASET_KIND = "cross_framework_component_cases"
+TRAINING_DATASET_KIND = "cross_framework_training_cases"
 CASE_SPLITS = {"development", "heldout"}
 
 
@@ -52,6 +59,7 @@ class ComponentCase:
 @dataclass(frozen=True)
 class ComponentManifest:
     benchmark_version: str
+    dataset_kind: str
     source_version_prefix: str
     target_version_prefix: str
     relative_tolerance: float
@@ -88,14 +96,59 @@ CASE_DEFINITIONS = {
     ),
 }
 
+TRAINING_CASE_DEFINITIONS = {
+    "linear-sgd-step": (
+        ("forward", "torch.nn.Linear", "mindspore.nn.Dense", "forward"),
+        ("loss", "torch.nn.functional.mse_loss", "mindspore.ops.mse_loss", "loss"),
+        ("gradients", "torch.autograd.grad", "mindspore.value_and_grad", "gradient"),
+        (
+            "optimizer-step",
+            "torch.optim.SGD.step",
+            "mindspore.nn.SGD",
+            "parameter_update",
+        ),
+    ),
+    "mlp-sgd-step": (
+        ("forward", "torch.nn.Sequential", "mindspore.nn.SequentialCell", "forward"),
+        ("loss", "torch.nn.functional.mse_loss", "mindspore.ops.mse_loss", "loss"),
+        ("gradients", "torch.autograd.grad", "mindspore.value_and_grad", "gradient"),
+        (
+            "optimizer-step",
+            "torch.optim.SGD.step",
+            "mindspore.nn.SGD",
+            "parameter_update",
+        ),
+    ),
+    "learning-rate-mismatch": (
+        ("forward", "torch.nn.Linear", "mindspore.nn.Dense", "forward"),
+        ("loss", "torch.nn.functional.mse_loss", "mindspore.ops.mse_loss", "loss"),
+        ("gradients", "torch.autograd.grad", "mindspore.value_and_grad", "gradient"),
+        (
+            "optimizer-step",
+            "torch.optim.SGD.step",
+            "mindspore.nn.SGD",
+            "parameter_update",
+        ),
+    ),
+}
+
+BENCHMARK_CASES = {
+    "runtime-components-v1": (COMPONENT_DATASET_KIND, CASE_DEFINITIONS),
+    "runtime-training-v1": (TRAINING_DATASET_KIND, TRAINING_CASE_DEFINITIONS),
+}
+
 
 def load_manifest(path: str | Path = DEFAULT_MANIFEST) -> ComponentManifest:
     document = json.loads(Path(path).read_text(encoding="utf-8"))
     if document.get("schema_version") != "1.0":
         raise SchemaError("unsupported component parity schema_version")
-    if document.get("dataset_kind") != DATASET_KIND:
-        raise SchemaError("unsupported component parity dataset_kind")
     benchmark_version = _required_string(document, "benchmark_version")
+    benchmark_definition = BENCHMARK_CASES.get(benchmark_version)
+    if benchmark_definition is None:
+        raise SchemaError("unsupported component parity benchmark_version")
+    expected_dataset_kind, case_definitions = benchmark_definition
+    if document.get("dataset_kind") != expected_dataset_kind:
+        raise SchemaError("unsupported component parity dataset_kind")
     source = document.get("source_framework")
     target = document.get("target_framework")
     if not isinstance(source, dict) or source.get("name") != "pytorch":
@@ -126,7 +179,7 @@ def load_manifest(path: str | Path = DEFAULT_MANIFEST) -> ComponentManifest:
             not isinstance(item, str) or not item.strip() for item in capabilities
         ):
             raise SchemaError(f"component parity case {case_id} requires capabilities")
-        operations = _load_operations(case_id, value.get("operations"))
+        operations = _load_operations(case_id, value.get("operations"), case_definitions)
         for operation in operations:
             previous = api_pairs.setdefault(operation.source_api, operation.target_api)
             if previous != operation.target_api:
@@ -182,10 +235,11 @@ def load_manifest(path: str | Path = DEFAULT_MANIFEST) -> ComponentManifest:
                 fault_injection,
             )
         )
-    if identifiers != set(CASE_DEFINITIONS):
+    if identifiers != set(case_definitions):
         raise SchemaError("component parity manifest must contain every built-in case once")
     return ComponentManifest(
         benchmark_version,
+        expected_dataset_kind,
         source_prefix,
         target_prefix,
         relative_tolerance,
@@ -194,8 +248,12 @@ def load_manifest(path: str | Path = DEFAULT_MANIFEST) -> ComponentManifest:
     )
 
 
-def _load_operations(case_id: str, values: Any) -> tuple[ComponentOperation, ...]:
-    expected = CASE_DEFINITIONS.get(case_id)
+def _load_operations(
+    case_id: str,
+    values: Any,
+    case_definitions: dict[str, tuple[tuple[str, str, str, str], ...]],
+) -> tuple[ComponentOperation, ...]:
+    expected = case_definitions.get(case_id)
     if expected is None:
         raise SchemaError(f"unknown built-in component case: {case_id}")
     if not isinstance(values, list):
@@ -496,6 +554,16 @@ def evaluate_benchmark(
     gradient = [
         result for result in evaluated if "gradient" in result["capabilities"]
     ]
+    training_steps = [
+        result
+        for result in equivalent_expected
+        if "training-step" in result["capabilities"]
+    ]
+    optimizer_defects = [
+        result
+        for result in divergent
+        if "optimizer" in result["capabilities"]
+    ]
     versions_match = bool(source_versions and target_versions) and all(
         _version_matches(version, manifest.source_version_prefix)
         for version in source_versions
@@ -507,7 +575,7 @@ def evaluate_benchmark(
     report = {
         "schema_version": "1.0",
         "benchmark_version": manifest.benchmark_version,
-        "dataset_kind": DATASET_KIND,
+        "dataset_kind": manifest.dataset_kind,
         "manifest_sha256": hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
         "case_count": len(manifest.cases),
         "evaluated_case_count": len(evaluated),
@@ -527,6 +595,12 @@ def evaluate_benchmark(
         "gradient_parity_rate": _rate(
             gradient, lambda result: result["status"] == "equivalent"
         ),
+        "training_step_parity_rate": _rate(
+            training_steps, lambda result: result["status"] == "equivalent"
+        ),
+        "optimizer_defect_top1_accuracy": _rate(
+            optimizer_defects, lambda result: result["localization_correct"]
+        ),
         "splits": {
             split: _split_metrics(evaluated, split) for split in sorted(CASE_SPLITS)
         },
@@ -535,13 +609,7 @@ def evaluate_benchmark(
         "version_prefixes_match": versions_match,
         "first_divergence_categories": dict(sorted(categories.items())),
         "cases": results,
-        "limitations": [
-            "The suite uses small deterministic components rather than full migrated projects.",
-            "Held-out defects are frozen fault injections and default-mode mismatches.",
-            "Tensor previews are exact only for the captured prefix; "
-            "large tensors also use summaries.",
-            "Passing components does not prove end-to-end migration correctness.",
-        ],
+        "limitations": _limitations(manifest.dataset_kind),
     }
     return report
 
@@ -557,6 +625,9 @@ def _run_case(
         "dtype-bool-regression": _run_dtype_regression,
         "batchnorm-default-mode": _run_batchnorm_default_mode,
         "missing-operator-injected": _run_missing_operator,
+        "linear-sgd-step": _run_linear_sgd_step,
+        "mlp-sgd-step": _run_mlp_sgd_step,
+        "learning-rate-mismatch": _run_learning_rate_mismatch,
     }
     runners[case.case_id](case, backend, recorder)
 
@@ -729,6 +800,140 @@ def _run_missing_operator(case, backend, recorder):
     backend.record(recorder, case, 0, function, value)
 
 
+def _run_linear_sgd_step(case, backend, recorder):
+    _run_sgd_training_step(
+        case, backend, recorder, model_kind="linear", learning_rate=0.1
+    )
+
+
+def _run_mlp_sgd_step(case, backend, recorder):
+    _run_sgd_training_step(
+        case, backend, recorder, model_kind="mlp", learning_rate=0.05
+    )
+
+
+def _run_learning_rate_mismatch(case, backend, recorder):
+    learning_rate = 0.1 if backend.framework == Framework.PYTORCH else 0.2
+    _run_sgd_training_step(
+        case,
+        backend,
+        recorder,
+        model_kind="linear",
+        learning_rate=learning_rate,
+    )
+
+
+def _run_sgd_training_step(
+    case,
+    backend,
+    recorder,
+    *,
+    model_kind: str,
+    learning_rate: float,
+):
+    inputs = backend.tensor([[1.0, -2.0], [0.5, 3.0]])
+    targets = backend.tensor([[0.5], [-1.0]])
+    model = _training_model(backend, model_kind)
+
+    if backend.framework == Framework.PYTORCH:
+        loss_function = backend.module.nn.functional.mse_loss
+        optimizer = backend.module.optim.SGD(model.parameters(), lr=learning_rate)
+        predictions = backend.record(recorder, case, 0, model, inputs)
+        loss = backend.record(recorder, case, 1, loss_function, predictions, targets)
+
+        def compute_gradients():
+            return backend.module.autograd.grad(loss, tuple(model.parameters()))
+
+        gradients = backend.record(recorder, case, 2, compute_gradients)
+
+        def optimizer_step():
+            for parameter, gradient in zip(model.parameters(), gradients):
+                parameter.grad = gradient.detach().clone()
+            optimizer.step()
+            return tuple(parameter.detach().clone() for parameter in model.parameters())
+
+        backend.record(recorder, case, 3, optimizer_step)
+        return
+
+    loss_function = backend.module.ops.mse_loss
+    weights = model.trainable_params()
+    optimizer = backend.module.nn.SGD(weights, learning_rate=learning_rate)
+    predictions = backend.record(recorder, case, 0, model, inputs)
+    backend.record(recorder, case, 1, loss_function, predictions, targets)
+
+    def training_loss(data, labels):
+        return loss_function(model(data), labels)
+
+    gradient_function = backend.module.value_and_grad(
+        training_loss,
+        grad_position=None,
+        weights=weights,
+    )
+
+    def compute_gradients():
+        _, gradients = gradient_function(inputs, targets)
+        return gradients
+
+    gradients = backend.record(recorder, case, 2, compute_gradients)
+
+    def optimizer_step():
+        optimizer(gradients)
+        return tuple(weights)
+
+    backend.record(recorder, case, 3, optimizer_step)
+
+
+def _training_model(backend, model_kind):
+    if model_kind == "linear":
+        weight = [[0.2, -0.4]]
+        bias = [0.1]
+        if backend.framework == Framework.PYTORCH:
+            layer = backend.module.nn.Linear(2, 1, bias=True)
+            with backend.module.no_grad():
+                layer.weight.copy_(backend.tensor(weight))
+                layer.bias.copy_(backend.tensor(bias))
+            return layer
+        return backend.module.nn.Dense(
+            2,
+            1,
+            weight_init=backend.tensor(weight),
+            bias_init=backend.tensor(bias),
+            has_bias=True,
+        )
+    if model_kind != "mlp":
+        raise ValueError(f"unsupported training model: {model_kind}")
+    first_weight = [[0.2, -0.4], [0.1, 0.3], [-0.5, 0.2]]
+    first_bias = [0.1, -0.2, 0.05]
+    second_weight = [[0.3, -0.6, 0.2]]
+    second_bias = [0.2]
+    if backend.framework == Framework.PYTORCH:
+        first = backend.module.nn.Linear(2, 3, bias=True)
+        second = backend.module.nn.Linear(3, 1, bias=True)
+        with backend.module.no_grad():
+            first.weight.copy_(backend.tensor(first_weight))
+            first.bias.copy_(backend.tensor(first_bias))
+            second.weight.copy_(backend.tensor(second_weight))
+            second.bias.copy_(backend.tensor(second_bias))
+        return backend.module.nn.Sequential(first, backend.module.nn.ReLU(), second)
+    return backend.module.nn.SequentialCell(
+        backend.module.nn.Dense(
+            2,
+            3,
+            weight_init=backend.tensor(first_weight),
+            bias_init=backend.tensor(first_bias),
+            has_bias=True,
+        ),
+        backend.module.nn.ReLU(),
+        backend.module.nn.Dense(
+            3,
+            1,
+            weight_init=backend.tensor(second_weight),
+            bias_init=backend.tensor(second_bias),
+            has_bias=True,
+        ),
+    )
+
+
 def _capture_report(
     manifest,
     framework,
@@ -741,7 +946,11 @@ def _capture_report(
     return {
         "schema_version": "1.0",
         "benchmark_version": manifest.benchmark_version,
-        "record_kind": "component_capture_report",
+        "record_kind": (
+            "training_capture_report"
+            if manifest.dataset_kind == TRAINING_DATASET_KIND
+            else "component_capture_report"
+        ),
         "framework": framework.value,
         "framework_version": version,
         "expected_version_prefix": expected_prefix,
@@ -753,6 +962,27 @@ def _capture_report(
         "captured": captured,
         "failures": failures,
     }
+
+
+def _limitations(dataset_kind):
+    shared = [
+        "Tensor previews are exact only for the captured prefix; "
+        "large tensors also use summaries.",
+        "Passing cases does not prove end-to-end migration correctness.",
+    ]
+    if dataset_kind == TRAINING_DATASET_KIND:
+        return [
+            "The suite executes one deterministic CPU optimizer step on small models.",
+            "The held-out optimizer defect is a frozen learning-rate fault injection.",
+            "It does not cover optimizer state restoration, mixed precision, "
+            "distributed training, or convergence.",
+            *shared,
+        ]
+    return [
+        "The suite uses small deterministic components rather than full migrated projects.",
+        "Held-out defects are frozen fault injections and default-mode mismatches.",
+        *shared,
+    ]
 
 
 def _split_metrics(results, split):
