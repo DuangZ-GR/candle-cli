@@ -1,0 +1,52 @@
+{
+  "schema_version": "1.0",
+  "workflow_version": "dual-runtime-v1",
+  "manifest_id": "pytorch-examples-mnist-dual-runtime-v1",
+  "source_files": ["upstream_main.py", "executable_slice.py"],
+  "manual_patch_count": 1,
+  "source": {
+    "framework": "pytorch",
+    "python_env": "CANDLE_CLI_PYTORCH_PYTHON",
+    "entrypoint": "runtime_runner.py",
+    "args": [
+      "--framework", "{framework}",
+      "--slice", "executable_slice.py",
+      "--trace", "{trace_path}"
+    ],
+    "trace_path": ".candle-cli/traces/{run_id}-pytorch.jsonl",
+    "timeout_seconds": 120,
+    "environment": {
+      "inherit": ["PATH", "LD_LIBRARY_PATH", "CUDA_VISIBLE_DEVICES"],
+      "set": {"OMP_NUM_THREADS": "1"}
+    },
+    "resource_limits": {"cpu_seconds": 60, "memory_mb": 8192}
+  },
+  "target": {
+    "framework": "mindspore",
+    "python_env": "CANDLE_CLI_MINDSPORE_PYTHON",
+    "entrypoint": "runtime_runner.py",
+    "args": [
+      "--framework", "{framework}",
+      "--slice", "executable_slice.py",
+      "--trace", "{trace_path}",
+      "--fault", "none"
+    ],
+    "trace_path": ".candle-cli/traces/{run_id}-mindspore.jsonl",
+    "timeout_seconds": 120,
+    "environment": {
+      "inherit": ["PATH", "LD_LIBRARY_PATH", "CUDA_VISIBLE_DEVICES"],
+      "set": {"OMP_NUM_THREADS": "1"}
+    },
+    "resource_limits": {"cpu_seconds": 60, "memory_mb": 8192}
+  },
+  "metadata": {
+    "repository": "https://github.com/pytorch/examples.git",
+    "commit": "acc295dc7b90714f1bf47f06004fc19a7fe235c4",
+    "license": "BSD-3-Clause",
+    "source_path": "mnist/main.py",
+    "source_sha256": "30a3359d1911d2d859dd090ce20be7ed132a33f508dc389f40366010b3e9ecc8",
+    "provenance": "PROVENANCE.json",
+    "runtime_scope": "Net.forward classifier head with fixed synthetic features",
+    "limitations": "The convolutional stem, dataset pipeline, optimizer, and convergence are outside this M14 runtime slice."
+  }
+}

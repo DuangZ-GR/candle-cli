@@ -1,6 +1,8 @@
+#![recursion_limit = "256"]
+
 use candle_cli::migration::{
     ensure_compatible_schema, ApiTraceRecord, DiagnosticCategory, DiagnosticRecord, Framework,
-    RecordKind, TraceComparisonResult, SCHEMA_VERSION,
+    MigrationRunReport, RecordKind, TraceComparisonResult, SCHEMA_VERSION,
 };
 
 const API_TRACE_FIXTURE: &str = include_str!("../fixtures/migration/api_trace_v1.json");
@@ -160,4 +162,73 @@ fn divergent_trace_comparison_requires_a_diagnostic() {
 
     let error = comparison.validate().unwrap_err();
     assert!(error.to_string().contains("must include it"));
+}
+
+#[test]
+fn dual_runtime_migration_report_deserializes_and_validates() {
+    let report: MigrationRunReport = serde_json::from_value(serde_json::json!({
+        "schema_version": SCHEMA_VERSION,
+        "record_kind": "migration_run_report",
+        "run_id": "run-1",
+        "project_root": "/workspace/project",
+        "mode": "apply",
+        "status": "verified",
+        "verified": true,
+        "started_at": "2026-08-06T00:00:00Z",
+        "duration_ms": 12.5,
+        "steps": [{
+            "name": "trace_compare",
+            "status": "passed",
+            "duration_ms": 1.5,
+            "details": {}
+        }],
+        "summary": {
+            "files_discovered": 2,
+            "files_scanned": 2,
+            "finding_count": 3,
+            "scan_issue_count": 0,
+            "mapping_counts": {"supported": 3},
+            "files_changed": 1,
+            "edit_count": 2,
+            "rewrite_issue_count": 0,
+            "validation_status": "passed",
+            "trace_equivalent": true,
+            "first_divergence_category": null,
+            "runtime_collection": {
+                "manifest_id": "pytorch-examples-mnist-v1",
+                "workflow_version": "dual-runtime-v1",
+                "source_file_count": 2,
+                "source_line_count": 160,
+                "mapping_coverage": 1.0,
+                "unknown_api_count": 0,
+                "automatic_patch_count": 2,
+                "manual_patch_count": 1,
+                "patch_adoption_rate": 0.666667,
+                "source_status": "passed",
+                "target_status": "passed",
+                "source_trace_calls": 1,
+                "target_trace_calls": 1,
+                "trace_equivalence_rate": 1.0,
+                "rollback_performed": false,
+                "rollback_succeeded": null,
+                "metadata": {"fixture": "external-model-slice"}
+            }
+        },
+        "artifacts": {
+            "transaction_manifest": "/tmp/transaction.json",
+            "runtime_manifest": "/workspace/project/runtime_manifest.json",
+            "source_trace": "/tmp/source.jsonl",
+            "target_trace": "/tmp/target.jsonl"
+        },
+        "error": null
+    }))
+    .unwrap();
+
+    report.validate().unwrap();
+    let runtime = report.summary.runtime_collection.unwrap();
+    assert_eq!(runtime.automatic_patch_count, 2);
+    assert_eq!(
+        report.artifacts.source_trace.as_deref(),
+        Some("/tmp/source.jsonl")
+    );
 }

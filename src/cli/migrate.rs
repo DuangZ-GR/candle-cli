@@ -24,10 +24,13 @@ pub fn run_migrate(command: MigrateCommand) -> Result<()> {
 }
 
 fn run_workflow(arguments: RunArgs) -> Result<()> {
-    if arguments.apply && arguments.validate_program.is_none() {
+    if arguments.apply
+        && arguments.validate_program.is_none()
+        && arguments.runtime_manifest.is_none()
+    {
         return Err(Error::new(
             ErrorKind::InvalidInput,
-            "--apply requires --validate-program",
+            "--apply requires --validate-program or --runtime-manifest",
         ));
     }
     if !arguments.apply
@@ -48,6 +51,14 @@ fn run_workflow(arguments: RunArgs) -> Result<()> {
         return Err(Error::new(
             ErrorKind::InvalidInput,
             "--source-trace and --target-trace must be provided together",
+        ));
+    }
+    if arguments.runtime_manifest.is_some()
+        && (arguments.source_trace.is_some() || arguments.validate_program.is_some())
+    {
+        return Err(Error::new(
+            ErrorKind::InvalidInput,
+            "--runtime-manifest cannot be combined with explicit traces or validation",
         ));
     }
     if arguments.output.as_deref().is_some_and(Path::exists) && !arguments.force {
@@ -91,6 +102,9 @@ fn run_workflow(arguments: RunArgs) -> Result<()> {
             .arg(source)
             .arg("--target-trace")
             .arg(target);
+    }
+    if let Some(manifest) = &arguments.runtime_manifest {
+        command.arg("--runtime-manifest").arg(manifest);
     }
     if let Some(program) = &arguments.validate_program {
         command.arg("--validate-command").arg(program);
@@ -174,12 +188,62 @@ fn render_workflow_markdown(report: &MigrationRunReport) -> String {
                 .as_deref()
                 .unwrap_or("none")
         ),
+    ];
+    if let Some(runtime) = &report.summary.runtime_collection {
+        let patch_adoption = runtime
+            .patch_adoption_rate
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "not_applicable".to_string());
+        let trace_rate = runtime
+            .trace_equivalence_rate
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "not_run".to_string());
+        let rollback_succeeded = runtime
+            .rollback_succeeded
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "not_run".to_string());
+        lines.extend([
+            String::new(),
+            "## Dual-runtime collection".to_string(),
+            String::new(),
+            format!("- Manifest: `{}`", escape_markdown(&runtime.manifest_id)),
+            format!(
+                "- Source files/lines: `{}/{}`",
+                runtime.source_file_count, runtime.source_line_count
+            ),
+            format!(
+                "- Mapping coverage: `{:.2}%`",
+                runtime.mapping_coverage * 100.0
+            ),
+            format!("- Unknown APIs: `{}`", runtime.unknown_api_count),
+            format!(
+                "- Automatic/manual patches: `{}/{}`",
+                runtime.automatic_patch_count, runtime.manual_patch_count
+            ),
+            format!("- Patch adoption rate: `{patch_adoption}`"),
+            format!(
+                "- Source/target runtime: `{}/{}`",
+                escape_markdown(&runtime.source_status),
+                escape_markdown(&runtime.target_status)
+            ),
+            format!(
+                "- Source/target trace calls: `{}/{}`",
+                runtime.source_trace_calls, runtime.target_trace_calls
+            ),
+            format!("- Trace equivalence rate: `{trace_rate}`"),
+            format!(
+                "- Rollback performed/succeeded: `{}/{rollback_succeeded}`",
+                runtime.rollback_performed
+            ),
+        ]);
+    }
+    lines.extend([
         String::new(),
         "## Steps".to_string(),
         String::new(),
         "| Step | Status | Duration (ms) |".to_string(),
         "| --- | --- | ---: |".to_string(),
-    ];
+    ]);
     for step in &report.steps {
         lines.push(format!(
             "| `{}` | `{}` | {:.3} |",

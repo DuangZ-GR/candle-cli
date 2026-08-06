@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "benchmark_version": "real-model-dual-runtime-v1",
+  "dataset_kind": "pinned_external_model_slice_dual_runtime_cases",
+  "slice": {
+    "id": "pytorch-examples-mnist-v1",
+    "root": "model_slices/pytorch_examples_mnist",
+    "migration_path": "executable_slice.py",
+    "runtime_manifest": "runtime_manifest.json"
+  },
+  "frameworks": {
+    "source": {"name": "pytorch", "version_prefix": "2.6"},
+    "target": {"name": "mindspore", "version_prefix": "2.9"}
+  },
+  "cases": [
+    {"id": "verified-apply", "fault": "none", "expected_status": "verified"},
+    {"id": "target-runtime-rollback", "fault": "runtime", "expected_status": "rolled_back"},
+    {
+      "id": "target-dtype-rollback",
+      "fault": "dtype",
+      "expected_status": "rolled_back",
+      "expected_divergence": "dtype_mismatch"
+    }
+  ]
+}

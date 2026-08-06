@@ -108,6 +108,12 @@ cargo run -- migrate run ./project --apply \
   --validate-program /path/to/mindspore/python \
   --validate-arg=-m --validate-arg=pytest
 
+# 由版本化清单自动采集 PyTorch/MindSpore Trace、比较并按需回滚
+export CANDLE_CLI_PYTORCH_PYTHON=/path/to/pytorch/python
+export CANDLE_CLI_MINDSPORE_PYTHON=/path/to/mindspore/python
+cargo run -- migrate run ./project/model.py --apply \
+  --runtime-manifest ./project/runtime_manifest.json
+
 # 应用精确映射并直接执行验证程序（不经过 shell）
 cargo run -- migrate rewrite ./project --apply \
   --validate-program python --validate-arg=-m --validate-arg=pytest
@@ -136,6 +142,8 @@ cargo run -- migrate rollback \
 `runtime-training-v1` 将验证扩展到最小训练步骤：前向输出、MSE loss、参数梯度和 SGD 一步更新后的参数快照。Linux 真实双端采集使用 PyTorch 2.6.0+cu124 与 MindSpore 2.9.0，两端均完成 3/3 案例和 12/12 调用记录；2/2 等价训练步骤通过，1/1 学习率注入缺陷在优化器更新阶段首错 Top-1 定位正确。该数据仍是小型确定性训练步基准，不覆盖多步收敛、Adam、混合精度、分布式训练或真实项目端到端准确率，详见 `docs/M12_TRAINING_PARITY.md`。
 
 `workflow-e2e-v1` 通过统一的 `migrate run` 状态机验证扫描、改写、程序执行、Trace 比较和回滚：在 PyTorch 2.6.0+cu124 与 MindSpore 2.9.0 环境中，4/4 固定场景符合预期，1/1 真实双框架应用验证通过，2/2 故障注入完整恢复源码，1/1 dtype 偏差首错 Top-1 正确并触发回滚。该集合只包含一个两算子可执行样例和两个已标注故障，证明闭环控制与恢复能力，不代表真实项目迁移准确率，详见 `docs/M13_END_TO_END_WORKFLOW.md`。
+
+`real-model-dual-runtime-v1` 固定 PyTorch Examples MNIST 的 141 行上游源码，并对其中分类器头构造 25 行离线可执行切片。工作流自动启动 PyTorch 2.6.0+cu124 与 MindSpore 2.9.0、生成 Trace、应用 6 个自动 Patch，并将 1 次人工功能适配单独计数：3/3 场景通过，1/1 正常迁移等价，2/2 故障注入按字节回滚，自动 Patch 采用率为 6/7（85.7143%）。运行切片的 5/5 调用映射覆盖率为 100%，但该数字不代表完整上游程序或未知项目的迁移准确率，详见 `docs/M14_REAL_MODEL_DUAL_RUNTIME.md`。
 
 随仓库固定的 `security-regression-v1` 在不执行危险 Shell 的情况下测试 12 个本地路径/权限攻击样例和 10 个正常样例：12/12 被介入（10 个硬拦截、2 个确认门禁），10/10 正常样例放行。该数据只适用于当前确定性回归集，不能外推到未知攻击、容器逃逸、提示注入或网络外传，详见 `docs/M8_SECURITY_BENCHMARK.md`。
 

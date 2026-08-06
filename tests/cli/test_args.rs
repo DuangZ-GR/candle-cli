@@ -84,6 +84,34 @@ fn parses_migrate_run_mode() {
                 arguments.target_trace.unwrap().to_string_lossy(),
                 "mindspore.jsonl"
             );
+            assert!(arguments.runtime_manifest.is_none());
+        }
+        other => panic!("unexpected command: {other:?}"),
+    }
+}
+
+#[test]
+fn parses_migrate_run_runtime_manifest() {
+    let cli = Cli::parse_from([
+        "candle-cli",
+        "migrate",
+        "run",
+        "project",
+        "--apply",
+        "--runtime-manifest",
+        "runtime.json",
+    ]);
+
+    match cli.command {
+        Some(CommandMode::Migrate {
+            command: MigrateCommand::Run(arguments),
+        }) => {
+            assert!(arguments.apply);
+            assert_eq!(
+                arguments.runtime_manifest.unwrap().to_string_lossy(),
+                "runtime.json"
+            );
+            assert!(arguments.validate_program.is_none());
         }
         other => panic!("unexpected command: {other:?}"),
     }
