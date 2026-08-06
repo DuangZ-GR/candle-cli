@@ -5,7 +5,7 @@
 
 [English](README.md) | [中文](README_CN.md)
 
-`candle-cli` 是面向 PyTorch→MindSpore 工程迁移的 Rust-first 智能诊断 CLI：当前提供确定性 AST 扫描与安全 Agent 基础设施，目标是结合双框架运行证据定位首个语义偏差，并生成经过验证的修复。
+`candle-cli` 是面向 PyTorch→MindSpore 工程迁移的 Rust-first 智能诊断 CLI：通过确定性 AST 扫描、官方映射、双框架运行证据和事务式 Patch，定位首个语义偏差并生成可验证、可回滚的迁移结果。
 
 项目的一句话定位、可复现指标、推荐简历表述与能力边界见 [`docs/RESUME_PROJECT_SUMMARY_CN.md`](docs/RESUME_PROJECT_SUMMARY_CN.md)。
 
@@ -23,6 +23,7 @@
 - **迁移静态扫描** — 无需安装 PyTorch/MindSpore，解析 import 别名、Tensor Method、源码位置和参数信息
 - **组件级差分验证** — 分离采集 PyTorch/MindSpore 前向与梯度轨迹，评估等价性、缺陷分类和首错 Top-1
 - **可验证迁移重写** — 最小化预览 API/dtype 修改，事务式应用，显式执行验证命令，并支持校验和保护的回滚
+- **端到端迁移闭环** — 单个命令串联扫描、预览、应用、程序验证、Trace 比较和失败回滚，输出统一 JSON/Markdown 报告
 
 ## 快速开始
 
@@ -73,6 +74,7 @@ cargo run -- prompt "你好，介绍一下你自己"
 | `cargo run -- context-harness` | 测量确定性轮次裁切的 Token 减少与完整性 |
 | `cargo run -- doctor` | 打印运行时状态 |
 | `cargo run -- migrate scan <path>` | 扫描 PyTorch API 并输出版本化 JSON 报告 |
+| `cargo run -- migrate run <path>` | 执行扫描、改写、验证、Trace 对比和回滚闭环 |
 | `cargo run -- migrate map <api>` | 查询带框架版本与官方证据的 MindSpore 映射 |
 | `cargo run -- migrate import-msprobe ...` | 将 msprobe `dump.json` 归一化为标准 JSONL |
 | `cargo run -- migrate compare <pt.jsonl> <ms.jsonl>` | 对齐双框架轨迹并定位首个可观测偏差 |
@@ -97,6 +99,15 @@ cargo run -- migrate map torch.arange --pretty
 # 只生成最小 Patch 预览，不修改源码
 cargo run -- migrate rewrite ./project --pretty
 
+# 统一预览工作流并生成 Markdown 报告
+cargo run -- migrate run ./project \
+  --format markdown --output migration-report.md
+
+# 应用补丁并强制在 MindSpore 环境执行验证
+cargo run -- migrate run ./project --apply \
+  --validate-program /path/to/mindspore/python \
+  --validate-arg=-m --validate-arg=pytest
+
 # 应用精确映射并直接执行验证程序（不经过 shell）
 cargo run -- migrate rewrite ./project --apply \
   --validate-program python --validate-arg=-m --validate-arg=pytest
@@ -112,7 +123,7 @@ cargo run -- migrate rollback \
 
 固定的 `torch2ms-scanner-v1` 语法覆盖集包含 50 个任务。当前版本在该公开、随仓库发布的开发评测集上为 50/50 精确匹配、precision 100%、recall 100%。该结果仅说明这些已收录语法模式通过，不能代表未知真实项目的总体准确率；后续将另建独立真实项目测试集。
 
-确定性重写默认只预览。它解析 import 别名，只修改已接受映射的调用名称及其内部受支持的 `dtype=` 常量，不重排周边代码或注释；标记为 `difference` 的映射必须显式传入 `--include-differences`。应用前会校验预览时的源码哈希，随后在同一项目的 `.candle-cli/backups` 中保存备份和事务清单。验证命令失败或超时时会自动恢复全部源码；未提供 `--validate-program` 的应用结果会明确标记为 `verified: false`。固定的 `rewrite-cases-v1` 合成开发集包含 14 个案例，当前精确 Patch、安全跳过和语法有效率均为 100%；这不是 held-out 或真实项目评测结果。
+确定性重写默认只预览。它解析 import 别名，只修改已接受映射的调用名称及其内部受支持的 `dtype=` 常量，不重排周边代码或注释；标记为 `difference` 的映射必须显式传入 `--include-differences`。应用前会校验预览时的源码哈希，随后在同一项目的 `.candle-cli/backups` 中保存备份和事务清单。验证命令失败或超时时会自动恢复全部源码；未提供 `--validate-program` 的应用结果会明确标记为 `verified: false`。固定的 `rewrite-cases-v1` 合成开发集包含 15 个案例，当前精确 Patch、安全跳过和语法有效率均为 100%；其中专门包含混合迁移文件，确保仍有 PyTorch 引用时不会误删 import。这不是 held-out 或真实项目评测结果。
 
 固定的 `real-projects-v1` 增加了真实项目覆盖审计，包含 PyTorch Examples、nanoGPT、DETR 的 25 个文件与 4,436 行代码。在知识库快照 `ms2.9.0-pt2.1-2026-08-05.1` 下，25/25 文件扫描无问题，但当前只映射 132/545 个调用发现（24.22%）和 21/162 个唯一 API（12.96%）。exact-only 策略在 18 个文件中产生 71 个调用改写，18/18 个预览保持语法有效。这些是静态覆盖与语法指标，不是运行时迁移准确率，详见 `docs/M6_REAL_PROJECT_BASELINE.md`。
 
@@ -121,6 +132,10 @@ cargo run -- migrate rollback \
 带版本门禁的运行微基准可分别在 PyTorch 与 MindSpore 环境采集 5 条确定性 API 链，再通过公共轨迹比较器核对返回结构、dtype、shape、NaN/Inf 和数值摘要。`runtime-parity-v2` 已在 Linux 的 PyTorch 2.6.0+cu124 与 MindSpore 2.9.0 环境完成真实双端采集：两端均为 5/5 案例、10/10 调用成功，5/5 案例等价，运行一致率与分类准确率均为 100%，版本门禁通过。该数据只代表基础前向 API 微基准，不代表真实项目端到端迁移准确率，详见 `docs/M7_RUNTIME_PARITY.md`。
 
 `runtime-components-v1` 进一步覆盖 MLP、CNN、输入/权重梯度、BatchNorm 推理，以及 dtype 误转、默认训练模式和缺失算子三类固定偏差。Linux 真实双端采集完成 7/7 案例和每端 12/12 调用记录；4/4 等价组件通过，3/3 留出偏差的类别与首错 Top-1 正确，梯度案例 1/1 一致。该集合仍是小型确定性组件与故障注入，不是完整项目迁移准确率，详见 `docs/M11_COMPONENT_PARITY.md`。
+
+`runtime-training-v1` 将验证扩展到最小训练步骤：前向输出、MSE loss、参数梯度和 SGD 一步更新后的参数快照。Linux 真实双端采集使用 PyTorch 2.6.0+cu124 与 MindSpore 2.9.0，两端均完成 3/3 案例和 12/12 调用记录；2/2 等价训练步骤通过，1/1 学习率注入缺陷在优化器更新阶段首错 Top-1 定位正确。该数据仍是小型确定性训练步基准，不覆盖多步收敛、Adam、混合精度、分布式训练或真实项目端到端准确率，详见 `docs/M12_TRAINING_PARITY.md`。
+
+`workflow-e2e-v1` 通过统一的 `migrate run` 状态机验证扫描、改写、程序执行、Trace 比较和回滚：在 PyTorch 2.6.0+cu124 与 MindSpore 2.9.0 环境中，4/4 固定场景符合预期，1/1 真实双框架应用验证通过，2/2 故障注入完整恢复源码，1/1 dtype 偏差首错 Top-1 正确并触发回滚。该集合只包含一个两算子可执行样例和两个已标注故障，证明闭环控制与恢复能力，不代表真实项目迁移准确率，详见 `docs/M13_END_TO_END_WORKFLOW.md`。
 
 随仓库固定的 `security-regression-v1` 在不执行危险 Shell 的情况下测试 12 个本地路径/权限攻击样例和 10 个正常样例：12/12 被介入（10 个硬拦截、2 个确认门禁），10/10 正常样例放行。该数据只适用于当前确定性回归集，不能外推到未知攻击、容器逃逸、提示注入或网络外传，详见 `docs/M8_SECURITY_BENCHMARK.md`。
 

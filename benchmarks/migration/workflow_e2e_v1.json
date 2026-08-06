@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "benchmark_version": "workflow-e2e-v1",
+  "dataset_kind": "deterministic_migration_workflow_cases",
+  "source_framework": {
+    "name": "pytorch",
+    "version_prefix": "2.6"
+  },
+  "target_framework": {
+    "name": "mindspore",
+    "version_prefix": "2.9"
+  },
+  "cases": [
+    {
+      "id": "preview-safe",
+      "kind": "preview",
+      "expected_status": "previewed"
+    },
+    {
+      "id": "validated-apply",
+      "kind": "real_framework_apply",
+      "expected_status": "verified"
+    },
+    {
+      "id": "validation-failure-rollback",
+      "kind": "validation_fault",
+      "expected_status": "rolled_back"
+    },
+    {
+      "id": "dtype-divergence-rollback",
+      "kind": "trace_fault",
+      "expected_status": "rolled_back",
+      "expected_divergence": "dtype_mismatch"
+    }
+  ]
+}

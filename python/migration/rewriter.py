@@ -284,7 +284,19 @@ def plan_rewrite(
             )
             scanner.visit(tree)
             edits = scanner.edits
-            if edits and mindspore_name is None:
+            import_edits = (
+                _replace_unused_torch_imports(
+                    source,
+                    tree,
+                    _apply_edits(source, edits),
+                    mindspore_name,
+                )
+                if edits
+                else []
+            )
+            if import_edits:
+                edits.extend(import_edits)
+            elif edits and mindspore_name is None:
                 insertion = _import_insertion_offset(source, tree)
                 edits.append(
                     TextEdit(
@@ -571,6 +583,76 @@ def _mindspore_binding(tree: ast.Module) -> str | None:
                 if item.name == "mindspore":
                     return item.asname or "mindspore"
     return None
+
+
+def _replace_unused_torch_imports(
+    source: str,
+    tree: ast.Module,
+    semantically_patched: str,
+    mindspore_name: str | None,
+) -> list[TextEdit]:
+    """Replace torch-only imports when every imported binding became unused."""
+
+    candidates: list[tuple[ast.stmt, set[str]]] = []
+    for statement in tree.body:
+        if isinstance(statement, ast.Import):
+            torch_aliases = [item for item in statement.names if item.name == "torch"]
+            if not torch_aliases:
+                continue
+            if len(statement.names) != len(torch_aliases):
+                return []
+            candidates.append(
+                (
+                    statement,
+                    {item.asname or "torch" for item in torch_aliases},
+                )
+            )
+        elif isinstance(statement, ast.ImportFrom) and (
+            statement.module == "torch"
+            or (statement.module or "").startswith("torch.")
+        ):
+            if any(item.name == "*" for item in statement.names):
+                return []
+            candidates.append(
+                (
+                    statement,
+                    {item.asname or item.name for item in statement.names},
+                )
+            )
+    if not candidates:
+        return []
+    patched_tree = ast.parse(semantically_patched, type_comments=True)
+    imported_bindings = {name for _, names in candidates for name in names}
+    if any(
+        isinstance(node, ast.Name)
+        and isinstance(node.ctx, ast.Load)
+        and node.id in imported_bindings
+        for node in ast.walk(patched_tree)
+    ):
+        return []
+
+    replacements = []
+    for index, (statement, _) in enumerate(candidates):
+        replacement = (
+            "import mindspore"
+            if mindspore_name is None and index == 0
+            else "# PyTorch import removed after deterministic migration"
+        )
+        replacements.append(
+            TextEdit(
+                start=_source_offset(source, statement.lineno, statement.col_offset),
+                end=_source_offset(
+                    source,
+                    statement.end_lineno,
+                    statement.end_col_offset,
+                ),
+                replacement=replacement,
+                source_api="<import>",
+                target_api="mindspore",
+                mapping_status="exact",
+            )
+        )
+    return replacements
 
 
 def _source_offset(source: str, line_number: int, byte_column: int) -> int:

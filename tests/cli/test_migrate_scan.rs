@@ -59,6 +59,71 @@ fn migrate_scan_emits_a_json_report() {
 }
 
 #[test]
+fn migrate_run_previews_the_complete_workflow() {
+    let project = tempdir().unwrap();
+    fs::write(
+        project.path().join("model.py"),
+        "import torch\nvalue = torch.add(x, 1)\n",
+    )
+    .unwrap();
+
+    let output = Command::cargo_bin("candle-cli")
+        .unwrap()
+        .env("CANDLE_CLI_PYTHON", test_python())
+        .args(["migrate", "run"])
+        .arg(project.path())
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["record_kind"], "migration_run_report");
+    assert_eq!(report["status"], "previewed");
+    assert_eq!(report["steps"][0]["name"], "scan");
+    assert_eq!(report["steps"][1]["name"], "rewrite_preview");
+    assert_eq!(report["summary"]["finding_count"], 1);
+    assert_eq!(report["summary"]["files_changed"], 1);
+}
+
+#[test]
+fn migrate_run_validation_failure_restores_source_and_writes_report() {
+    let project = tempdir().unwrap();
+    let source = project.path().join("model.py");
+    let original = "import torch\nvalue = torch.add(x, 1)\n";
+    fs::write(&source, original).unwrap();
+    let report_path = project.path().join("migration-report.json");
+    let python = test_python();
+
+    let output = Command::cargo_bin("candle-cli")
+        .unwrap()
+        .env("CANDLE_CLI_PYTHON", &python)
+        .args(["migrate", "run"])
+        .arg(project.path())
+        .args([
+            "--apply",
+            "--validate-program",
+            &python,
+            "--validate-arg=-c",
+            "--validate-arg=raise SystemExit(7)",
+            "--output",
+        ])
+        .arg(&report_path)
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success());
+    assert_eq!(fs::read_to_string(source).unwrap(), original);
+    let report: Value = serde_json::from_slice(&fs::read(report_path).unwrap()).unwrap();
+    assert_eq!(report["status"], "rolled_back");
+    assert_eq!(report["error"]["stage"], "validation");
+    assert_eq!(report["summary"]["validation_status"], "failed");
+}
+
+#[test]
 fn migrate_scan_refuses_to_overwrite_output_without_force() {
     let project = tempdir().unwrap();
     fs::write(

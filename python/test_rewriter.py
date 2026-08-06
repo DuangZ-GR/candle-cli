@@ -25,12 +25,31 @@ def patched(plan):
     return plan.files[0].patched_source
 
 
-def test_rewrites_exact_api_and_adds_mindspore_import(tmp_path):
+def test_rewrites_exact_api_and_replaces_unused_torch_import(tmp_path):
     path = write_source(tmp_path, "import torch\ny = torch.add(x, 1)\n")
     result = patched(plan_rewrite(path))
 
-    assert result == "import mindspore\nimport torch\ny = mindspore.mint.add(x, 1)\n"
+    assert result == "import mindspore\ny = mindspore.mint.add(x, 1)\n"
     ast.parse(result)
+
+
+def test_mixed_migration_keeps_torch_import_for_unresolved_usage(tmp_path):
+    path = write_source(
+        tmp_path,
+        "import torch\na = torch.add(x, 1)\nb = torch.future_api(x)\n",
+    )
+    result = patched(plan_rewrite(path))
+
+    assert result.startswith("import mindspore\nimport torch\n")
+    assert "mindspore.mint.add" in result
+    assert "torch.future_api" in result
+
+
+def test_replaces_unused_from_import_after_call_rewrite(tmp_path):
+    path = write_source(tmp_path, "from torch import add as plus\ny = plus(x, 1)\n")
+    result = patched(plan_rewrite(path))
+
+    assert result == "import mindspore\ny = mindspore.mint.add(x, 1)\n"
 
 
 def test_resolves_torch_alias_without_reformatting_file(tmp_path):
