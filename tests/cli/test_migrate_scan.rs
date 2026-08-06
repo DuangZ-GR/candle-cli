@@ -165,6 +165,70 @@ fn migrate_run_renders_attached_data_pipeline_report() {
 }
 
 #[test]
+fn migrate_run_renders_attached_advanced_training_report() {
+    let project = tempdir().unwrap();
+    fs::write(
+        project.path().join("model.py"),
+        "import torch\nvalue = torch.add(x, 1)\n",
+    )
+    .unwrap();
+    let training_path = project.path().join("advanced-training.json");
+    let cases: Vec<Value> = (0..13)
+        .map(|index| serde_json::json!({"id": format!("case-{index}")}))
+        .collect();
+    fs::write(
+        &training_path,
+        serde_json::json!({
+            "schema_version": "1.0",
+            "record_kind": "advanced_training_report",
+            "benchmark_version": "advanced-training-v1",
+            "complete": true,
+            "passed": true,
+            "case_count": 13,
+            "evaluated_case_count": 13,
+            "fault_case_count": 5,
+            "mode_component_count": 4,
+            "multi_step_optimizer_case_count": 3,
+            "checkpoint_case_count": 1,
+            "classification_accuracy": 1.0,
+            "diagnostic_top1_accuracy": 1.0,
+            "mode_parity_rate": 1.0,
+            "multi_step_optimizer_parity_rate": 0.666667,
+            "checkpoint_restore_rate": 1.0,
+            "first_divergence_categories": {"optimizer_state_mismatch": 2},
+            "runtime_environments": {
+                "pytorch": {"device_target": "CPU"},
+                "mindspore-pynative": {"device_target": "CPU"},
+                "mindspore-graph": {"device_target": "CPU"}
+            },
+            "cases": cases
+        })
+        .to_string(),
+    )
+    .unwrap();
+
+    let output = Command::cargo_bin("candle-cli")
+        .unwrap()
+        .env("CANDLE_CLI_PYTHON", test_python())
+        .args(["migrate", "run"])
+        .arg(project.path())
+        .arg("--advanced-training-report")
+        .arg(training_path)
+        .args(["--format", "markdown"])
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let markdown = String::from_utf8(output.stdout).unwrap();
+    assert!(markdown.contains("## Graph mode and advanced training"));
+    assert!(markdown.contains("Mode/optimizer/checkpoint parity: `100.00%/66.67%/100.00%`"));
+}
+
+#[test]
 fn migrate_run_validation_failure_restores_source_and_writes_report() {
     let project = tempdir().unwrap();
     let source = project.path().join("model.py");

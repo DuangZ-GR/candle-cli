@@ -147,6 +147,8 @@ cargo run -- migrate rollback \
 
 `data-pipeline-randomness-v1` 使用 PyTorch 2.6.0+cu124/torchvision 0.21.0+cu124 与 MindSpore 2.9.0 真实运行 18 个冻结的数据输入案例，覆盖 TensorDataset/DataLoader、Normalize、Resize、ToTensor、布局、dtype、标签、掩码、尾批次、固定种子、Dropout、采样和初始化。7/7 个确定性等价案例与 3/3 个统计等价案例通过，8/8 个故障注入的类别和首差异 Top-1 全部正确。4 个随机案例均报告样本量、统计量和阈值，并明确禁止逐元素相等判定。该结果只适用于固定的小型数组和已标注故障，不代表未知项目准确率，也不表示两个框架使用相同随机算法，详见 `docs/M15_DATA_PIPELINE_RANDOMNESS.md`。
 
+`advanced-training-v1` 在 CPU 上通过 PyTorch Eager、MindSpore PYNATIVE/GRAPH 真实运行 13 个冻结案例。4/4 前向组件在三运行时一致；三个 3–5 步优化器案例中 2/3 等价，AdamW + 学习率序列暴露出可复现的跨框架优化器状态差异，没有通过放宽容差隐藏；三个独立进程 Checkpoint 恢复均成功，5/5 个编译/运行/梯度/优化器/shape 故障均正确完成 Top-1 分类。该结果来自固定小网络和短轨迹，不代表完整收敛、加速卡、混合精度或分布式训练结论，详见 `docs/M16_GRAPH_ADVANCED_TRAINING.md`。
+
 随仓库固定的 `security-regression-v1` 在不执行危险 Shell 的情况下测试 12 个本地路径/权限攻击样例和 10 个正常样例：12/12 被介入（10 个硬拦截、2 个确认门禁），10/10 正常样例放行。该数据只适用于当前确定性回归集，不能外推到未知攻击、容器逃逸、提示注入或网络外传，详见 `docs/M8_SECURITY_BENCHMARK.md`。
 
 `context-compaction-v1` 在四类确定性会话中把序列化消息的估算 Token 从 4,434 降至 1,395，减少 68.54%，同时保持系统消息和工具调用/结果配对完整。该指标使用启发式估算，不是 Provider 计费数据。Bridge 现已能在 Provider 返回字段时采集真实 Token/Cache usage，但仓库尚未固化真实 Provider 评测，因此确定性上下文报告仍将缓存命中率记为 `null`，详见 `docs/M9_CONTEXT_BENCHMARK.md` 与 `docs/M10_PROVIDER_USAGE.md`。

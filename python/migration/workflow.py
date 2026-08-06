@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from migration.advanced_training import validate_report as validate_advanced_training_report
 from migration.cli_io import configure_utf8_stdio
 from migration.data_pipeline import validate_report as validate_data_pipeline_report
 from migration.mapping import DEFAULT_KNOWLEDGE_BASE, MappingKnowledgeBase
@@ -51,6 +52,7 @@ def run_migration(
     target_trace: str | Path | None = None,
     runtime_manifest: str | Path | None = None,
     data_pipeline_report: str | Path | None = None,
+    advanced_training_report: str | Path | None = None,
     relative_tolerance: float = 1e-5,
     absolute_tolerance: float = 1e-8,
 ) -> dict[str, Any]:
@@ -109,6 +111,7 @@ def run_migration(
             "first_divergence_category": None,
             "runtime_collection": None,
             "data_pipeline": None,
+            "advanced_training": None,
         },
         "artifacts": {
             "transaction_manifest": None,
@@ -123,6 +126,9 @@ def run_migration(
             else None,
             "data_pipeline_report": str(Path(data_pipeline_report).resolve())
             if data_pipeline_report is not None
+            else None,
+            "advanced_training_report": str(Path(advanced_training_report).resolve())
+            if advanced_training_report is not None
             else None,
         },
         "error": None,
@@ -188,6 +194,32 @@ def run_migration(
             "passed" if pipeline_payload["passed"] else "attention",
             pipeline_started,
             report["summary"]["data_pipeline"],
+        )
+
+    if advanced_training_report is not None:
+        training_started = time.perf_counter()
+        try:
+            training_payload = _load_json(Path(advanced_training_report).resolve())
+            validate_advanced_training_report(training_payload)
+        except (OSError, ValueError) as error:
+            _append_step(
+                report,
+                "advanced_training_diagnostics",
+                "failed",
+                training_started,
+                {"message": str(error)},
+            )
+            _fail(report, "advanced_training_diagnostics", error)
+            return _finish(report, started)
+        report["summary"]["advanced_training"] = _advanced_training_summary(
+            training_payload
+        )
+        _append_step(
+            report,
+            "advanced_training_diagnostics",
+            "passed" if training_payload["passed"] else "attention",
+            training_started,
+            report["summary"]["advanced_training"],
         )
 
     dual_runtime: DualRuntimeManifest | None = None
@@ -569,6 +601,22 @@ def render_markdown(report: dict[str, Any]) -> str:
                 f"- Minimum stochastic sample size: `{pipeline['minimum_stochastic_sample_size']}`",
             ]
         )
+    training = summary.get("advanced_training")
+    if training is not None:
+        lines.extend(
+            [
+                "",
+                "## Graph mode and advanced training",
+                "",
+                f"- Benchmark: `{training['benchmark_version']}`",
+                f"- Complete/passed: `{training['complete']}/{training['passed']}`",
+                f"- Cases/faults: `{training['case_count']}/{training['fault_case_count']}`",
+                f"- Mode components: `{training['mode_component_count']}`",
+                f"- Multi-step optimizers/checkpoints: `{training['multi_step_optimizer_case_count']}/{training['checkpoint_case_count']}`",
+                f"- Classification/diagnostic Top-1: `{training['classification_accuracy']:.2%}/{training['diagnostic_top1_accuracy']:.2%}`",
+                f"- Mode/optimizer/checkpoint parity: `{training['mode_parity_rate']:.2%}/{training['multi_step_optimizer_parity_rate']:.2%}/{training['checkpoint_restore_rate']:.2%}`",
+            ]
+        )
     lines.extend(
         [
             "",
@@ -712,6 +760,30 @@ def _data_pipeline_summary(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _advanced_training_summary(payload: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "benchmark_version": payload["benchmark_version"],
+        "complete": payload["complete"],
+        "passed": payload["passed"],
+        "case_count": payload["case_count"],
+        "fault_case_count": payload["fault_case_count"],
+        "mode_component_count": payload["mode_component_count"],
+        "multi_step_optimizer_case_count": payload[
+            "multi_step_optimizer_case_count"
+        ],
+        "checkpoint_case_count": payload["checkpoint_case_count"],
+        "classification_accuracy": payload["classification_accuracy"],
+        "diagnostic_top1_accuracy": payload["diagnostic_top1_accuracy"],
+        "mode_parity_rate": payload["mode_parity_rate"],
+        "multi_step_optimizer_parity_rate": payload[
+            "multi_step_optimizer_parity_rate"
+        ],
+        "checkpoint_restore_rate": payload["checkpoint_restore_rate"],
+        "first_divergence_categories": payload["first_divergence_categories"],
+        "runtime_environments": payload["runtime_environments"],
+    }
+
+
 def _rollback_after_compare_failure(
     report: dict[str, Any],
     apply_report: dict[str, Any] | None,
@@ -779,6 +851,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--target-trace")
     parser.add_argument("--runtime-manifest")
     parser.add_argument("--data-pipeline-report")
+    parser.add_argument("--advanced-training-report")
     parser.add_argument("--relative-tolerance", type=float, default=1e-5)
     parser.add_argument("--absolute-tolerance", type=float, default=1e-8)
     parser.add_argument("--output")
@@ -804,6 +877,7 @@ def main(argv: list[str] | None = None) -> int:
             target_trace=arguments.target_trace,
             runtime_manifest=arguments.runtime_manifest,
             data_pipeline_report=arguments.data_pipeline_report,
+            advanced_training_report=arguments.advanced_training_report,
             relative_tolerance=arguments.relative_tolerance,
             absolute_tolerance=arguments.absolute_tolerance,
         )

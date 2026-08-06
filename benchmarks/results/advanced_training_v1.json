@@ -1,0 +1,403 @@
+{
+  "benchmark_version": "advanced-training-v1",
+  "case_count": 13,
+  "cases": [
+    {
+      "capabilities": [
+        "mode-parity",
+        "pynative",
+        "graph",
+        "linear"
+      ],
+      "classification_correct": true,
+      "evidence": {
+        "compared_runtimes": [
+          "pytorch",
+          "mindspore-pynative",
+          "mindspore-graph"
+        ]
+      },
+      "expected_category": null,
+      "expected_equivalent": true,
+      "fault_injection": false,
+      "first_divergence_category": null,
+      "id": "linear-mode-parity",
+      "kind": "forward",
+      "localization_correct": null,
+      "passed": true,
+      "split": "development",
+      "status": "equivalent"
+    },
+    {
+      "capabilities": [
+        "mode-parity",
+        "pynative",
+        "graph",
+        "mlp"
+      ],
+      "classification_correct": true,
+      "evidence": {
+        "compared_runtimes": [
+          "pytorch",
+          "mindspore-pynative",
+          "mindspore-graph"
+        ]
+      },
+      "expected_category": null,
+      "expected_equivalent": true,
+      "fault_injection": false,
+      "first_divergence_category": null,
+      "id": "mlp-mode-parity",
+      "kind": "forward",
+      "localization_correct": null,
+      "passed": true,
+      "split": "development",
+      "status": "equivalent"
+    },
+    {
+      "capabilities": [
+        "mode-parity",
+        "pynative",
+        "graph",
+        "conv2d"
+      ],
+      "classification_correct": true,
+      "evidence": {
+        "compared_runtimes": [
+          "pytorch",
+          "mindspore-pynative",
+          "mindspore-graph"
+        ]
+      },
+      "expected_category": null,
+      "expected_equivalent": true,
+      "fault_injection": false,
+      "first_divergence_category": null,
+      "id": "conv-mode-parity",
+      "kind": "forward",
+      "localization_correct": null,
+      "passed": true,
+      "split": "development",
+      "status": "equivalent"
+    },
+    {
+      "capabilities": [
+        "mode-parity",
+        "pynative",
+        "graph",
+        "tensor-control-flow"
+      ],
+      "classification_correct": true,
+      "evidence": {
+        "compared_runtimes": [
+          "pytorch",
+          "mindspore-pynative",
+          "mindspore-graph"
+        ]
+      },
+      "expected_category": null,
+      "expected_equivalent": true,
+      "fault_injection": false,
+      "first_divergence_category": null,
+      "id": "control-flow-mode-parity",
+      "kind": "forward",
+      "localization_correct": null,
+      "passed": true,
+      "split": "development",
+      "status": "equivalent"
+    },
+    {
+      "capabilities": [
+        "multi-step",
+        "adam",
+        "loss-trajectory",
+        "optimizer-state"
+      ],
+      "classification_correct": true,
+      "evidence": {
+        "loss_trend": [
+          "decreasing",
+          "decreasing",
+          "decreasing"
+        ],
+        "steps": 5
+      },
+      "expected_category": null,
+      "expected_equivalent": true,
+      "fault_injection": false,
+      "first_divergence_category": null,
+      "id": "linear-adam-5step",
+      "kind": "training",
+      "localization_correct": null,
+      "passed": true,
+      "split": "development",
+      "status": "equivalent"
+    },
+    {
+      "capabilities": [
+        "multi-step",
+        "adamw",
+        "lr-scheduler",
+        "loss-trajectory",
+        "optimizer-state"
+      ],
+      "classification_correct": true,
+      "evidence": {
+        "loss_trend": [
+          "decreasing",
+          "decreasing",
+          "decreasing"
+        ],
+        "steps": 5
+      },
+      "expected_category": "optimizer_state_mismatch",
+      "expected_equivalent": false,
+      "fault_injection": false,
+      "first_divergence_category": "optimizer_state_mismatch",
+      "id": "mlp-adamw-schedule-5step",
+      "kind": "training",
+      "localization_correct": true,
+      "passed": true,
+      "split": "development",
+      "status": "divergent"
+    },
+    {
+      "capabilities": [
+        "multi-step",
+        "adam",
+        "gradient-accumulation",
+        "gradient-clipping"
+      ],
+      "classification_correct": true,
+      "evidence": {
+        "loss_trend": [
+          "decreasing",
+          "decreasing",
+          "decreasing"
+        ],
+        "steps": 3
+      },
+      "expected_category": null,
+      "expected_equivalent": true,
+      "fault_injection": false,
+      "first_divergence_category": null,
+      "id": "linear-accumulate-clip-3step",
+      "kind": "training",
+      "localization_correct": null,
+      "passed": true,
+      "split": "development",
+      "status": "equivalent"
+    },
+    {
+      "capabilities": [
+        "checkpoint",
+        "cross-process",
+        "parameter-name",
+        "parameter-order"
+      ],
+      "classification_correct": true,
+      "evidence": {
+        "consumer_pids": [
+          1344955,
+          1345364,
+          1351939
+        ],
+        "producer_pids": [
+          1344890,
+          1345227,
+          1351808
+        ]
+      },
+      "expected_category": null,
+      "expected_equivalent": true,
+      "fault_injection": false,
+      "first_divergence_category": null,
+      "id": "checkpoint-cross-process",
+      "kind": "checkpoint",
+      "localization_correct": null,
+      "passed": true,
+      "split": "development",
+      "status": "equivalent"
+    },
+    {
+      "capabilities": [
+        "fault-localization",
+        "graph",
+        "compile-stage"
+      ],
+      "classification_correct": true,
+      "evidence": {
+        "error_type": "AttributeError",
+        "phase": "compile"
+      },
+      "expected_category": "graph_compile_failure",
+      "expected_equivalent": false,
+      "fault_injection": true,
+      "first_divergence_category": "graph_compile_failure",
+      "id": "graph-compile-failure-injected",
+      "kind": "diagnostic",
+      "localization_correct": true,
+      "passed": true,
+      "split": "heldout",
+      "status": "divergent"
+    },
+    {
+      "capabilities": [
+        "fault-localization",
+        "runtime-stage"
+      ],
+      "classification_correct": true,
+      "evidence": {
+        "error_type": "RuntimeError",
+        "phase": "runtime"
+      },
+      "expected_category": "runtime_error",
+      "expected_equivalent": false,
+      "fault_injection": true,
+      "first_divergence_category": "runtime_error",
+      "id": "runtime-error-injected",
+      "kind": "diagnostic",
+      "localization_correct": true,
+      "passed": true,
+      "split": "heldout",
+      "status": "divergent"
+    },
+    {
+      "capabilities": [
+        "fault-localization",
+        "gradient",
+        "gradient-state"
+      ],
+      "classification_correct": true,
+      "evidence": {
+        "phase": "gradient"
+      },
+      "expected_category": "gradient_mismatch",
+      "expected_equivalent": false,
+      "fault_injection": true,
+      "first_divergence_category": "gradient_mismatch",
+      "id": "gradient-mismatch-injected",
+      "kind": "diagnostic",
+      "localization_correct": true,
+      "passed": true,
+      "split": "heldout",
+      "status": "divergent"
+    },
+    {
+      "capabilities": [
+        "fault-localization",
+        "optimizer",
+        "optimizer-state"
+      ],
+      "classification_correct": true,
+      "evidence": {
+        "graph_beta2": 0.9,
+        "phase": "optimizer",
+        "pynative_beta2": 0.999
+      },
+      "expected_category": "optimizer_state_mismatch",
+      "expected_equivalent": false,
+      "fault_injection": true,
+      "first_divergence_category": "optimizer_state_mismatch",
+      "id": "optimizer-state-mismatch-injected",
+      "kind": "diagnostic",
+      "localization_correct": true,
+      "passed": true,
+      "split": "heldout",
+      "status": "divergent"
+    },
+    {
+      "capabilities": [
+        "fault-localization",
+        "graph",
+        "shape-specialization"
+      ],
+      "classification_correct": true,
+      "evidence": {
+        "error_type": "ValueError",
+        "phase": "runtime"
+      },
+      "expected_category": "shape_mismatch",
+      "expected_equivalent": false,
+      "fault_injection": true,
+      "first_divergence_category": "shape_mismatch",
+      "id": "shape-specialization-injected",
+      "kind": "diagnostic",
+      "localization_correct": true,
+      "passed": true,
+      "split": "heldout",
+      "status": "divergent"
+    }
+  ],
+  "checkpoint_case_count": 1,
+  "checkpoint_restore_rate": 1.0,
+  "classification_accuracy": 1.0,
+  "complete": true,
+  "dataset_kind": "cross_framework_advanced_training_cases",
+  "diagnostic_top1_accuracy": 1.0,
+  "evaluated_case_count": 13,
+  "fault_case_count": 5,
+  "first_divergence_categories": {
+    "gradient_mismatch": 1,
+    "graph_compile_failure": 1,
+    "optimizer_state_mismatch": 2,
+    "runtime_error": 1,
+    "shape_mismatch": 1
+  },
+  "limitations": [
+    "The suite compares deterministic CPU runs on tiny networks and does not prove full convergence.",
+    "Training trajectories contain 3-5 optimizer updates; distributed, mixed-precision and accelerator kernels are out of scope.",
+    "Held-out failures are frozen fault injections used to test phase/category localization.",
+    "Checkpoint evidence proves fresh-process restoration for this benchmark, not compatibility across all framework releases."
+  ],
+  "manifest_sha256": "5980323524250ff3345c262d2b0fba2bb656cea84c5279599bfff50174a63332",
+  "mode_component_count": 4,
+  "mode_parity_rate": 1.0,
+  "multi_step_optimizer_case_count": 3,
+  "multi_step_optimizer_parity_rate": 0.666667,
+  "passed": true,
+  "record_kind": "advanced_training_report",
+  "runtime_environments": {
+    "mindspore-graph": {
+      "device_target": "CPU",
+      "execution_mode": "graph",
+      "framework": "mindspore",
+      "framework_version": "2.9.0",
+      "platform": "Linux-6.8.0-90-generic-x86_64-with-glibc2.39",
+      "processor": "x86_64",
+      "python_version": "3.10.20"
+    },
+    "mindspore-pynative": {
+      "device_target": "CPU",
+      "execution_mode": "py_native",
+      "framework": "mindspore",
+      "framework_version": "2.9.0",
+      "platform": "Linux-6.8.0-90-generic-x86_64-with-glibc2.39",
+      "processor": "x86_64",
+      "python_version": "3.10.20"
+    },
+    "pytorch": {
+      "device_target": "CPU",
+      "execution_mode": "eager",
+      "framework": "pytorch",
+      "framework_version": "2.6.0+cu124",
+      "platform": "Linux-6.8.0-90-generic-x86_64-with-glibc2.39",
+      "processor": "x86_64",
+      "python_version": "3.10.20"
+    }
+  },
+  "schema_version": "1.0",
+  "splits": {
+    "development": {
+      "case_count": 8,
+      "pass_rate": 1.0,
+      "passed_count": 8
+    },
+    "heldout": {
+      "case_count": 5,
+      "pass_rate": 1.0,
+      "passed_count": 5
+    }
+  },
+  "version_prefixes_match": true
+}

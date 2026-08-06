@@ -143,6 +143,34 @@ fn parses_migrate_run_data_pipeline_report() {
 }
 
 #[test]
+fn parses_migrate_run_advanced_training_report() {
+    let cli = Cli::parse_from([
+        "candle-cli",
+        "migrate",
+        "run",
+        "project",
+        "--advanced-training-report",
+        "training.json",
+    ]);
+
+    match cli.command {
+        Some(CommandMode::Migrate {
+            command: MigrateCommand::Run(arguments),
+        }) => {
+            assert_eq!(
+                arguments
+                    .advanced_training_report
+                    .unwrap()
+                    .to_string_lossy(),
+                "training.json"
+            );
+            assert!(!arguments.apply);
+        }
+        other => panic!("unexpected command: {other:?}"),
+    }
+}
+
+#[test]
 fn parses_migrate_map_mode() {
     let cli = Cli::parse_from(["candle-cli", "migrate", "map", "torch.sum", "--pretty"]);
 

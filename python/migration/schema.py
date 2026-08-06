@@ -86,6 +86,8 @@ class DiagnosticCategory(StringEnum):
     REPRODUCIBILITY_MISMATCH = "reproducibility_mismatch"
     RANDOM_DISTRIBUTION_MISMATCH = "random_distribution_mismatch"
     GRAPH_COMPILE_FAILURE = "graph_compile_failure"
+    OPTIMIZER_STATE_MISMATCH = "optimizer_state_mismatch"
+    CHECKPOINT_MISMATCH = "checkpoint_mismatch"
     DEVICE_UNSUPPORTED = "device_unsupported"
     RUNTIME_ERROR = "runtime_error"
     NEEDS_MANUAL_REVIEW = "needs_manual_review"

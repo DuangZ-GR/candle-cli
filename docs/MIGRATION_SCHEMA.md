@@ -10,7 +10,7 @@
 - 未知枚举值降级为 `unknown`，但原始值可保存在 `metadata` 中供排查。
 - JSON 文件使用 UTF-8；流式轨迹使用一行一条记录的 JSON Lines。
 
-Rust 实现在 `src/migration/schema.rs`，Python 实现在 `python/migration/schema.py`。两端共同读取 `tests/fixtures/migration` 中的固定样例，防止字段名或枚举编码发生漂移。协议当前包含 `api_trace`、`diagnostic`、`scan_report`、`trace_comparison`、`msprobe_import_report`、`rewrite_plan`、`rewrite_apply_report` 和 `rewrite_rollback_report` 八种记录。
+Rust 实现在 `src/migration/schema.rs`，Python 实现在 `python/migration/schema.py`。两端共同读取 `tests/fixtures/migration` 中的固定样例，防止字段名或枚举编码发生漂移。协议覆盖 API Trace、诊断、扫描、Trace 比较、msprobe 导入、改写计划/应用/回滚和统一迁移运行报告；M15/M16 的数据流水线与高级训练报告通过严格校验后作为摘要附加到统一运行报告。
 
 ## 坐标约定
 
@@ -60,7 +60,8 @@ Rust 实现在 `src/migration/schema.rs`，Python 实现在 `python/migration/sc
 - `value_mismatch`、`gradient_mismatch`、`randomness_mismatch`；
 - `layout_mismatch`、`normalization_mismatch`、`label_dtype_mismatch`、`mask_dtype_mismatch`；
 - `batching_mismatch`、`transform_mismatch`、`reproducibility_mismatch`、`random_distribution_mismatch`；
-- `graph_compile_failure`、`device_unsupported`、`runtime_error`；
+- `graph_compile_failure`、`optimizer_state_mismatch`、`checkpoint_mismatch`；
+- `device_unsupported`、`runtime_error`；
 - `needs_manual_review`。
 
 每条诊断必须包含至少一条证据，置信度必须位于 `[0, 1]`。只有包含 `diff_validation` 证据的诊断才能设置 `verified: true`，确保“已验证”代表实际执行对拍结果，而不是模型判断。

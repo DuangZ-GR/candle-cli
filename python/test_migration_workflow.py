@@ -156,6 +156,37 @@ def write_data_pipeline_report(root: Path) -> Path:
     return path
 
 
+def write_advanced_training_report(root: Path) -> Path:
+    payload = {
+        "schema_version": "1.0",
+        "record_kind": "advanced_training_report",
+        "benchmark_version": "advanced-training-v1",
+        "complete": True,
+        "passed": True,
+        "case_count": 13,
+        "evaluated_case_count": 13,
+        "fault_case_count": 5,
+        "mode_component_count": 4,
+        "multi_step_optimizer_case_count": 3,
+        "checkpoint_case_count": 1,
+        "classification_accuracy": 1.0,
+        "diagnostic_top1_accuracy": 1.0,
+        "mode_parity_rate": 1.0,
+        "multi_step_optimizer_parity_rate": 0.666667,
+        "checkpoint_restore_rate": 1.0,
+        "first_divergence_categories": {"optimizer_state_mismatch": 2},
+        "runtime_environments": {
+            "pytorch": {"device_target": "CPU"},
+            "mindspore-pynative": {"device_target": "CPU"},
+            "mindspore-graph": {"device_target": "CPU"},
+        },
+        "cases": [{"id": f"case-{index}"} for index in range(13)],
+    }
+    path = root / "advanced-training-report.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    return path
+
+
 def test_preview_runs_scan_and_rewrite_without_modifying_source(tmp_path):
     source = write_project(tmp_path)
     original = source.read_bytes()
@@ -197,6 +228,30 @@ def test_preview_attaches_data_pipeline_diagnostics(tmp_path):
     markdown = render_markdown(report)
     assert "## Data pipeline and randomness" in markdown
     assert "First-divergence Top-1: `100.00%`" in markdown
+
+
+def test_preview_attaches_advanced_training_diagnostics(tmp_path):
+    write_project(tmp_path)
+    training_report = write_advanced_training_report(tmp_path)
+
+    report = run_migration(tmp_path, advanced_training_report=training_report)
+
+    assert report["status"] == "previewed"
+    assert [step["name"] for step in report["steps"]] == [
+        "scan",
+        "advanced_training_diagnostics",
+        "rewrite_preview",
+    ]
+    training = report["summary"]["advanced_training"]
+    assert training["case_count"] == 13
+    assert training["mode_component_count"] == 4
+    assert training["multi_step_optimizer_parity_rate"] == 0.666667
+    assert report["artifacts"]["advanced_training_report"] == str(
+        training_report.resolve()
+    )
+    markdown = render_markdown(report)
+    assert "## Graph mode and advanced training" in markdown
+    assert "Mode/optimizer/checkpoint parity: `100.00%/66.67%/100.00%`" in markdown
 
 
 def test_apply_requires_validation_command(tmp_path):

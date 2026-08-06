@@ -1,0 +1,129 @@
+{
+  "schema_version": "1.0",
+  "benchmark_version": "advanced-training-v1",
+  "dataset_kind": "cross_framework_advanced_training_cases",
+  "source_framework": {"name": "pytorch", "version_prefix": "2.6"},
+  "target_framework": {"name": "mindspore", "version_prefix": "2.9"},
+  "relative_tolerance": 0.002,
+  "absolute_tolerance": 0.00001,
+  "description": "Frozen Graph/PYNATIVE, multi-step optimizer, gradient-state and cross-process checkpoint benchmark.",
+  "cases": [
+    {
+      "id": "linear-mode-parity",
+      "split": "development",
+      "kind": "forward",
+      "capabilities": ["mode-parity", "pynative", "graph", "linear"],
+      "expected_equivalent": true,
+      "expected_category": null,
+      "fault_injection": false
+    },
+    {
+      "id": "mlp-mode-parity",
+      "split": "development",
+      "kind": "forward",
+      "capabilities": ["mode-parity", "pynative", "graph", "mlp"],
+      "expected_equivalent": true,
+      "expected_category": null,
+      "fault_injection": false
+    },
+    {
+      "id": "conv-mode-parity",
+      "split": "development",
+      "kind": "forward",
+      "capabilities": ["mode-parity", "pynative", "graph", "conv2d"],
+      "expected_equivalent": true,
+      "expected_category": null,
+      "fault_injection": false
+    },
+    {
+      "id": "control-flow-mode-parity",
+      "split": "development",
+      "kind": "forward",
+      "capabilities": ["mode-parity", "pynative", "graph", "tensor-control-flow"],
+      "expected_equivalent": true,
+      "expected_category": null,
+      "fault_injection": false
+    },
+    {
+      "id": "linear-adam-5step",
+      "split": "development",
+      "kind": "training",
+      "capabilities": ["multi-step", "adam", "loss-trajectory", "optimizer-state"],
+      "expected_equivalent": true,
+      "expected_category": null,
+      "fault_injection": false
+    },
+    {
+      "id": "mlp-adamw-schedule-5step",
+      "split": "development",
+      "kind": "training",
+      "capabilities": ["multi-step", "adamw", "lr-scheduler", "loss-trajectory", "optimizer-state"],
+      "expected_equivalent": false,
+      "expected_category": "optimizer_state_mismatch",
+      "fault_injection": false
+    },
+    {
+      "id": "linear-accumulate-clip-3step",
+      "split": "development",
+      "kind": "training",
+      "capabilities": ["multi-step", "adam", "gradient-accumulation", "gradient-clipping"],
+      "expected_equivalent": true,
+      "expected_category": null,
+      "fault_injection": false
+    },
+    {
+      "id": "checkpoint-cross-process",
+      "split": "development",
+      "kind": "checkpoint",
+      "capabilities": ["checkpoint", "cross-process", "parameter-name", "parameter-order"],
+      "expected_equivalent": true,
+      "expected_category": null,
+      "fault_injection": false
+    },
+    {
+      "id": "graph-compile-failure-injected",
+      "split": "heldout",
+      "kind": "diagnostic",
+      "capabilities": ["fault-localization", "graph", "compile-stage"],
+      "expected_equivalent": false,
+      "expected_category": "graph_compile_failure",
+      "fault_injection": true
+    },
+    {
+      "id": "runtime-error-injected",
+      "split": "heldout",
+      "kind": "diagnostic",
+      "capabilities": ["fault-localization", "runtime-stage"],
+      "expected_equivalent": false,
+      "expected_category": "runtime_error",
+      "fault_injection": true
+    },
+    {
+      "id": "gradient-mismatch-injected",
+      "split": "heldout",
+      "kind": "diagnostic",
+      "capabilities": ["fault-localization", "gradient", "gradient-state"],
+      "expected_equivalent": false,
+      "expected_category": "gradient_mismatch",
+      "fault_injection": true
+    },
+    {
+      "id": "optimizer-state-mismatch-injected",
+      "split": "heldout",
+      "kind": "diagnostic",
+      "capabilities": ["fault-localization", "optimizer", "optimizer-state"],
+      "expected_equivalent": false,
+      "expected_category": "optimizer_state_mismatch",
+      "fault_injection": true
+    },
+    {
+      "id": "shape-specialization-injected",
+      "split": "heldout",
+      "kind": "diagnostic",
+      "capabilities": ["fault-localization", "graph", "shape-specialization"],
+      "expected_equivalent": false,
+      "expected_category": "shape_mismatch",
+      "fault_injection": true
+    }
+  ]
+}
