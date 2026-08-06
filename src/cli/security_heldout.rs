@@ -1,13 +1,17 @@
 use crate::permissions::{mode::PermissionMode, policy::PermissionPolicy};
+#[cfg(unix)]
+use crate::tools::builtin::shell;
 use crate::tools::{
-    builtin::{read, shell, web_search},
+    builtin::{read, web_search},
     registry::ToolRegistry,
 };
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::{Error, Result, Write};
 use std::path::{Path, PathBuf};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+#[cfg(unix)]
+use std::time::Duration;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 const MANIFEST_JSON: &str = include_str!("../../benchmarks/security/security_heldout_v1.json");
 

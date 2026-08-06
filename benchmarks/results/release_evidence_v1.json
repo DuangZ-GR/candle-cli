@@ -123,7 +123,7 @@
     {
       "id": "security-heldout",
       "source": "benchmarks/results/security_heldout_v1.json",
-      "source_sha256": "6bc571e67232788581a292d04d50e5f12f056083bf81d061d99a76998852615c",
+      "source_sha256": "d3507bd618bd4a47233d824f99b9e93389f2d051314dace29b390f30097985d2",
       "claim_eligible": true,
       "metrics": {
         "attack_case_count": 15,
@@ -136,7 +136,7 @@
     {
       "id": "context-fact-retention",
       "source": "benchmarks/results/context_fact_retention_v2.json",
-      "source_sha256": "2f1f2a78eae54b2112bb78fc31303ef37643824c038245d7dbea1c75a5770204",
+      "source_sha256": "a5a021da4e8f3b66bfb226836c90ad3f7a491f998b88ea1669c32f5e345a8835",
       "claim_eligible": true,
       "metrics": {
         "case_count": 20,
@@ -149,7 +149,7 @@
     {
       "id": "agent-ollama-smoke",
       "source": "benchmarks/results/agent_ablation_ollama_smoke_v1.json",
-      "source_sha256": "bdd5f0b6bbd52bb07afdeafd3344166e2289422bda019dbb663a5b8d475ae6ed",
+      "source_sha256": "f890e42c3795d750d322ed8322d1315b0a2443bb064890ebb5fcb110a21f7e38",
       "claim_eligible": false,
       "metrics": {
         "run_mode": "smoke",
