@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "benchmark_version": "data-pipeline-randomness-v1",
+  "dataset_kind": "cross_framework_data_pipeline_cases",
+  "source_framework": {"name": "pytorch", "version_prefix": "2.6."},
+  "target_framework": {"name": "mindspore", "version_prefix": "2.9."},
+  "cases": [
+    {"id":"tensor-dataset-order","split":"development","capabilities":["TensorDataset","DataLoader","order"],"comparison_kind":"deterministic","expected_equivalent":true,"expected_category":null,"fault_injection":false,"thresholds":{}},
+    {"id":"dataloader-tail-batch","split":"development","capabilities":["DataLoader","tail_batch"],"comparison_kind":"deterministic","expected_equivalent":true,"expected_category":null,"fault_injection":false,"thresholds":{}},
+    {"id":"normalize-float-range","split":"development","capabilities":["Normalize","range"],"comparison_kind":"deterministic","expected_equivalent":true,"expected_category":null,"fault_injection":false,"thresholds":{"absolute_tolerance":0.00001}},
+    {"id":"resize-layout-preserved","split":"development","capabilities":["Resize","layout"],"comparison_kind":"deterministic","expected_equivalent":true,"expected_category":null,"fault_injection":false,"thresholds":{"absolute_tolerance":0.02}},
+    {"id":"to-tensor-scale-layout","split":"development","capabilities":["ToTensor","layout","range"],"comparison_kind":"deterministic","expected_equivalent":true,"expected_category":null,"fault_injection":false,"thresholds":{"absolute_tolerance":0.00001}},
+    {"id":"classification-label-semantics","split":"development","capabilities":["labels","classification"],"comparison_kind":"deterministic","expected_equivalent":true,"expected_category":null,"fault_injection":false,"thresholds":{}},
+    {"id":"boolean-mask-semantics","split":"development","capabilities":["boolean_mask"],"comparison_kind":"deterministic","expected_equivalent":true,"expected_category":null,"fault_injection":false,"thresholds":{}},
+    {"id":"layout-hwc-injected","split":"development","capabilities":["layout","HWC","CHW"],"comparison_kind":"deterministic","expected_equivalent":false,"expected_category":"layout_mismatch","fault_injection":true,"thresholds":{}},
+    {"id":"tensor-bool-injected","split":"development","capabilities":["dtype","boolean_regression"],"comparison_kind":"deterministic","expected_equivalent":false,"expected_category":"dtype_mismatch","fault_injection":true,"thresholds":{}},
+    {"id":"normalization-scale-injected","split":"heldout","capabilities":["ToTensor","normalization","range"],"comparison_kind":"deterministic","expected_equivalent":false,"expected_category":"normalization_mismatch","fault_injection":true,"thresholds":{"absolute_tolerance":0.00001}},
+    {"id":"label-float-injected","split":"heldout","capabilities":["labels","dtype"],"comparison_kind":"deterministic","expected_equivalent":false,"expected_category":"label_dtype_mismatch","fault_injection":true,"thresholds":{}},
+    {"id":"mask-int-injected","split":"heldout","capabilities":["boolean_mask","dtype"],"comparison_kind":"deterministic","expected_equivalent":false,"expected_category":"mask_dtype_mismatch","fault_injection":true,"thresholds":{}},
+    {"id":"drop-last-injected","split":"heldout","capabilities":["DataLoader","drop_last"],"comparison_kind":"deterministic","expected_equivalent":false,"expected_category":"batching_mismatch","fault_injection":true,"thresholds":{}},
+    {"id":"resize-default-injected","split":"heldout","capabilities":["Resize","default_value","interpolation"],"comparison_kind":"deterministic","expected_equivalent":false,"expected_category":"transform_mismatch","fault_injection":true,"thresholds":{"absolute_tolerance":0.02}},
+    {"id":"fixed-seed-reset-injected","split":"heldout","capabilities":["seed","reproducibility"],"comparison_kind":"fixed_seed","expected_equivalent":false,"expected_category":"reproducibility_mismatch","fault_injection":true,"thresholds":{"minimum_sample_size":128,"reproducible_required":true}},
+    {"id":"dropout-statistical","split":"development","capabilities":["Dropout","statistics"],"comparison_kind":"statistical","expected_equivalent":true,"expected_category":null,"fault_injection":false,"thresholds":{"minimum_sample_size":4096,"max_mean_delta":0.08,"max_stddev_delta":0.08,"max_probability_delta":0.05}},
+    {"id":"uniform-sampler-statistical","split":"heldout","capabilities":["sampling","statistics"],"comparison_kind":"statistical","expected_equivalent":true,"expected_category":null,"fault_injection":false,"thresholds":{"minimum_sample_size":4096,"max_mean_delta":0.08,"max_stddev_delta":0.08,"max_probability_delta":0.04}},
+    {"id":"normal-initializer-statistical","split":"heldout","capabilities":["initializer","statistics"],"comparison_kind":"statistical","expected_equivalent":true,"expected_category":null,"fault_injection":false,"thresholds":{"minimum_sample_size":4096,"max_mean_delta":0.08,"max_stddev_delta":0.08,"max_probability_delta":0.05}}
+  ]
+}

@@ -86,6 +86,26 @@ pub struct MigrationRunSummary {
     pub first_divergence_category: Option<String>,
     #[serde(default)]
     pub runtime_collection: Option<RuntimeCollectionSummary>,
+    #[serde(default)]
+    pub data_pipeline: Option<DataPipelineSummary>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DataPipelineSummary {
+    pub benchmark_version: String,
+    pub complete: bool,
+    pub passed: bool,
+    pub case_count: u64,
+    pub fault_case_count: u64,
+    pub stochastic_case_count: u64,
+    pub minimum_stochastic_sample_size: u64,
+    pub classification_accuracy: f64,
+    pub first_divergence_top1_accuracy: f64,
+    pub deterministic_equivalence_rate: f64,
+    pub statistical_equivalence_rate: f64,
+    pub first_divergence_categories: BTreeMap<String, u64>,
+    pub source_framework_version: String,
+    pub target_framework_version: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -118,6 +138,8 @@ pub struct MigrationRunArtifacts {
     pub source_trace: Option<String>,
     #[serde(default)]
     pub target_trace: Option<String>,
+    #[serde(default)]
+    pub data_pipeline_report: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -233,6 +255,51 @@ impl MigrationRunReport {
                 return Err(SchemaError::new(
                     "runtime rollback result requires rollback_performed=true",
                 ));
+            }
+        }
+        if let Some(pipeline) = &self.summary.data_pipeline {
+            validate_non_empty(
+                "data pipeline benchmark_version",
+                &pipeline.benchmark_version,
+            )?;
+            validate_non_empty(
+                "data pipeline source_framework_version",
+                &pipeline.source_framework_version,
+            )?;
+            validate_non_empty(
+                "data pipeline target_framework_version",
+                &pipeline.target_framework_version,
+            )?;
+            if pipeline.case_count < 12 || pipeline.fault_case_count < 5 {
+                return Err(SchemaError::new(
+                    "data pipeline summary does not meet the frozen case floor",
+                ));
+            }
+            if pipeline.stochastic_case_count == 0 || pipeline.minimum_stochastic_sample_size == 0 {
+                return Err(SchemaError::new(
+                    "data pipeline summary requires stochastic samples",
+                ));
+            }
+            for (name, value) in [
+                ("classification_accuracy", pipeline.classification_accuracy),
+                (
+                    "first_divergence_top1_accuracy",
+                    pipeline.first_divergence_top1_accuracy,
+                ),
+                (
+                    "deterministic_equivalence_rate",
+                    pipeline.deterministic_equivalence_rate,
+                ),
+                (
+                    "statistical_equivalence_rate",
+                    pipeline.statistical_equivalence_rate,
+                ),
+            ] {
+                if !value.is_finite() || !(0.0..=1.0).contains(&value) {
+                    return Err(SchemaError::new(format!(
+                        "data pipeline {name} must be between zero and one"
+                    )));
+                }
             }
         }
         if self.summary.trace_equivalent != Some(false)
@@ -1085,6 +1152,14 @@ pub enum DiagnosticCategory {
     ValueMismatch,
     GradientMismatch,
     RandomnessMismatch,
+    LayoutMismatch,
+    NormalizationMismatch,
+    LabelDtypeMismatch,
+    MaskDtypeMismatch,
+    BatchingMismatch,
+    TransformMismatch,
+    ReproducibilityMismatch,
+    RandomDistributionMismatch,
     GraphCompileFailure,
     DeviceUnsupported,
     RuntimeError,

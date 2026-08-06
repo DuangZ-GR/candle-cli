@@ -212,6 +212,22 @@ fn dual_runtime_migration_report_deserializes_and_validates() {
                 "rollback_performed": false,
                 "rollback_succeeded": null,
                 "metadata": {"fixture": "external-model-slice"}
+            },
+            "data_pipeline": {
+                "benchmark_version": "data-pipeline-randomness-v1",
+                "complete": true,
+                "passed": true,
+                "case_count": 18,
+                "fault_case_count": 8,
+                "stochastic_case_count": 4,
+                "minimum_stochastic_sample_size": 128,
+                "classification_accuracy": 1.0,
+                "first_divergence_top1_accuracy": 1.0,
+                "deterministic_equivalence_rate": 1.0,
+                "statistical_equivalence_rate": 1.0,
+                "first_divergence_categories": {"layout_mismatch": 1},
+                "source_framework_version": "2.6.0+cu124",
+                "target_framework_version": "2.9.0"
             }
         },
         "artifacts": {
@@ -219,6 +235,7 @@ fn dual_runtime_migration_report_deserializes_and_validates() {
             "runtime_manifest": "/workspace/project/runtime_manifest.json",
             "source_trace": "/tmp/source.jsonl",
             "target_trace": "/tmp/target.jsonl"
+            ,"data_pipeline_report": "/tmp/data-pipeline.json"
         },
         "error": null
     }))
@@ -230,5 +247,10 @@ fn dual_runtime_migration_report_deserializes_and_validates() {
     assert_eq!(
         report.artifacts.source_trace.as_deref(),
         Some("/tmp/source.jsonl")
+    );
+    assert_eq!(report.summary.data_pipeline.unwrap().case_count, 18);
+    assert_eq!(
+        report.artifacts.data_pipeline_report.as_deref(),
+        Some("/tmp/data-pipeline.json")
     );
 }

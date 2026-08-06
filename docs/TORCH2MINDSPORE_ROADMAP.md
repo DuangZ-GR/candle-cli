@@ -127,6 +127,14 @@ benchmarks/
 - `value_mismatch`：数值不一致
 - `gradient_mismatch`：梯度不一致
 - `randomness_mismatch`：随机性不一致
+- `layout_mismatch`：HWC/CHW 等布局不一致
+- `normalization_mismatch`：归一化范围或缩放不一致
+- `label_dtype_mismatch`：标签类型不一致
+- `mask_dtype_mismatch`：布尔掩码类型不一致
+- `batching_mismatch`：批大小、尾批次或 drop-last 语义不一致
+- `transform_mismatch`：Transform 类型或参数不一致
+- `reproducibility_mismatch`：固定种子重复执行不可复现
+- `random_distribution_mismatch`：随机统计分布超出冻结阈值
 - `graph_compile_failure`：图模式编译失败
 - `device_unsupported`：设备不支持
 - `runtime_error`：运行时错误

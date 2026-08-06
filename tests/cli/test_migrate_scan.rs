@@ -90,6 +90,81 @@ fn migrate_run_previews_the_complete_workflow() {
 }
 
 #[test]
+fn migrate_run_renders_attached_data_pipeline_report() {
+    let project = tempdir().unwrap();
+    fs::write(
+        project.path().join("model.py"),
+        "import torch\nvalue = torch.add(x, 1)\n",
+    )
+    .unwrap();
+    let mut cases: Vec<Value> = (0..11)
+        .map(|index| {
+            serde_json::json!({
+                "case_id": format!("deterministic-{index}"),
+                "comparison_kind": "deterministic",
+                "elementwise_compared": false
+            })
+        })
+        .collect();
+    cases.push(serde_json::json!({
+        "case_id": "random-statistical",
+        "comparison_kind": "statistical",
+        "sample_size": 128,
+        "statistics": {"source": {"mean": 0.0}, "target": {"mean": 0.0}},
+        "thresholds": {"max_mean_delta": 0.1},
+        "elementwise_compared": false
+    }));
+    let pipeline_path = project.path().join("pipeline.json");
+    fs::write(
+        &pipeline_path,
+        serde_json::json!({
+            "schema_version": "1.0",
+            "record_kind": "data_pipeline_diagnostic_report",
+            "benchmark_version": "data-pipeline-randomness-v1",
+            "dataset_kind": "cross_framework_data_pipeline_cases",
+            "complete": true,
+            "passed": true,
+            "case_count": 12,
+            "evaluated_case_count": 12,
+            "fault_case_count": 5,
+            "stochastic_case_count": 1,
+            "minimum_stochastic_sample_size": 128,
+            "classification_accuracy": 1.0,
+            "first_divergence_top1_accuracy": 1.0,
+            "deterministic_equivalence_rate": 1.0,
+            "statistical_equivalence_rate": 1.0,
+            "first_divergence_categories": {"layout_mismatch": 1},
+            "source_framework_version": "2.6.0+cu124",
+            "target_framework_version": "2.9.0",
+            "splits": {},
+            "cases": cases
+        })
+        .to_string(),
+    )
+    .unwrap();
+
+    let output = Command::cargo_bin("candle-cli")
+        .unwrap()
+        .env("CANDLE_CLI_PYTHON", test_python())
+        .args(["migrate", "run"])
+        .arg(project.path())
+        .args(["--data-pipeline-report"])
+        .arg(pipeline_path)
+        .args(["--format", "markdown"])
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let markdown = String::from_utf8(output.stdout).unwrap();
+    assert!(markdown.contains("## Data pipeline and randomness"));
+    assert!(markdown.contains("First-divergence Top-1: `100.00%`"));
+}
+
+#[test]
 fn migrate_run_validation_failure_restores_source_and_writes_report() {
     let project = tempdir().unwrap();
     let source = project.path().join("model.py");

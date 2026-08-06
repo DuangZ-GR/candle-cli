@@ -1,0 +1,439 @@
+{
+  "benchmark_version": "data-pipeline-randomness-v1",
+  "case_count": 18,
+  "cases": [
+    {
+      "case_id": "tensor-dataset-order",
+      "comparison_kind": "deterministic",
+      "elementwise_compared": false,
+      "expected_category": null,
+      "expected_equivalent": true,
+      "first_difference": null,
+      "observed_category": null,
+      "observed_equivalent": true,
+      "passed": true,
+      "sample_size": null,
+      "split": "development",
+      "statistics": null,
+      "status": "evaluated",
+      "thresholds": {}
+    },
+    {
+      "case_id": "dataloader-tail-batch",
+      "comparison_kind": "deterministic",
+      "elementwise_compared": false,
+      "expected_category": null,
+      "expected_equivalent": true,
+      "first_difference": null,
+      "observed_category": null,
+      "observed_equivalent": true,
+      "passed": true,
+      "sample_size": null,
+      "split": "development",
+      "statistics": null,
+      "status": "evaluated",
+      "thresholds": {}
+    },
+    {
+      "case_id": "normalize-float-range",
+      "comparison_kind": "deterministic",
+      "elementwise_compared": false,
+      "expected_category": null,
+      "expected_equivalent": true,
+      "first_difference": null,
+      "observed_category": null,
+      "observed_equivalent": true,
+      "passed": true,
+      "sample_size": null,
+      "split": "development",
+      "statistics": null,
+      "status": "evaluated",
+      "thresholds": {
+        "absolute_tolerance": 1e-05
+      }
+    },
+    {
+      "case_id": "resize-layout-preserved",
+      "comparison_kind": "deterministic",
+      "elementwise_compared": false,
+      "expected_category": null,
+      "expected_equivalent": true,
+      "first_difference": null,
+      "observed_category": null,
+      "observed_equivalent": true,
+      "passed": true,
+      "sample_size": null,
+      "split": "development",
+      "statistics": null,
+      "status": "evaluated",
+      "thresholds": {
+        "absolute_tolerance": 0.02
+      }
+    },
+    {
+      "case_id": "to-tensor-scale-layout",
+      "comparison_kind": "deterministic",
+      "elementwise_compared": false,
+      "expected_category": null,
+      "expected_equivalent": true,
+      "first_difference": null,
+      "observed_category": null,
+      "observed_equivalent": true,
+      "passed": true,
+      "sample_size": null,
+      "split": "development",
+      "statistics": null,
+      "status": "evaluated",
+      "thresholds": {
+        "absolute_tolerance": 1e-05
+      }
+    },
+    {
+      "case_id": "classification-label-semantics",
+      "comparison_kind": "deterministic",
+      "elementwise_compared": false,
+      "expected_category": null,
+      "expected_equivalent": true,
+      "first_difference": null,
+      "observed_category": null,
+      "observed_equivalent": true,
+      "passed": true,
+      "sample_size": null,
+      "split": "development",
+      "statistics": null,
+      "status": "evaluated",
+      "thresholds": {}
+    },
+    {
+      "case_id": "boolean-mask-semantics",
+      "comparison_kind": "deterministic",
+      "elementwise_compared": false,
+      "expected_category": null,
+      "expected_equivalent": true,
+      "first_difference": null,
+      "observed_category": null,
+      "observed_equivalent": true,
+      "passed": true,
+      "sample_size": null,
+      "split": "development",
+      "statistics": null,
+      "status": "evaluated",
+      "thresholds": {}
+    },
+    {
+      "case_id": "layout-hwc-injected",
+      "comparison_kind": "deterministic",
+      "elementwise_compared": false,
+      "expected_category": "layout_mismatch",
+      "expected_equivalent": false,
+      "first_difference": "tensor.layout",
+      "observed_category": "layout_mismatch",
+      "observed_equivalent": false,
+      "passed": true,
+      "sample_size": null,
+      "split": "development",
+      "statistics": null,
+      "status": "evaluated",
+      "thresholds": {}
+    },
+    {
+      "case_id": "tensor-bool-injected",
+      "comparison_kind": "deterministic",
+      "elementwise_compared": false,
+      "expected_category": "dtype_mismatch",
+      "expected_equivalent": false,
+      "first_difference": "tensor.dtype",
+      "observed_category": "dtype_mismatch",
+      "observed_equivalent": false,
+      "passed": true,
+      "sample_size": null,
+      "split": "development",
+      "statistics": null,
+      "status": "evaluated",
+      "thresholds": {}
+    },
+    {
+      "case_id": "normalization-scale-injected",
+      "comparison_kind": "deterministic",
+      "elementwise_compared": false,
+      "expected_category": "normalization_mismatch",
+      "expected_equivalent": false,
+      "first_difference": "tensor.max",
+      "observed_category": "normalization_mismatch",
+      "observed_equivalent": false,
+      "passed": true,
+      "sample_size": null,
+      "split": "heldout",
+      "statistics": null,
+      "status": "evaluated",
+      "thresholds": {
+        "absolute_tolerance": 1e-05
+      }
+    },
+    {
+      "case_id": "label-float-injected",
+      "comparison_kind": "deterministic",
+      "elementwise_compared": false,
+      "expected_category": "label_dtype_mismatch",
+      "expected_equivalent": false,
+      "first_difference": "labels.dtype",
+      "observed_category": "label_dtype_mismatch",
+      "observed_equivalent": false,
+      "passed": true,
+      "sample_size": null,
+      "split": "heldout",
+      "statistics": null,
+      "status": "evaluated",
+      "thresholds": {}
+    },
+    {
+      "case_id": "mask-int-injected",
+      "comparison_kind": "deterministic",
+      "elementwise_compared": false,
+      "expected_category": "mask_dtype_mismatch",
+      "expected_equivalent": false,
+      "first_difference": "mask.dtype",
+      "observed_category": "mask_dtype_mismatch",
+      "observed_equivalent": false,
+      "passed": true,
+      "sample_size": null,
+      "split": "heldout",
+      "statistics": null,
+      "status": "evaluated",
+      "thresholds": {}
+    },
+    {
+      "case_id": "drop-last-injected",
+      "comparison_kind": "deterministic",
+      "elementwise_compared": false,
+      "expected_category": "batching_mismatch",
+      "expected_equivalent": false,
+      "first_difference": "batch_sizes",
+      "observed_category": "batching_mismatch",
+      "observed_equivalent": false,
+      "passed": true,
+      "sample_size": null,
+      "split": "heldout",
+      "statistics": null,
+      "status": "evaluated",
+      "thresholds": {}
+    },
+    {
+      "case_id": "resize-default-injected",
+      "comparison_kind": "deterministic",
+      "elementwise_compared": false,
+      "expected_category": "transform_mismatch",
+      "expected_equivalent": false,
+      "first_difference": "transform.parameters",
+      "observed_category": "transform_mismatch",
+      "observed_equivalent": false,
+      "passed": true,
+      "sample_size": null,
+      "split": "heldout",
+      "statistics": null,
+      "status": "evaluated",
+      "thresholds": {
+        "absolute_tolerance": 0.02
+      }
+    },
+    {
+      "case_id": "fixed-seed-reset-injected",
+      "comparison_kind": "fixed_seed",
+      "elementwise_compared": false,
+      "expected_category": "reproducibility_mismatch",
+      "expected_equivalent": false,
+      "first_difference": "randomness.reproducible",
+      "observed_category": "reproducibility_mismatch",
+      "observed_equivalent": false,
+      "passed": true,
+      "sample_size": 128,
+      "split": "heldout",
+      "statistics": {
+        "source": {
+          "mean": 0.48134095,
+          "stddev": 0.28929087,
+          "zero_fraction": 0.0
+        },
+        "source_reproducible": true,
+        "target": {
+          "mean": 0.48242958,
+          "stddev": 0.28819749,
+          "zero_fraction": 0.0
+        },
+        "target_reproducible": false
+      },
+      "status": "evaluated",
+      "thresholds": {
+        "minimum_sample_size": 128,
+        "reproducible_required": true
+      }
+    },
+    {
+      "case_id": "dropout-statistical",
+      "comparison_kind": "statistical",
+      "elementwise_compared": false,
+      "expected_category": null,
+      "expected_equivalent": true,
+      "first_difference": null,
+      "observed_category": null,
+      "observed_equivalent": true,
+      "passed": true,
+      "sample_size": 4096,
+      "split": "development",
+      "statistics": {
+        "absolute_differences": {
+          "mean": 0.01432292,
+          "stddev": 0.00825943,
+          "zero_fraction": 0.01074218
+        },
+        "sequence_equal": false,
+        "source": {
+          "mean": 0.99251305,
+          "stddev": 0.58160865,
+          "zero_fraction": 0.25561523
+        },
+        "source_sequence_digest": "4716a3b033f71b3b9ca133ccacf4f400d029c1fd795ef06a00328395a9eec67b",
+        "target": {
+          "mean": 1.00683597,
+          "stddev": 0.57334922,
+          "zero_fraction": 0.24487305
+        },
+        "target_sequence_digest": "fd1638c21a821059857b3a7b2562555475bda4cfa2ad7bdf1218fd5957d1d7e5"
+      },
+      "status": "evaluated",
+      "thresholds": {
+        "max_mean_delta": 0.08,
+        "max_probability_delta": 0.05,
+        "max_stddev_delta": 0.08,
+        "minimum_sample_size": 4096
+      }
+    },
+    {
+      "case_id": "uniform-sampler-statistical",
+      "comparison_kind": "statistical",
+      "elementwise_compared": false,
+      "expected_category": null,
+      "expected_equivalent": true,
+      "first_difference": null,
+      "observed_category": null,
+      "observed_equivalent": true,
+      "passed": true,
+      "sample_size": 4096,
+      "split": "heldout",
+      "statistics": {
+        "absolute_differences": {
+          "frequency_0": 0.01635742,
+          "frequency_1": 0.00756836,
+          "frequency_2": 0.01293945,
+          "frequency_3": 0.01098633,
+          "mean": 0.05126954,
+          "stddev": 0.00459929,
+          "zero_fraction": 0.01635742
+        },
+        "sequence_equal": false,
+        "source": {
+          "frequency_0": 0.26123046875,
+          "frequency_1": 0.255859375,
+          "frequency_2": 0.234130859375,
+          "frequency_3": 0.248779296875,
+          "mean": 1.47045898,
+          "stddev": 1.12656418,
+          "zero_fraction": 0.26123047
+        },
+        "source_sequence_digest": "d79bbd36d56d28438f17f995f4cbcf67e82e61d9d885478bcc3b52f1db6c84dd",
+        "target": {
+          "frequency_0": 0.244873046875,
+          "frequency_1": 0.248291015625,
+          "frequency_2": 0.2470703125,
+          "frequency_3": 0.259765625,
+          "mean": 1.52172852,
+          "stddev": 1.12196489,
+          "zero_fraction": 0.24487305
+        },
+        "target_sequence_digest": "5f6c0b64f2aeb3db66d4cb595c1765546e4e8d6730e0ae080870077e6218a57d"
+      },
+      "status": "evaluated",
+      "thresholds": {
+        "max_mean_delta": 0.08,
+        "max_probability_delta": 0.04,
+        "max_stddev_delta": 0.08,
+        "minimum_sample_size": 4096
+      }
+    },
+    {
+      "case_id": "normal-initializer-statistical",
+      "comparison_kind": "statistical",
+      "elementwise_compared": false,
+      "expected_category": null,
+      "expected_equivalent": true,
+      "first_difference": null,
+      "observed_category": null,
+      "observed_equivalent": true,
+      "passed": true,
+      "sample_size": 4096,
+      "split": "heldout",
+      "statistics": {
+        "absolute_differences": {
+          "mean": 0.01208738,
+          "stddev": 0.00650834,
+          "zero_fraction": 0.0
+        },
+        "sequence_equal": false,
+        "source": {
+          "mean": 0.01977365,
+          "stddev": 1.01214272,
+          "zero_fraction": 0.0
+        },
+        "source_sequence_digest": "6bd7480b40f337da9a88087a1c54f79037bdcf85ea1973c9e01478edccadf179",
+        "target": {
+          "mean": 0.03186103,
+          "stddev": 1.00563438,
+          "zero_fraction": 0.0
+        },
+        "target_sequence_digest": "a3b11204ef35da78325a4640f440ed5bd8e61bd4cd47b9c178b4eeccf040e0e0"
+      },
+      "status": "evaluated",
+      "thresholds": {
+        "max_mean_delta": 0.08,
+        "max_probability_delta": 0.05,
+        "max_stddev_delta": 0.08,
+        "minimum_sample_size": 4096
+      }
+    }
+  ],
+  "classification_accuracy": 1.0,
+  "complete": true,
+  "dataset_kind": "cross_framework_data_pipeline_cases",
+  "deterministic_equivalence_rate": 1.0,
+  "evaluated_case_count": 18,
+  "fault_case_count": 8,
+  "first_divergence_categories": {
+    "batching_mismatch": 1,
+    "dtype_mismatch": 1,
+    "label_dtype_mismatch": 1,
+    "layout_mismatch": 1,
+    "mask_dtype_mismatch": 1,
+    "normalization_mismatch": 1,
+    "reproducibility_mismatch": 1,
+    "transform_mismatch": 1
+  },
+  "first_divergence_top1_accuracy": 1.0,
+  "minimum_stochastic_sample_size": 128,
+  "passed": true,
+  "record_kind": "data_pipeline_diagnostic_report",
+  "schema_version": "1.0",
+  "source_framework_version": "2.6.0+cu124",
+  "splits": {
+    "development": {
+      "case_count": 10,
+      "passed_case_rate": 1.0
+    },
+    "heldout": {
+      "case_count": 8,
+      "passed_case_rate": 1.0
+    }
+  },
+  "statistical_equivalence_rate": 1.0,
+  "stochastic_case_count": 4,
+  "target_framework_version": "2.9.0"
+}
