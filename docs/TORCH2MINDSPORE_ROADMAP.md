@@ -136,6 +136,8 @@ benchmarks/
 - `reproducibility_mismatch`：固定种子重复执行不可复现
 - `random_distribution_mismatch`：随机统计分布超出冻结阈值
 - `graph_compile_failure`：图模式编译失败
+- `optimizer_state_mismatch`：优化器超参数、状态槽或更新轨迹不一致
+- `checkpoint_mismatch`：Checkpoint 参数结构或恢复输出不一致
 - `device_unsupported`：设备不支持
 - `runtime_error`：运行时错误
 - `needs_manual_review`：需要人工确认
@@ -298,6 +300,9 @@ benchmarks/
 - 大模型辅助修复成功率
 - 正向等价验证通过率
 - 反向等价验证通过率
+- PYNATIVE/GRAPH 模式等价率
+- 多步优化器轨迹等价率
+- 跨进程 Checkpoint 恢复率
 - 平均诊断耗时
 - 输入、输出、缓存 Token 与估算成本
 - 工具调用失败率和重试率
@@ -377,11 +382,9 @@ benchmarks/
 
 ## 12. 立即执行顺序
 
-1. 完成 M0 基础缺陷修复和回归测试。
-2. 实现统一诊断 Schema 与错误分类。
-3. 实现 AST 扫描器及测试样例。
-4. 引入第一版固定 API 映射快照和风险报告。
-5. 在高级诊断前先建立第一批缺陷注入 Benchmark。
-6. 接入执行轨迹并实现首个差异定位。
-7. 实现确定性修复和自动重新验证。
-8. 运行消融实验并发布结果，再为确有收益的任务引入专家子 Agent。
+M0–M16 已完成并形成从静态扫描、改写、双运行时验证、回滚到数据流水线和高级训练状态的机器证据。当前顺序为：
+
+1. M17：实现“近期原文 + 结构化任务状态 + 可验证摘要”的上下文策略。
+2. 固定 Provider、模型和请求集，采集真实 Token、Cache、延迟与成本。
+3. 在相同任务、预算和超时下完成单 Agent/多 Agent 消融。
+4. M18：增加 CI Benchmark 门禁、安装包、版本、Changelog 和一键复现实验。

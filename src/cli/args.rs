@@ -69,6 +69,8 @@ pub struct RunArgs {
     pub runtime_manifest: Option<PathBuf>,
     #[arg(long)]
     pub data_pipeline_report: Option<PathBuf>,
+    #[arg(long)]
+    pub advanced_training_report: Option<PathBuf>,
     #[arg(long, default_value_t = 1e-5)]
     pub relative_tolerance: f64,
     #[arg(long, default_value_t = 1e-8)]

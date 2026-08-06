@@ -1,0 +1,566 @@
+{
+  "benchmark_version": "advanced-training-v1",
+  "case_count": 13,
+  "cases": [
+    {
+      "capabilities": [
+        "mode-parity",
+        "pynative",
+        "graph",
+        "linear"
+      ],
+      "duration_ms": 36.936,
+      "fault_injection": false,
+      "id": "linear-mode-parity",
+      "kind": "forward",
+      "measurements": {
+        "output": [
+          [
+            1.100000023841858,
+            -0.30000001192092896
+          ],
+          [
+            -1.0,
+            0.9500001072883606
+          ]
+        ],
+        "parameter_schema": [
+          {
+            "index": 0,
+            "name": "weight",
+            "shape": [
+              2,
+              2
+            ]
+          },
+          {
+            "index": 1,
+            "name": "bias",
+            "shape": [
+              2
+            ]
+          }
+        ]
+      },
+      "split": "development",
+      "status": "ok"
+    },
+    {
+      "capabilities": [
+        "mode-parity",
+        "pynative",
+        "graph",
+        "mlp"
+      ],
+      "duration_ms": 3.928,
+      "fault_injection": false,
+      "id": "mlp-mode-parity",
+      "kind": "forward",
+      "measurements": {
+        "output": [
+          [
+            0.5300000309944153
+          ],
+          [
+            -0.17000003159046173
+          ]
+        ],
+        "parameter_schema": [
+          {
+            "index": 0,
+            "name": "0.weight",
+            "shape": [
+              3,
+              2
+            ]
+          },
+          {
+            "index": 1,
+            "name": "0.bias",
+            "shape": [
+              3
+            ]
+          },
+          {
+            "index": 2,
+            "name": "2.weight",
+            "shape": [
+              1,
+              3
+            ]
+          },
+          {
+            "index": 3,
+            "name": "2.bias",
+            "shape": [
+              1
+            ]
+          }
+        ]
+      },
+      "split": "development",
+      "status": "ok"
+    },
+    {
+      "capabilities": [
+        "mode-parity",
+        "pynative",
+        "graph",
+        "conv2d"
+      ],
+      "duration_ms": 6.337,
+      "fault_injection": false,
+      "id": "conv-mode-parity",
+      "kind": "forward",
+      "measurements": {
+        "output": [
+          [
+            [
+              [
+                -0.6500000357627869,
+                -0.6999999284744263
+              ],
+              [
+                2.299999952316284,
+                -0.5
+              ]
+            ]
+          ]
+        ],
+        "parameter_schema": [
+          {
+            "index": 0,
+            "name": "weight",
+            "shape": [
+              1,
+              1,
+              2,
+              2
+            ]
+          }
+        ]
+      },
+      "split": "development",
+      "status": "ok"
+    },
+    {
+      "capabilities": [
+        "mode-parity",
+        "pynative",
+        "graph",
+        "tensor-control-flow"
+      ],
+      "duration_ms": 2.308,
+      "fault_injection": false,
+      "id": "control-flow-mode-parity",
+      "kind": "forward",
+      "measurements": {
+        "output": [
+          [
+            2.0,
+            -0.5
+          ],
+          [
+            1.0,
+            0.5
+          ]
+        ],
+        "parameter_schema": []
+      },
+      "split": "development",
+      "status": "ok"
+    },
+    {
+      "capabilities": [
+        "multi-step",
+        "adam",
+        "loss-trajectory",
+        "optimizer-state"
+      ],
+      "duration_ms": 8565.961,
+      "fault_injection": false,
+      "id": "linear-adam-5step",
+      "kind": "training",
+      "measurements": {
+        "final_parameters": [
+          0.29802536964416504,
+          -0.30244535207748413,
+          0.1971873790025711
+        ],
+        "gradient_norms": [
+          1.7307986941641882,
+          1.5110944104304136,
+          1.292864613790875,
+          1.077394894775279,
+          0.8663609835991096
+        ],
+        "learning_rates": [
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02
+        ],
+        "loss_trend": "decreasing",
+        "losses": [
+          0.6306250095367432,
+          0.5771312117576599,
+          0.531148374080658,
+          0.4927373230457306,
+          0.4618459939956665
+        ],
+        "optimizer": "adam",
+        "optimizer_state_slot_count": 6,
+        "parameter_schema": [
+          {
+            "index": 0,
+            "name": "weight",
+            "shape": [
+              1,
+              2
+            ]
+          },
+          {
+            "index": 1,
+            "name": "bias",
+            "shape": [
+              1
+            ]
+          }
+        ],
+        "step_count": 5
+      },
+      "split": "development",
+      "status": "ok"
+    },
+    {
+      "capabilities": [
+        "multi-step",
+        "adamw",
+        "lr-scheduler",
+        "loss-trajectory",
+        "optimizer-state"
+      ],
+      "duration_ms": 34.024,
+      "fault_injection": false,
+      "id": "mlp-adamw-schedule-5step",
+      "kind": "training",
+      "measurements": {
+        "final_parameters": [
+          0.24390237033367157,
+          -0.35575804114341736,
+          0.055986035615205765,
+          0.3438463509082794,
+          -0.5433828234672546,
+          0.15621811151504517,
+          0.1439223736524582,
+          -0.24387796223163605,
+          0.006256347522139549,
+          0.3437785804271698,
+          -0.6437527537345886,
+          0.15653884410858154,
+          0.24355119466781616
+        ],
+        "gradient_norms": [
+          1.0753472694611421,
+          1.057445313144947,
+          1.0417931964639113,
+          1.0307932911658617,
+          1.0246323652011469
+        ],
+        "learning_rates": [
+          0.015,
+          0.013,
+          0.009,
+          0.005,
+          0.002
+        ],
+        "loss_trend": "decreasing",
+        "losses": [
+          0.6993000507354736,
+          0.6534105539321899,
+          0.6143792867660522,
+          0.5878245830535889,
+          0.5732547640800476
+        ],
+        "optimizer": "adamw",
+        "optimizer_state_slot_count": 12,
+        "parameter_schema": [
+          {
+            "index": 0,
+            "name": "0.weight",
+            "shape": [
+              3,
+              2
+            ]
+          },
+          {
+            "index": 1,
+            "name": "0.bias",
+            "shape": [
+              3
+            ]
+          },
+          {
+            "index": 2,
+            "name": "2.weight",
+            "shape": [
+              1,
+              3
+            ]
+          },
+          {
+            "index": 3,
+            "name": "2.bias",
+            "shape": [
+              1
+            ]
+          }
+        ],
+        "step_count": 5
+      },
+      "split": "development",
+      "status": "ok"
+    },
+    {
+      "capabilities": [
+        "multi-step",
+        "adam",
+        "gradient-accumulation",
+        "gradient-clipping"
+      ],
+      "duration_ms": 25.085,
+      "fault_injection": false,
+      "id": "linear-accumulate-clip-3step",
+      "kind": "training",
+      "measurements": {
+        "accumulation_steps": 2,
+        "clip_norm": 0.25,
+        "final_parameters": [
+          0.23000654578208923,
+          -0.3700014054775238,
+          0.12999269366264343
+        ],
+        "gradient_norms": [
+          0.24999987334009777,
+          0.2499998528509899,
+          0.2499998472630511
+        ],
+        "learning_rates": [
+          0.01,
+          0.01,
+          0.01
+        ],
+        "loss_trend": "decreasing",
+        "losses": [
+          0.6306249797344208,
+          0.6029703617095947,
+          0.5771313980221748
+        ],
+        "optimizer": "adam-accumulate-clip",
+        "optimizer_state_slot_count": 6,
+        "parameter_schema": [
+          {
+            "index": 0,
+            "name": "weight",
+            "shape": [
+              1,
+              2
+            ]
+          },
+          {
+            "index": 1,
+            "name": "bias",
+            "shape": [
+              1
+            ]
+          }
+        ],
+        "pre_clip_gradient_norms": [
+          1.7307986941641882,
+          1.6209289650869778,
+          1.511096747526261
+        ],
+        "step_count": 3
+      },
+      "split": "development",
+      "status": "ok"
+    },
+    {
+      "capabilities": [
+        "checkpoint",
+        "cross-process",
+        "parameter-name",
+        "parameter-order"
+      ],
+      "duration_ms": 28698.481,
+      "fault_injection": false,
+      "id": "checkpoint-cross-process",
+      "kind": "checkpoint",
+      "measurements": {
+        "checkpoint_bytes": 1514,
+        "consumer_pid": 1344955,
+        "distinct_processes": true,
+        "output_after": [
+          [
+            1.100000023841858
+          ],
+          [
+            -1.0
+          ]
+        ],
+        "output_before": [
+          [
+            1.100000023841858
+          ],
+          [
+            -1.0
+          ]
+        ],
+        "parameter_schema_after": [
+          {
+            "index": 0,
+            "name": "weight",
+            "shape": [
+              1,
+              2
+            ]
+          },
+          {
+            "index": 1,
+            "name": "bias",
+            "shape": [
+              1
+            ]
+          }
+        ],
+        "parameter_schema_before": [
+          {
+            "index": 0,
+            "name": "weight",
+            "shape": [
+              1,
+              2
+            ]
+          },
+          {
+            "index": 1,
+            "name": "bias",
+            "shape": [
+              1
+            ]
+          }
+        ],
+        "producer_pid": 1344890,
+        "roundtrip_equivalent": true
+      },
+      "split": "development",
+      "status": "ok"
+    },
+    {
+      "capabilities": [
+        "fault-localization",
+        "graph",
+        "compile-stage"
+      ],
+      "duration_ms": 0.033,
+      "fault_injection": true,
+      "id": "graph-compile-failure-injected",
+      "kind": "diagnostic",
+      "phase": "compile",
+      "split": "heldout",
+      "status": "not_applicable"
+    },
+    {
+      "capabilities": [
+        "fault-localization",
+        "runtime-stage"
+      ],
+      "duration_ms": 0.03,
+      "fault_injection": true,
+      "id": "runtime-error-injected",
+      "kind": "diagnostic",
+      "phase": "runtime",
+      "split": "heldout",
+      "status": "not_applicable"
+    },
+    {
+      "capabilities": [
+        "fault-localization",
+        "gradient",
+        "gradient-state"
+      ],
+      "duration_ms": 6.151,
+      "fault_injection": true,
+      "id": "gradient-mismatch-injected",
+      "kind": "diagnostic",
+      "measurements": {
+        "gradient_signature": [
+          -0.8749999403953552,
+          -1.3562500476837158,
+          -0.625
+        ]
+      },
+      "phase": "gradient",
+      "split": "heldout",
+      "status": "ok"
+    },
+    {
+      "capabilities": [
+        "fault-localization",
+        "optimizer",
+        "optimizer-state"
+      ],
+      "duration_ms": 16.028,
+      "fault_injection": true,
+      "id": "optimizer-state-mismatch-injected",
+      "kind": "diagnostic",
+      "measurements": {
+        "beta2": 0.999,
+        "final_parameters": [
+          0.27903130650520325,
+          -0.32118695974349976,
+          0.17864561080932617
+        ],
+        "losses": [
+          0.6306250095367432,
+          0.5771312117576599,
+          0.531148374080658,
+          0.4927373230457306
+        ]
+      },
+      "phase": "optimizer",
+      "split": "heldout",
+      "status": "ok"
+    },
+    {
+      "capabilities": [
+        "fault-localization",
+        "graph",
+        "shape-specialization"
+      ],
+      "duration_ms": 0.028,
+      "fault_injection": true,
+      "id": "shape-specialization-injected",
+      "kind": "diagnostic",
+      "phase": "runtime",
+      "split": "heldout",
+      "status": "not_applicable"
+    }
+  ],
+  "device_target": "CPU",
+  "execution_mode": "eager",
+  "expected_version_prefix": "2.6",
+  "framework": "pytorch",
+  "framework_version": "2.6.0+cu124",
+  "pid": 1344783,
+  "platform": "Linux-6.8.0-90-generic-x86_64-with-glibc2.39",
+  "processor": "x86_64",
+  "python_version": "3.10.20",
+  "record_kind": "advanced_training_capture",
+  "runtime": "pytorch",
+  "schema_version": "1.0",
+  "status": "captured",
+  "unexpected_failures": [],
+  "version_compatible": true
+}

@@ -109,6 +109,9 @@ fn run_workflow(arguments: RunArgs) -> Result<()> {
     if let Some(report) = &arguments.data_pipeline_report {
         command.arg("--data-pipeline-report").arg(report);
     }
+    if let Some(report) = &arguments.advanced_training_report {
+        command.arg("--advanced-training-report").arg(report);
+    }
     if let Some(program) = &arguments.validate_program {
         command.arg("--validate-command").arg(program);
         command.args(&arguments.validate_args);
@@ -273,6 +276,41 @@ fn render_workflow_markdown(report: &MigrationRunReport) -> String {
             format!(
                 "- Minimum stochastic sample size: `{}`",
                 pipeline.minimum_stochastic_sample_size
+            ),
+        ]);
+    }
+    if let Some(training) = &report.summary.advanced_training {
+        lines.extend([
+            String::new(),
+            "## Graph mode and advanced training".to_string(),
+            String::new(),
+            format!(
+                "- Benchmark: `{}`",
+                escape_markdown(&training.benchmark_version)
+            ),
+            format!(
+                "- Complete/passed: `{}/{}`",
+                training.complete, training.passed
+            ),
+            format!(
+                "- Cases/faults: `{}/{}`",
+                training.case_count, training.fault_case_count
+            ),
+            format!("- Mode components: `{}`", training.mode_component_count),
+            format!(
+                "- Multi-step optimizers/checkpoints: `{}/{}`",
+                training.multi_step_optimizer_case_count, training.checkpoint_case_count
+            ),
+            format!(
+                "- Classification/diagnostic Top-1: `{:.2}%/{:.2}%`",
+                training.classification_accuracy * 100.0,
+                training.diagnostic_top1_accuracy * 100.0
+            ),
+            format!(
+                "- Mode/optimizer/checkpoint parity: `{:.2}%/{:.2}%/{:.2}%`",
+                training.mode_parity_rate * 100.0,
+                training.multi_step_optimizer_parity_rate * 100.0,
+                training.checkpoint_restore_rate * 100.0
             ),
         ]);
     }

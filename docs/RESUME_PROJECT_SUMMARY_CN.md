@@ -41,12 +41,13 @@ flowchart LR
 | 端到端迁移工作流 | 4/4 固定场景通过；1/1 真实双框架应用验证；2/2 故障完整回滚；1/1 dtype 首错 Top-1 | 两算子程序与已标注故障；证明控制流和恢复，不代表项目迁移准确率 |
 | 真实模型自动双运行时 | PyTorch Examples MNIST 分类器头 3/3 场景通过；1/1 等价迁移；2/2 字节级回滚；自动 Patch 6/7 | 25 行离线切片，不是完整 141 行程序或未知项目成功率 |
 | 数据流水线与随机性 | 18/18 真实双框架案例；8/8 故障类别与首差异 Top-1；7/7 确定性、3/3 统计等价 | 固定小型数组与故障注入；随机案例 128–4096 样本，不代表未知分布 |
+| Graph 与高级训练状态 | 13/13 分类正确；4/4 三模式组件；2/3 多步优化器等价并定位 1 个真实 AdamW 差异；3/3 跨进程 Checkpoint 恢复 | CPU 小网络、3–5 步短轨迹；不代表完整收敛或加速卡结果 |
 | 安全回归 | 12/12 攻击样例被硬拦截或进入确认门禁；10/10 正常样例放行 | 当前路径/权限回归集，不覆盖未知攻击 |
 | 上下文裁切 | 估算 Token 4,434→1,395，减少 68.54%；系统消息与工具链完整 | 启发式估算，不是 Provider 计费 Token |
 | Provider 缓存 | Bridge 已支持采集并设置完整性门禁；已发布基准仍为 `null` | 尚未固定真实 Provider 请求集，不能声称具体缓存命中率 |
-| 当前全量测试 | Rust 150/150；Python 331/331 | Linux 隔离测试目录；双框架组件、训练步、真实模型和数据流水线已真实验收 |
+| 当前全量测试 | Rust 152/152；Python 338/338 | Linux 隔离测试目录；双框架组件、训练步、真实模型、数据流水线与 Graph 高级训练已真实验收 |
 
-机器可读结果和完整限制分别位于 `benchmarks/results`、`docs/M6_REAL_PROJECT_RESULTS.md`、`docs/M7_RUNTIME_PARITY.md`、`docs/M8_SECURITY_BENCHMARK.md`、`docs/M9_CONTEXT_BENCHMARK.md`、`docs/M11_COMPONENT_PARITY.md`、`docs/M12_TRAINING_PARITY.md`、`docs/M13_END_TO_END_WORKFLOW.md`、`docs/M14_REAL_MODEL_DUAL_RUNTIME.md` 与 `docs/M15_DATA_PIPELINE_RANDOMNESS.md`。
+机器可读结果和完整限制分别位于 `benchmarks/results`、`docs/M6_REAL_PROJECT_RESULTS.md`、`docs/M7_RUNTIME_PARITY.md`、`docs/M8_SECURITY_BENCHMARK.md`、`docs/M9_CONTEXT_BENCHMARK.md`、`docs/M11_COMPONENT_PARITY.md`、`docs/M12_TRAINING_PARITY.md`、`docs/M13_END_TO_END_WORKFLOW.md`、`docs/M14_REAL_MODEL_DUAL_RUNTIME.md`、`docs/M15_DATA_PIPELINE_RANDOMNESS.md` 与 `docs/M16_GRAPH_ADVANCED_TRAINING.md`。
 
 ## 推荐简历版本
 
@@ -60,7 +61,7 @@ flowchart LR
 
 ### 建议保留的四条经历
 
-- **迁移诊断闭环：** 基于 Python AST 构建不执行目标代码的 PyTorch API 扫描器，并以版本化 Schema 串联 MindSpore 官方映射、dtype/shape/返回结构/数值/数据流水线/梯度/优化器更新 Trace 与首个偏差诊断；在 PyTorch 2.6/MindSpore 2.9 环境真实运行 18 个数据输入与随机性案例，实现 8/8 故障类别及首差异 Top-1、7/7 确定性等价和 3/3 统计等价，随机案例按 128–4096 个样本比较统计量而非逐元素值。
+- **迁移诊断闭环：** 基于 Python AST 构建不执行目标代码的 PyTorch API 扫描器，以版本化 Schema 串联官方映射、dtype/shape/返回结构/数据流水线/梯度/优化器状态与首差异诊断；在 PyTorch 2.6/MindSpore 2.9 环境完成 18 个数据随机性案例和 13 个高级训练案例，数据故障 8/8、训练阶段故障 5/5 Top-1 正确，4/4 组件通过 PYNATIVE/GRAPH，并在 3–5 步轨迹中验证 2/3 优化器等价、定位 1 个真实 AdamW 状态差异及 3/3 跨进程恢复。
 - **真实项目与安全修复：** 在 PyTorch Examples、nanoGPT、DETR 共 25 个文件、4,436 行真实代码上将调用映射覆盖率由 24.22% 提升至 44.77%，冻结规则后在 Segment Anything 留出集达到 41.98%；实现 `migrate run` 统一状态机串联扫描、Patch、验证、Trace 比较与回滚，并在 PyTorch Examples MNIST 分类器头完成 3/3 双运行时场景、1/1 等价迁移、2/2 字节级回滚和 6/7 自动 Patch。
 - **Rust/Python Agent 架构：** 使用 Rust trait 隔离运行时，Rust 负责 Agent Loop、工具注册、权限和结构化协议，持久化 Python JSONL Worker 负责 OpenAI-compatible API/本地模型与迁移分析；支持工具调用纠错、子 Agent 三步有界只读委派、超时控制和会话级运行时复用。
 - **安全、上下文与评测工程：** 将路径边界和权限决策放在工具执行层，固定回归集 12/12 攻击样例被拦截或门禁、10/10 正常样例放行；按完整用户轮次裁切上下文，在四类确定性会话中将估算 Token 减少 68.54% 并保持工具调用链完整，所有指标以版本化清单、机器可读结果和自动化防漂移测试固化。
@@ -80,16 +81,16 @@ flowchart LR
 - 不把 4 个端到端工作流场景写成真实项目迁移成功率；其中可执行程序仅有两个算子，两个失败案例是明确标注的故障注入。
 - 不把 M14 的 25 行分类器头切片写成完整 MNIST 项目迁移成功率。
 - 不把 M15 的 18 个固定案例写成未知数据流水线准确率；统计等价也不表示随机序列或 RNG 算法相同。
+- 不把 M16 的 3–5 步小网络轨迹写成完整模型收敛；2/3 优化器等价率应与已定位的 AdamW 差异一起披露。
 
 这些限定不会降低项目含金量，反而说明评测口径、数据泄漏和工程证据意识是设计的一部分。
 
 ## 下一轮最有价值的开发
 
-1. **Graph Mode 与高级训练状态：** 增加 PYNATIVE/GRAPH 编译差异、Adam/AdamW、Checkpoint 和 3–10 步短训练轨迹。
-2. **扩大真实数据覆盖：** 增加图片目录、文本序列、可变长度输入、多 worker、prefetch 和分布式 sampler 留出案例。
-3. **把数据诊断接入自动修复：** 根据布局、标签、掩码和 Transform 类别生成受约束补丁，并沿用校验和回滚门禁。
-4. **升级上下文系统：** 从直接丢弃旧轮次升级为“近期原文 + 结构化任务状态 + 可验证摘要”，同时评测 Token、任务成功率和事实保留率。
-5. **运行真实 Token/Cache 评测：** Bridge 已能聚合 input/output/cached input tokens；下一步固定 Provider、模型、请求集和价格日期，补充请求延迟、重试率、成本与缓存指标。
-6. **扩展安全留出集：** 覆盖符号链接竞态、Windows junction、压缩包逃逸、命令/提示注入、网络外传和资源耗尽，并把开发规则集与留出攻击集分离。
+1. **升级上下文系统：** 从直接丢弃旧轮次升级为“近期原文 + 结构化任务状态 + 可验证摘要”，同时评测 Token、任务成功率和事实保留率。
+2. **运行真实 Token/Cache 评测：** Bridge 已能聚合 input/output/cached input tokens；下一步固定 Provider、模型、请求集和价格日期，补充请求延迟、重试率、成本与缓存指标。
+3. **单/多 Agent 消融：** 在相同任务、预算和超时下比较通过率、工具步数、Token、耗时与人工介入次数。
+4. **完成发布闭环：** 增加 Linux/Windows CI、固定 Benchmark 门禁、安装包、版本号、Changelog 和一键复现实验。
+5. **继续拆解 AdamW 差异：** 对偏置修正、权重衰减、学习率序列和状态槽逐项消融，形成可执行迁移建议。
 
-项目已经完成真实模型双运行时和数据流水线诊断；下一步应验证 Graph Mode 与多步训练状态，再通过 CI、留出安全集和正式发布形成完整工程闭环。
+项目已经完成真实模型、数据流水线、Graph Mode 和多步训练状态的可审计验证；下一步应完成真实上下文/Token/Cache 与单多 Agent 消融，再通过 CI 和正式发布形成完整工程闭环。

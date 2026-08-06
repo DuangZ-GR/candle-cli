@@ -88,6 +88,8 @@ pub struct MigrationRunSummary {
     pub runtime_collection: Option<RuntimeCollectionSummary>,
     #[serde(default)]
     pub data_pipeline: Option<DataPipelineSummary>,
+    #[serde(default)]
+    pub advanced_training: Option<AdvancedTrainingSummary>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -106,6 +108,25 @@ pub struct DataPipelineSummary {
     pub first_divergence_categories: BTreeMap<String, u64>,
     pub source_framework_version: String,
     pub target_framework_version: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AdvancedTrainingSummary {
+    pub benchmark_version: String,
+    pub complete: bool,
+    pub passed: bool,
+    pub case_count: u64,
+    pub fault_case_count: u64,
+    pub mode_component_count: u64,
+    pub multi_step_optimizer_case_count: u64,
+    pub checkpoint_case_count: u64,
+    pub classification_accuracy: f64,
+    pub diagnostic_top1_accuracy: f64,
+    pub mode_parity_rate: f64,
+    pub multi_step_optimizer_parity_rate: f64,
+    pub checkpoint_restore_rate: f64,
+    pub first_divergence_categories: BTreeMap<String, u64>,
+    pub runtime_environments: Value,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -140,6 +161,8 @@ pub struct MigrationRunArtifacts {
     pub target_trace: Option<String>,
     #[serde(default)]
     pub data_pipeline_report: Option<String>,
+    #[serde(default)]
+    pub advanced_training_report: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1161,6 +1184,8 @@ pub enum DiagnosticCategory {
     ReproducibilityMismatch,
     RandomDistributionMismatch,
     GraphCompileFailure,
+    OptimizerStateMismatch,
+    CheckpointMismatch,
     DeviceUnsupported,
     RuntimeError,
     NeedsManualReview,
