@@ -53,6 +53,9 @@ def build_release_report(config_path: Path, repository_root: Path) -> dict[str, 
         source = _safe_source(repository_root, raw_path)
         source_bytes = source.read_bytes()
         payload = json.loads(source_bytes)
+        canonical_source_bytes = json.dumps(
+            payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+        ).encode("utf-8")
         required_true = entry.get("required_true")
         if required_true and _lookup(payload, required_true) is not True:
             raise ValueError(f"release evidence {entry_id} did not pass {required_true}")
@@ -70,7 +73,7 @@ def build_release_report(config_path: Path, repository_root: Path) -> dict[str, 
             {
                 "id": entry_id,
                 "source": raw_path.replace("\\", "/"),
-                "source_sha256": hashlib.sha256(source_bytes).hexdigest(),
+                "source_sha256": hashlib.sha256(canonical_source_bytes).hexdigest(),
                 "claim_eligible": bool(entry.get("claim_eligible", False)),
                 "metrics": metrics,
             }

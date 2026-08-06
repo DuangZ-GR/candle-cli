@@ -410,6 +410,7 @@ fn observe(
     observations.push((id, outcome));
 }
 
+#[cfg(unix)]
 fn blocked(value: bool) -> &'static str {
     if value {
         "hard_blocked"
