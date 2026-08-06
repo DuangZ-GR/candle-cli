@@ -1,10 +1,10 @@
 use crate::cli::args::{
-    CompareArgs, ImportMsprobeArgs, MapArgs, MigrateCommand, RewriteArgs, RollbackArgs, ScanArgs,
-    ScanOutputFormat,
+    CompareArgs, ImportMsprobeArgs, MapArgs, MigrateCommand, RewriteArgs, RollbackArgs, RunArgs,
+    ScanArgs, ScanOutputFormat,
 };
 use crate::migration::{
-    MappingResolution, MsprobeImportReport, RewriteApplyReport, RewritePlanReport,
-    RewriteRollbackReport, ScanReport, TraceComparisonResult,
+    MappingResolution, MigrationRunReport, MsprobeImportReport, RewriteApplyReport,
+    RewritePlanReport, RewriteRollbackReport, ScanReport, TraceComparisonResult,
 };
 use std::ffi::OsString;
 use std::io::{Error, ErrorKind, Result, Write};
@@ -13,6 +13,7 @@ use std::process::{Command, Output};
 
 pub fn run_migrate(command: MigrateCommand) -> Result<()> {
     match command {
+        MigrateCommand::Run(arguments) => run_workflow(arguments),
         MigrateCommand::Scan(arguments) => run_scan(arguments),
         MigrateCommand::Map(arguments) => run_map(arguments),
         MigrateCommand::Compare(arguments) => run_compare(arguments),
@@ -20,6 +21,185 @@ pub fn run_migrate(command: MigrateCommand) -> Result<()> {
         MigrateCommand::Rewrite(arguments) => run_rewrite(arguments),
         MigrateCommand::Rollback(arguments) => run_rollback(arguments),
     }
+}
+
+fn run_workflow(arguments: RunArgs) -> Result<()> {
+    if arguments.apply && arguments.validate_program.is_none() {
+        return Err(Error::new(
+            ErrorKind::InvalidInput,
+            "--apply requires --validate-program",
+        ));
+    }
+    if !arguments.apply
+        && (arguments.validate_program.is_some() || !arguments.validate_args.is_empty())
+    {
+        return Err(Error::new(
+            ErrorKind::InvalidInput,
+            "validation arguments require --apply",
+        ));
+    }
+    if arguments.validate_program.is_none() && !arguments.validate_args.is_empty() {
+        return Err(Error::new(
+            ErrorKind::InvalidInput,
+            "--validate-arg requires --validate-program",
+        ));
+    }
+    if arguments.source_trace.is_some() != arguments.target_trace.is_some() {
+        return Err(Error::new(
+            ErrorKind::InvalidInput,
+            "--source-trace and --target-trace must be provided together",
+        ));
+    }
+    if arguments.output.as_deref().is_some_and(Path::exists) && !arguments.force {
+        return Err(Error::new(
+            ErrorKind::AlreadyExists,
+            "output file already exists; pass --force to replace it",
+        ));
+    }
+
+    let python_root = python_root();
+    let mut command = python_command(&python_root)?;
+    command
+        .args(["-m", "migration.workflow"])
+        .arg(&arguments.path)
+        .arg("--max-file-bytes")
+        .arg(arguments.max_file_bytes.to_string())
+        .arg("--validation-timeout")
+        .arg(arguments.validation_timeout.to_string())
+        .arg("--relative-tolerance")
+        .arg(arguments.relative_tolerance.to_string())
+        .arg("--absolute-tolerance")
+        .arg(arguments.absolute_tolerance.to_string());
+    if let Some(path) = &arguments.knowledge_base {
+        command.arg("--knowledge-base").arg(path);
+    }
+    if arguments.include_differences {
+        command.arg("--include-differences");
+    }
+    if arguments.apply {
+        command.arg("--apply");
+    }
+    if arguments.allow_partial {
+        command.arg("--allow-partial");
+    }
+    if arguments.pretty {
+        command.arg("--pretty");
+    }
+    if let (Some(source), Some(target)) = (&arguments.source_trace, &arguments.target_trace) {
+        command
+            .arg("--source-trace")
+            .arg(source)
+            .arg("--target-trace")
+            .arg(target);
+    }
+    if let Some(program) = &arguments.validate_program {
+        command.arg("--validate-command").arg(program);
+        command.args(&arguments.validate_args);
+    }
+    let output = command.output().map_err(|error| {
+        Error::new(
+            error.kind(),
+            format!("failed to start migration workflow: {error}"),
+        )
+    })?;
+    if output.stdout.is_empty() {
+        let message = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(Error::other(if message.is_empty() {
+            "migration workflow produced no JSON output".to_string()
+        } else {
+            message
+        }));
+    }
+    let report: MigrationRunReport = serde_json::from_slice(&output.stdout).map_err(|error| {
+        Error::new(
+            ErrorKind::InvalidData,
+            format!("migration workflow returned invalid JSON: {error}"),
+        )
+    })?;
+    report.validate().map_err(|error| {
+        Error::new(
+            ErrorKind::InvalidData,
+            format!("migration workflow returned an invalid report: {error}"),
+        )
+    })?;
+    let rendered = match arguments.format {
+        ScanOutputFormat::Json => output.stdout,
+        ScanOutputFormat::Markdown => render_workflow_markdown(&report).into_bytes(),
+    };
+    write_report(arguments.output.as_deref(), &rendered)?;
+    if !output.status.success() {
+        return Err(Error::other(format!(
+            "migration workflow ended with status {}",
+            report.status
+        )));
+    }
+    Ok(())
+}
+
+fn render_workflow_markdown(report: &MigrationRunReport) -> String {
+    let trace_equivalent = match report.summary.trace_equivalent {
+        Some(value) => value.to_string(),
+        None => "not_run".to_string(),
+    };
+    let mut lines = vec![
+        "# Torch2MindSpore Migration Run".to_string(),
+        String::new(),
+        format!("- Run ID: `{}`", escape_markdown(&report.run_id)),
+        format!("- Mode: `{}`", escape_markdown(&report.mode_name)),
+        format!("- Status: `{}`", escape_markdown(&report.status)),
+        format!("- Verified: `{}`", report.verified),
+        format!("- Duration: `{:.3} ms`", report.duration_ms),
+        String::new(),
+        "## Summary".to_string(),
+        String::new(),
+        format!(
+            "- Files scanned: {}/{}",
+            report.summary.files_scanned, report.summary.files_discovered
+        ),
+        format!("- Findings: {}", report.summary.finding_count),
+        format!(
+            "- Rewrite edits: {} in {} file(s)",
+            report.summary.edit_count, report.summary.files_changed
+        ),
+        format!(
+            "- Validation: `{}`",
+            escape_markdown(&report.summary.validation_status)
+        ),
+        format!("- Trace equivalent: `{trace_equivalent}`"),
+        format!(
+            "- First divergence: `{}`",
+            report
+                .summary
+                .first_divergence_category
+                .as_deref()
+                .unwrap_or("none")
+        ),
+        String::new(),
+        "## Steps".to_string(),
+        String::new(),
+        "| Step | Status | Duration (ms) |".to_string(),
+        "| --- | --- | ---: |".to_string(),
+    ];
+    for step in &report.steps {
+        lines.push(format!(
+            "| `{}` | `{}` | {:.3} |",
+            escape_markdown(&step.name),
+            escape_markdown(&step.status),
+            step.duration_ms
+        ));
+    }
+    if let Some(error) = &report.error {
+        lines.extend([
+            String::new(),
+            "## Error".to_string(),
+            String::new(),
+            format!("- Stage: `{}`", escape_markdown(&error.stage)),
+            format!("- Type: `{}`", escape_markdown(&error.error_type)),
+            format!("- Message: {}", escape_markdown(&error.message)),
+        ]);
+    }
+    lines.push(String::new());
+    lines.join("\n")
 }
 
 fn run_rewrite(arguments: RewriteArgs) -> Result<()> {

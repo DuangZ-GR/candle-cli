@@ -5,7 +5,7 @@
 
 [English](README.md) | [中文](README_CN.md)
 
-`candle-cli` is a Rust-first diagnostic CLI for PyTorch-to-MindSpore migration. It currently combines deterministic AST scanning with a safety-oriented agent foundation, and is evolving toward evidence-backed first-divergence diagnosis and verified repairs.
+`candle-cli` is a Rust-first diagnostic CLI for PyTorch-to-MindSpore migration. It combines deterministic AST scanning, official mappings, cross-framework runtime evidence, and transactional patches to locate the first semantic divergence and produce verifiable, reversible migration results.
 
 ## Highlights
 
@@ -21,6 +21,7 @@
 - **Migration scanner** — discovers aliased PyTorch calls, inferred Tensor methods, source spans, and arguments without importing either framework
 - **Component parity** — captures PyTorch/MindSpore forward and gradient traces separately, then scores equivalence, defect class, and first-divergence Top-1
 - **Verified migration rewrites** — previews minimal API/dtype edits, applies them transactionally, runs an explicit validator, and supports checksum-protected rollback
+- **End-to-end migration workflow** — one command composes scan, preview, apply, program validation, trace comparison, and failure rollback into a JSON/Markdown report
 
 ## Quickstart
 
@@ -72,6 +73,7 @@ cargo run -- prompt "Hello, introduce yourself"
 | `cargo run -- context-harness` | Measure deterministic turn-compaction reduction and integrity |
 | `cargo run -- doctor` | Print runtime status |
 | `cargo run -- migrate scan <path>` | Scan PyTorch APIs and emit a versioned JSON report |
+| `cargo run -- migrate run <path>` | Run the scan, rewrite, validation, trace comparison, and rollback workflow |
 | `cargo run -- migrate map <api>` | Query a versioned MindSpore mapping with official evidence |
 | `cargo run -- migrate import-msprobe ...` | Normalize an msprobe `dump.json` into canonical JSONL |
 | `cargo run -- migrate compare <pt.jsonl> <ms.jsonl>` | Align traces and locate the first observable divergence |
@@ -105,6 +107,15 @@ cargo run -- migrate compare torch.jsonl mindspore.jsonl --pretty
 # Preview a minimal patch; source files are not changed
 cargo run -- migrate rewrite ./project --pretty
 
+# Run the unified preview workflow and write Markdown
+cargo run -- migrate run ./project \
+  --format markdown --output migration-report.md
+
+# Apply the patch and require validation in a MindSpore environment
+cargo run -- migrate run ./project --apply \
+  --validate-program /path/to/mindspore/python \
+  --validate-arg=-m --validate-arg=pytest
+
 # Apply only exact mappings and run a validator without a shell
 cargo run -- migrate rewrite ./project --apply \
   --validate-program python --validate-arg=-m --validate-arg=pytest
@@ -122,7 +133,7 @@ The checked-in `torch2ms-scanner-v1` syntax suite contains 50 tasks. This versio
 
 Runtime comparison accepts canonical traces produced by the lightweight `TraceRecorder` or imported from current msprobe API-level `dump.json` statistics. Calls are aligned through the versioned mapping snapshot and compared in order by runtime error, return structure, dtype, shape, NaN/Inf counts, and numerical summaries. The fixed `trace-defects-v1` suite contains 10 synthetic cases and currently reaches 100% classification accuracy and 100% Top-1 localization on its 8 injected defects. This is a reproducible development-set result, not a real-world generalization claim; see `docs/M4_VERIFICATION.md` for scope and limitations.
 
-Rewriting is preview-only by default. The rewriter resolves import aliases and changes only mapped call names plus supported `dtype=` constants inside accepted calls; comments and surrounding formatting remain untouched. Mappings marked `difference` require `--include-differences`. Apply verifies preview hashes, writes same-filesystem backups and a transaction manifest, and automatically restores all changed sources if the validator fails or times out. An apply without `--validate-program` is deliberately reported as `verified: false`. The fixed `rewrite-cases-v1` synthetic development set contains 14 cases and currently has 100% exact-patch, safe-skip, and syntax-valid rates; this is not a held-out or real-project benchmark.
+Rewriting is preview-only by default. The rewriter resolves import aliases and changes only mapped call names plus supported `dtype=` constants inside accepted calls; comments and surrounding formatting remain untouched. Mappings marked `difference` require `--include-differences`. Apply verifies preview hashes, writes same-filesystem backups and a transaction manifest, and automatically restores all changed sources if the validator fails or times out. An apply without `--validate-program` is deliberately reported as `verified: false`. The fixed `rewrite-cases-v1` synthetic development set contains 15 cases and currently has 100% exact-patch, safe-skip, and syntax-valid rates; it includes a mixed-migration case to ensure a still-used PyTorch import is preserved. This is not a held-out or real-project benchmark.
 
 The pinned `real-projects-v1` corpus adds an out-of-sample coverage audit over 25 files and 4,436 lines from PyTorch Examples, nanoGPT, and DETR. With knowledge snapshot `ms2.9.0-pt2.1-2026-08-05.1`, all 25 files scan without issues, while only 132/545 findings (24.22%) and 21/162 unique APIs (12.96%) are mapped. Exact-only rewriting finds 71 call edits across 18 files and all 18 previews remain syntactically valid. These are static coverage and syntax metrics, not runtime migration accuracy; see `docs/M6_REAL_PROJECT_BASELINE.md`.
 
@@ -131,6 +142,10 @@ After evidence-backed expansion to snapshot `.3`, mapped call coverage reaches 2
 The version-gated runtime parity microbenchmark captures five deterministic API chains in separate PyTorch and MindSpore environments, then evaluates return structure, dtype, shape, NaN/Inf and numeric summaries through the common trace comparator. A pinned Linux run of `runtime-parity-v2` on PyTorch 2.6.0+cu124 and MindSpore 2.9.0 captured 5/5 cases and 10/10 calls on each side; all 5 cases were equivalent, for 100% parity and classification accuracy with both version gates satisfied. This is a basic forward-API microbenchmark, not whole-project migration accuracy. See `docs/M7_RUNTIME_PARITY.md`.
 
 `runtime-components-v1` extends the same evidence path to an MLP, a CNN block, input/weight gradients, BatchNorm inference, and three frozen dtype/default-mode/missing-operator defects. A pinned Linux run captured 7/7 cases and 12/12 call records per framework: all 4 equivalent components passed, all 3 held-out defects had the correct class and first-divergence Top-1, and the gradient case was equivalent. This remains a small deterministic component/fault-injection suite, not end-to-end project migration accuracy. See `docs/M11_COMPONENT_PARITY.md`.
+
+`runtime-training-v1` extends validation to a minimal training step: forward output, MSE loss, parameter gradients, and parameter snapshots after one SGD update. A pinned Linux run on PyTorch 2.6.0+cu124 and MindSpore 2.9.0 captured 3/3 cases and 12/12 call records on each side: both equivalent training cases passed, and the frozen learning-rate fault was localized Top-1 at the optimizer update stage. This remains a small deterministic training-step benchmark, not evidence for multi-step convergence, Adam, mixed precision, distributed training, or whole-project migration accuracy. See `docs/M12_TRAINING_PARITY.md`.
+
+`workflow-e2e-v1` exercises the unified `migrate run` state machine across scanning, rewriting, program execution, trace comparison, and rollback. On PyTorch 2.6.0+cu124 and MindSpore 2.9.0, all 4 frozen scenarios matched expectations: the real cross-framework apply passed, both injected failures restored the original bytes, and the dtype fault was localized Top-1 before rollback. The suite contains one executable two-operator fixture and two labelled faults, so it demonstrates workflow control and recovery rather than whole-project migration accuracy. See `docs/M13_END_TO_END_WORKFLOW.md`.
 
 The checked-in `security-regression-v1` suite exercises 12 local path/permission attacks and 10 benign controls without running dangerous shell commands. All 12 attacks were intercepted (10 hard blocks and 2 confirmation gates), while 10/10 benign cases were allowed. These figures apply only to this deterministic regression set, not unknown attacks, container escape, prompt injection, or network exfiltration; see `docs/M8_SECURITY_BENCHMARK.md`.
 

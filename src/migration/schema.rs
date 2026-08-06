@@ -58,8 +58,160 @@ pub enum RecordKind {
     RewritePlan,
     RewriteApplyReport,
     RewriteRollbackReport,
+    MigrationRunReport,
     #[serde(other)]
     Unknown,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MigrationRunStep {
+    pub name: String,
+    pub status: String,
+    pub duration_ms: f64,
+    pub details: Value,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MigrationRunSummary {
+    pub files_discovered: u64,
+    pub files_scanned: u64,
+    pub finding_count: u64,
+    pub scan_issue_count: u64,
+    pub mapping_counts: BTreeMap<String, u64>,
+    pub files_changed: u64,
+    pub edit_count: u64,
+    pub rewrite_issue_count: u64,
+    pub validation_status: String,
+    pub trace_equivalent: Option<bool>,
+    pub first_divergence_category: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MigrationRunArtifacts {
+    pub transaction_manifest: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MigrationRunError {
+    pub stage: String,
+    #[serde(rename = "type")]
+    pub error_type: String,
+    pub message: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rollback_error: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MigrationRunReport {
+    pub schema_version: String,
+    pub record_kind: RecordKind,
+    pub run_id: String,
+    pub project_root: String,
+    #[serde(rename = "mode")]
+    pub mode_name: String,
+    pub status: String,
+    pub verified: bool,
+    pub started_at: String,
+    pub duration_ms: f64,
+    pub steps: Vec<MigrationRunStep>,
+    pub summary: MigrationRunSummary,
+    pub artifacts: MigrationRunArtifacts,
+    pub error: Option<MigrationRunError>,
+}
+
+impl MigrationRunReport {
+    pub fn validate(&self) -> Result<(), SchemaError> {
+        ensure_compatible_schema(&self.schema_version)?;
+        if self.record_kind != RecordKind::MigrationRunReport {
+            return Err(SchemaError::new(
+                "record_kind must be migration_run_report",
+            ));
+        }
+        validate_non_empty("migration run_id", &self.run_id)?;
+        validate_non_empty("migration project_root", &self.project_root)?;
+        validate_non_empty("migration started_at", &self.started_at)?;
+        if !matches!(self.mode_name.as_str(), "preview" | "apply") {
+            return Err(SchemaError::new(
+                "migration mode must be preview or apply",
+            ));
+        }
+        if !matches!(
+            self.status.as_str(),
+            "previewed" | "verified" | "divergent" | "rolled_back" | "failed"
+        ) {
+            return Err(SchemaError::new(
+                "migration run has an invalid terminal status",
+            ));
+        }
+        if !self.duration_ms.is_finite() || self.duration_ms < 0.0 {
+            return Err(SchemaError::new(
+                "migration duration_ms must be finite and non-negative",
+            ));
+        }
+        if self.steps.is_empty() {
+            return Err(SchemaError::new(
+                "migration run must contain at least one step",
+            ));
+        }
+        let mut step_names = std::collections::BTreeSet::new();
+        for step in &self.steps {
+            validate_non_empty("migration step name", &step.name)?;
+            validate_non_empty("migration step status", &step.status)?;
+            if !step.duration_ms.is_finite() || step.duration_ms < 0.0 {
+                return Err(SchemaError::new(
+                    "migration step duration must be finite and non-negative",
+                ));
+            }
+            if !step_names.insert(&step.name) {
+                return Err(SchemaError::new(
+                    "migration step names must be unique",
+                ));
+            }
+        }
+        if self.summary.files_scanned > self.summary.files_discovered {
+            return Err(SchemaError::new(
+                "migration files_scanned must not exceed files_discovered",
+            ));
+        }
+        validate_non_empty(
+            "migration validation_status",
+            &self.summary.validation_status,
+        )?;
+        if self.summary.trace_equivalent != Some(false)
+            && self.summary.first_divergence_category.is_some()
+        {
+            return Err(SchemaError::new(
+                "first divergence requires trace_equivalent=false",
+            ));
+        }
+        if self.status == "verified" && (!self.verified || self.mode_name != "apply") {
+            return Err(SchemaError::new(
+                "verified migration status requires verified apply mode",
+            ));
+        }
+        if self.verified && self.summary.validation_status != "passed" {
+            return Err(SchemaError::new(
+                "verified migration requires passed validation",
+            ));
+        }
+        let failed = matches!(self.status.as_str(), "divergent" | "rolled_back" | "failed");
+        if failed != self.error.is_some() {
+            return Err(SchemaError::new(
+                "migration failure status and error must agree",
+            ));
+        }
+        if let Some(error) = &self.error {
+            validate_non_empty("migration error stage", &error.stage)?;
+            validate_non_empty("migration error type", &error.error_type)?;
+            validate_non_empty("migration error message", &error.message)?;
+        }
+        if self.mode_name == "preview" && self.artifacts.transaction_manifest.is_some() {
+            return Err(SchemaError::new(
+                "preview migration must not contain a transaction manifest",
+            ));
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

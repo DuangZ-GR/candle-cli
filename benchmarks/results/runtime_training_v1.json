@@ -1,0 +1,121 @@
+{
+  "benchmark_version": "runtime-training-v1",
+  "case_count": 3,
+  "cases": [
+    {
+      "capabilities": [
+        "training-step",
+        "loss",
+        "gradient",
+        "optimizer",
+        "parameter-update",
+        "linear"
+      ],
+      "classification_correct": true,
+      "expected_call_index": null,
+      "expected_category": null,
+      "expected_equivalent": true,
+      "fault_injection": false,
+      "first_divergence_category": null,
+      "id": "linear-sgd-step",
+      "localization_correct": null,
+      "passed": true,
+      "source_call_index": null,
+      "source_duration_ms": 1031.219315,
+      "split": "development",
+      "status": "equivalent",
+      "target_duration_ms": 924.704778
+    },
+    {
+      "capabilities": [
+        "training-step",
+        "loss",
+        "gradient",
+        "optimizer",
+        "parameter-update",
+        "mlp"
+      ],
+      "classification_correct": true,
+      "expected_call_index": null,
+      "expected_category": null,
+      "expected_equivalent": true,
+      "fault_injection": false,
+      "first_divergence_category": null,
+      "id": "mlp-sgd-step",
+      "localization_correct": null,
+      "passed": true,
+      "source_call_index": null,
+      "source_duration_ms": 16.156856,
+      "split": "development",
+      "status": "equivalent",
+      "target_duration_ms": 372.212931
+    },
+    {
+      "capabilities": [
+        "fault-localization",
+        "training-step",
+        "optimizer",
+        "parameter-update",
+        "learning-rate"
+      ],
+      "classification_correct": true,
+      "expected_call_index": 3,
+      "expected_category": "value_mismatch",
+      "expected_equivalent": false,
+      "fault_injection": true,
+      "first_divergence_category": "value_mismatch",
+      "id": "learning-rate-mismatch",
+      "localization_correct": true,
+      "passed": true,
+      "source_call_index": 3,
+      "source_duration_ms": 4.854519,
+      "split": "heldout",
+      "status": "divergent",
+      "target_duration_ms": 246.506137
+    }
+  ],
+  "classification_accuracy": 1.0,
+  "complete": true,
+  "dataset_kind": "cross_framework_training_cases",
+  "equivalent_component_parity_rate": 1.0,
+  "evaluated_case_count": 3,
+  "first_divergence_categories": {
+    "value_mismatch": 1
+  },
+  "first_divergence_top1_accuracy": 1.0,
+  "gradient_parity_rate": 1.0,
+  "limitations": [
+    "The suite executes one deterministic CPU optimizer step on small models.",
+    "The held-out optimizer defect is a frozen learning-rate fault injection.",
+    "It does not cover optimizer state restoration, mixed precision, distributed training, or convergence.",
+    "Tensor previews are exact only for the captured prefix; large tensors also use summaries.",
+    "Passing cases does not prove end-to-end migration correctness."
+  ],
+  "manifest_sha256": "3e09222b28c85c372eb1419c5bfd985750ea5065132356ddd7e61e15236793e3",
+  "optimizer_defect_top1_accuracy": 1.0,
+  "passed": true,
+  "schema_version": "1.0",
+  "source_framework_versions": [
+    "2.6.0+cu124"
+  ],
+  "splits": {
+    "development": {
+      "case_count": 2,
+      "classification_accuracy": 1.0,
+      "first_divergence_top1_accuracy": null,
+      "passed_case_rate": 1.0
+    },
+    "heldout": {
+      "case_count": 1,
+      "classification_accuracy": 1.0,
+      "first_divergence_top1_accuracy": 1.0,
+      "passed_case_rate": 1.0
+    }
+  },
+  "target_framework_versions": [
+    "2.9.0"
+  ],
+  "training_step_parity_rate": 1.0,
+  "version_prefixes_match": true
+}
+

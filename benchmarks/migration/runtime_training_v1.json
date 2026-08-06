@@ -1,0 +1,55 @@
+{
+  "schema_version": "1.0",
+  "benchmark_version": "runtime-training-v1",
+  "dataset_kind": "cross_framework_training_cases",
+  "source_framework": {"name": "pytorch", "version_prefix": "2.6"},
+  "target_framework": {"name": "mindspore", "version_prefix": "2.9"},
+  "relative_tolerance": 0.00001,
+  "absolute_tolerance": 0.0000001,
+  "description": "Deterministic one-step training parity and frozen optimizer defect cases.",
+  "cases": [
+    {
+      "id": "linear-sgd-step",
+      "split": "development",
+      "capabilities": ["training-step", "loss", "gradient", "optimizer", "parameter-update", "linear"],
+      "expected_equivalent": true,
+      "expected_category": null,
+      "expected_call_index": null,
+      "operations": [
+        {"name": "forward", "source_api": "torch.nn.Linear", "target_api": "mindspore.nn.Dense", "semantic_role": "forward"},
+        {"name": "loss", "source_api": "torch.nn.functional.mse_loss", "target_api": "mindspore.ops.mse_loss", "semantic_role": "loss"},
+        {"name": "gradients", "source_api": "torch.autograd.grad", "target_api": "mindspore.value_and_grad", "semantic_role": "gradient"},
+        {"name": "optimizer-step", "source_api": "torch.optim.SGD.step", "target_api": "mindspore.nn.SGD", "semantic_role": "parameter_update"}
+      ]
+    },
+    {
+      "id": "mlp-sgd-step",
+      "split": "development",
+      "capabilities": ["training-step", "loss", "gradient", "optimizer", "parameter-update", "mlp"],
+      "expected_equivalent": true,
+      "expected_category": null,
+      "expected_call_index": null,
+      "operations": [
+        {"name": "forward", "source_api": "torch.nn.Sequential", "target_api": "mindspore.nn.SequentialCell", "semantic_role": "forward"},
+        {"name": "loss", "source_api": "torch.nn.functional.mse_loss", "target_api": "mindspore.ops.mse_loss", "semantic_role": "loss"},
+        {"name": "gradients", "source_api": "torch.autograd.grad", "target_api": "mindspore.value_and_grad", "semantic_role": "gradient"},
+        {"name": "optimizer-step", "source_api": "torch.optim.SGD.step", "target_api": "mindspore.nn.SGD", "semantic_role": "parameter_update"}
+      ]
+    },
+    {
+      "id": "learning-rate-mismatch",
+      "split": "heldout",
+      "capabilities": ["fault-localization", "training-step", "optimizer", "parameter-update", "learning-rate"],
+      "expected_equivalent": false,
+      "expected_category": "value_mismatch",
+      "expected_call_index": 3,
+      "fault_injection": true,
+      "operations": [
+        {"name": "forward", "source_api": "torch.nn.Linear", "target_api": "mindspore.nn.Dense", "semantic_role": "forward"},
+        {"name": "loss", "source_api": "torch.nn.functional.mse_loss", "target_api": "mindspore.ops.mse_loss", "semantic_role": "loss"},
+        {"name": "gradients", "source_api": "torch.autograd.grad", "target_api": "mindspore.value_and_grad", "semantic_role": "gradient"},
+        {"name": "optimizer-step", "source_api": "torch.optim.SGD.step", "target_api": "mindspore.nn.SGD", "semantic_role": "parameter_update"}
+      ]
+    }
+  ]
+}

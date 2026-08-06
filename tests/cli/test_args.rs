@@ -51,6 +51,45 @@ fn parses_migrate_scan_mode() {
 }
 
 #[test]
+fn parses_migrate_run_mode() {
+    let cli = Cli::parse_from([
+        "candle-cli",
+        "migrate",
+        "run",
+        "project",
+        "--apply",
+        "--validate-program",
+        "python",
+        "--validate-arg=-m",
+        "--validate-arg=pytest",
+        "--source-trace",
+        "torch.jsonl",
+        "--target-trace",
+        "mindspore.jsonl",
+    ]);
+
+    match cli.command {
+        Some(CommandMode::Migrate {
+            command: MigrateCommand::Run(arguments),
+        }) => {
+            assert_eq!(arguments.path.to_string_lossy(), "project");
+            assert!(arguments.apply);
+            assert_eq!(arguments.validate_program.as_deref(), Some("python"));
+            assert_eq!(arguments.validate_args, ["-m", "pytest"]);
+            assert_eq!(
+                arguments.source_trace.unwrap().to_string_lossy(),
+                "torch.jsonl"
+            );
+            assert_eq!(
+                arguments.target_trace.unwrap().to_string_lossy(),
+                "mindspore.jsonl"
+            );
+        }
+        other => panic!("unexpected command: {other:?}"),
+    }
+}
+
+#[test]
 fn parses_migrate_map_mode() {
     let cli = Cli::parse_from(["candle-cli", "migrate", "map", "torch.sum", "--pretty"]);
 
