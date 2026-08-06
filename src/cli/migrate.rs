@@ -106,6 +106,9 @@ fn run_workflow(arguments: RunArgs) -> Result<()> {
     if let Some(manifest) = &arguments.runtime_manifest {
         command.arg("--runtime-manifest").arg(manifest);
     }
+    if let Some(report) = &arguments.data_pipeline_report {
+        command.arg("--data-pipeline-report").arg(report);
+    }
     if let Some(program) = &arguments.validate_program {
         command.arg("--validate-command").arg(program);
         command.args(&arguments.validate_args);
@@ -234,6 +237,42 @@ fn render_workflow_markdown(report: &MigrationRunReport) -> String {
             format!(
                 "- Rollback performed/succeeded: `{}/{rollback_succeeded}`",
                 runtime.rollback_performed
+            ),
+        ]);
+    }
+    if let Some(pipeline) = &report.summary.data_pipeline {
+        lines.extend([
+            String::new(),
+            "## Data pipeline and randomness".to_string(),
+            String::new(),
+            format!(
+                "- Benchmark: `{}`",
+                escape_markdown(&pipeline.benchmark_version)
+            ),
+            format!(
+                "- Complete/passed: `{}/{}`",
+                pipeline.complete, pipeline.passed
+            ),
+            format!(
+                "- Cases/faults/stochastic: `{}/{}/{}`",
+                pipeline.case_count, pipeline.fault_case_count, pipeline.stochastic_case_count
+            ),
+            format!(
+                "- Classification accuracy: `{:.2}%`",
+                pipeline.classification_accuracy * 100.0
+            ),
+            format!(
+                "- First-divergence Top-1: `{:.2}%`",
+                pipeline.first_divergence_top1_accuracy * 100.0
+            ),
+            format!(
+                "- Deterministic/statistical equivalence: `{:.2}%/{:.2}%`",
+                pipeline.deterministic_equivalence_rate * 100.0,
+                pipeline.statistical_equivalence_rate * 100.0
+            ),
+            format!(
+                "- Minimum stochastic sample size: `{}`",
+                pipeline.minimum_stochastic_sample_size
             ),
         ]);
     }

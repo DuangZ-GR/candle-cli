@@ -145,6 +145,8 @@ cargo run -- migrate rollback \
 
 `real-model-dual-runtime-v1` 固定 PyTorch Examples MNIST 的 141 行上游源码，并对其中分类器头构造 25 行离线可执行切片。工作流自动启动 PyTorch 2.6.0+cu124 与 MindSpore 2.9.0、生成 Trace、应用 6 个自动 Patch，并将 1 次人工功能适配单独计数：3/3 场景通过，1/1 正常迁移等价，2/2 故障注入按字节回滚，自动 Patch 采用率为 6/7（85.7143%）。运行切片的 5/5 调用映射覆盖率为 100%，但该数字不代表完整上游程序或未知项目的迁移准确率，详见 `docs/M14_REAL_MODEL_DUAL_RUNTIME.md`。
 
+`data-pipeline-randomness-v1` 使用 PyTorch 2.6.0+cu124/torchvision 0.21.0+cu124 与 MindSpore 2.9.0 真实运行 18 个冻结的数据输入案例，覆盖 TensorDataset/DataLoader、Normalize、Resize、ToTensor、布局、dtype、标签、掩码、尾批次、固定种子、Dropout、采样和初始化。7/7 个确定性等价案例与 3/3 个统计等价案例通过，8/8 个故障注入的类别和首差异 Top-1 全部正确。4 个随机案例均报告样本量、统计量和阈值，并明确禁止逐元素相等判定。该结果只适用于固定的小型数组和已标注故障，不代表未知项目准确率，也不表示两个框架使用相同随机算法，详见 `docs/M15_DATA_PIPELINE_RANDOMNESS.md`。
+
 随仓库固定的 `security-regression-v1` 在不执行危险 Shell 的情况下测试 12 个本地路径/权限攻击样例和 10 个正常样例：12/12 被介入（10 个硬拦截、2 个确认门禁），10/10 正常样例放行。该数据只适用于当前确定性回归集，不能外推到未知攻击、容器逃逸、提示注入或网络外传，详见 `docs/M8_SECURITY_BENCHMARK.md`。
 
 `context-compaction-v1` 在四类确定性会话中把序列化消息的估算 Token 从 4,434 降至 1,395，减少 68.54%，同时保持系统消息和工具调用/结果配对完整。该指标使用启发式估算，不是 Provider 计费数据。Bridge 现已能在 Provider 返回字段时采集真实 Token/Cache usage，但仓库尚未固化真实 Provider 评测，因此确定性上下文报告仍将缓存命中率记为 `null`，详见 `docs/M9_CONTEXT_BENCHMARK.md` 与 `docs/M10_PROVIDER_USAGE.md`。

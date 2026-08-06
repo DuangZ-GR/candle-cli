@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from migration.cli_io import configure_utf8_stdio
+from migration.data_pipeline import validate_report as validate_data_pipeline_report
 from migration.mapping import DEFAULT_KNOWLEDGE_BASE, MappingKnowledgeBase
 from migration.rewriter import (
     DEFAULT_VALIDATION_TIMEOUT_SECONDS,
@@ -49,6 +50,7 @@ def run_migration(
     source_trace: str | Path | None = None,
     target_trace: str | Path | None = None,
     runtime_manifest: str | Path | None = None,
+    data_pipeline_report: str | Path | None = None,
     relative_tolerance: float = 1e-5,
     absolute_tolerance: float = 1e-8,
 ) -> dict[str, Any]:
@@ -106,6 +108,7 @@ def run_migration(
             "trace_equivalent": None,
             "first_divergence_category": None,
             "runtime_collection": None,
+            "data_pipeline": None,
         },
         "artifacts": {
             "transaction_manifest": None,
@@ -117,6 +120,9 @@ def run_migration(
             else None,
             "target_trace": str(Path(target_trace).resolve())
             if target_trace is not None
+            else None,
+            "data_pipeline_report": str(Path(data_pipeline_report).resolve())
+            if data_pipeline_report is not None
             else None,
         },
         "error": None,
@@ -157,6 +163,32 @@ def run_migration(
             "issue_count": scan_summary["issue_count"],
         },
     )
+
+    if data_pipeline_report is not None:
+        pipeline_started = time.perf_counter()
+        try:
+            pipeline_payload = _load_json(Path(data_pipeline_report).resolve())
+            validate_data_pipeline_report(pipeline_payload)
+        except (OSError, ValueError) as error:
+            _append_step(
+                report,
+                "data_pipeline_diagnostics",
+                "failed",
+                pipeline_started,
+                {"message": str(error)},
+            )
+            _fail(report, "data_pipeline_diagnostics", error)
+            return _finish(report, started)
+        report["summary"]["data_pipeline"] = _data_pipeline_summary(
+            pipeline_payload
+        )
+        _append_step(
+            report,
+            "data_pipeline_diagnostics",
+            "passed" if pipeline_payload["passed"] else "attention",
+            pipeline_started,
+            report["summary"]["data_pipeline"],
+        )
 
     dual_runtime: DualRuntimeManifest | None = None
     if runtime_manifest is not None:
@@ -521,6 +553,22 @@ def render_markdown(report: dict[str, Any]) -> str:
                 f"- Rollback performed/succeeded: `{runtime['rollback_performed']}/{runtime['rollback_succeeded'] if runtime['rollback_succeeded'] is not None else 'not_run'}`",
             ]
         )
+    pipeline = summary.get("data_pipeline")
+    if pipeline is not None:
+        lines.extend(
+            [
+                "",
+                "## Data pipeline and randomness",
+                "",
+                f"- Benchmark: `{pipeline['benchmark_version']}`",
+                f"- Complete/passed: `{pipeline['complete']}/{pipeline['passed']}`",
+                f"- Cases/faults/stochastic: `{pipeline['case_count']}/{pipeline['fault_case_count']}/{pipeline['stochastic_case_count']}`",
+                f"- Classification accuracy: `{pipeline['classification_accuracy']:.2%}`",
+                f"- First-divergence Top-1: `{pipeline['first_divergence_top1_accuracy']:.2%}`",
+                f"- Deterministic/statistical equivalence: `{pipeline['deterministic_equivalence_rate']:.2%}/{pipeline['statistical_equivalence_rate']:.2%}`",
+                f"- Minimum stochastic sample size: `{pipeline['minimum_stochastic_sample_size']}`",
+            ]
+        )
     lines.extend(
         [
             "",
@@ -641,6 +689,29 @@ def _runtime_summary(
     }
 
 
+def _data_pipeline_summary(payload: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "benchmark_version": payload["benchmark_version"],
+        "complete": payload["complete"],
+        "passed": payload["passed"],
+        "case_count": payload["case_count"],
+        "fault_case_count": payload["fault_case_count"],
+        "stochastic_case_count": payload["stochastic_case_count"],
+        "minimum_stochastic_sample_size": payload["minimum_stochastic_sample_size"],
+        "classification_accuracy": payload["classification_accuracy"],
+        "first_divergence_top1_accuracy": payload[
+            "first_divergence_top1_accuracy"
+        ],
+        "deterministic_equivalence_rate": payload[
+            "deterministic_equivalence_rate"
+        ],
+        "statistical_equivalence_rate": payload["statistical_equivalence_rate"],
+        "first_divergence_categories": payload["first_divergence_categories"],
+        "source_framework_version": payload["source_framework_version"],
+        "target_framework_version": payload["target_framework_version"],
+    }
+
+
 def _rollback_after_compare_failure(
     report: dict[str, Any],
     apply_report: dict[str, Any] | None,
@@ -707,6 +778,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--source-trace")
     parser.add_argument("--target-trace")
     parser.add_argument("--runtime-manifest")
+    parser.add_argument("--data-pipeline-report")
     parser.add_argument("--relative-tolerance", type=float, default=1e-5)
     parser.add_argument("--absolute-tolerance", type=float, default=1e-8)
     parser.add_argument("--output")
@@ -731,6 +803,7 @@ def main(argv: list[str] | None = None) -> int:
             source_trace=arguments.source_trace,
             target_trace=arguments.target_trace,
             runtime_manifest=arguments.runtime_manifest,
+            data_pipeline_report=arguments.data_pipeline_report,
             relative_tolerance=arguments.relative_tolerance,
             absolute_tolerance=arguments.absolute_tolerance,
         )

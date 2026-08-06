@@ -58,6 +58,8 @@ Rust 实现在 `src/migration/schema.rs`，Python 实现在 `python/migration/sc
 - `parameter_mismatch`、`default_value_mismatch`；
 - `dtype_mismatch`、`shape_mismatch`、`return_structure_mismatch`；
 - `value_mismatch`、`gradient_mismatch`、`randomness_mismatch`；
+- `layout_mismatch`、`normalization_mismatch`、`label_dtype_mismatch`、`mask_dtype_mismatch`；
+- `batching_mismatch`、`transform_mismatch`、`reproducibility_mismatch`、`random_distribution_mismatch`；
 - `graph_compile_failure`、`device_unsupported`、`runtime_error`；
 - `needs_manual_review`。
 

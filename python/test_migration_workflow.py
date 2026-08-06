@@ -110,6 +110,52 @@ Path(args.trace).write_text(json.dumps(payload) + "\\n", encoding="utf-8")
     return path
 
 
+def write_data_pipeline_report(root: Path) -> Path:
+    cases = [
+        {
+            "case_id": f"deterministic-{index}",
+            "comparison_kind": "deterministic",
+            "elementwise_compared": False,
+        }
+        for index in range(11)
+    ]
+    cases.append(
+        {
+            "case_id": "random-statistical",
+            "comparison_kind": "statistical",
+            "sample_size": 128,
+            "statistics": {"source": {"mean": 0.0}, "target": {"mean": 0.0}},
+            "thresholds": {"max_mean_delta": 0.1},
+            "elementwise_compared": False,
+        }
+    )
+    payload = {
+        "schema_version": "1.0",
+        "record_kind": "data_pipeline_diagnostic_report",
+        "benchmark_version": "data-pipeline-randomness-v1",
+        "dataset_kind": "cross_framework_data_pipeline_cases",
+        "complete": True,
+        "passed": True,
+        "case_count": 12,
+        "evaluated_case_count": 12,
+        "fault_case_count": 5,
+        "stochastic_case_count": 1,
+        "minimum_stochastic_sample_size": 128,
+        "classification_accuracy": 1.0,
+        "first_divergence_top1_accuracy": 1.0,
+        "deterministic_equivalence_rate": 1.0,
+        "statistical_equivalence_rate": 1.0,
+        "first_divergence_categories": {"layout_mismatch": 1},
+        "source_framework_version": "2.6.0+cu124",
+        "target_framework_version": "2.9.0",
+        "splits": {},
+        "cases": cases,
+    }
+    path = root / "data-pipeline-report.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    return path
+
+
 def test_preview_runs_scan_and_rewrite_without_modifying_source(tmp_path):
     source = write_project(tmp_path)
     original = source.read_bytes()
@@ -127,6 +173,30 @@ def test_preview_runs_scan_and_rewrite_without_modifying_source(tmp_path):
     assert report["summary"]["files_changed"] == 1
     assert report["summary"]["edit_count"] == 2
     assert source.read_bytes() == original
+
+
+def test_preview_attaches_data_pipeline_diagnostics(tmp_path):
+    write_project(tmp_path)
+    pipeline_report = write_data_pipeline_report(tmp_path)
+
+    report = run_migration(tmp_path, data_pipeline_report=pipeline_report)
+
+    assert report["status"] == "previewed"
+    assert [step["name"] for step in report["steps"]] == [
+        "scan",
+        "data_pipeline_diagnostics",
+        "rewrite_preview",
+    ]
+    pipeline = report["summary"]["data_pipeline"]
+    assert pipeline["case_count"] == 12
+    assert pipeline["fault_case_count"] == 5
+    assert pipeline["minimum_stochastic_sample_size"] == 128
+    assert report["artifacts"]["data_pipeline_report"] == str(
+        pipeline_report.resolve()
+    )
+    markdown = render_markdown(report)
+    assert "## Data pipeline and randomness" in markdown
+    assert "First-divergence Top-1: `100.00%`" in markdown
 
 
 def test_apply_requires_validation_command(tmp_path):
