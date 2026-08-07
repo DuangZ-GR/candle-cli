@@ -1,5 +1,6 @@
 use candle_cli::tools::registry::ToolRegistry;
 use std::fs;
+#[cfg(unix)]
 use std::time::{Duration, Instant};
 
 #[test]
