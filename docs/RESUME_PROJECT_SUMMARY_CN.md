@@ -6,6 +6,12 @@
 
 这句话比“基于 Rust 的 Agentic CLI”更准确，因为它先说明解决的工程问题，再说明实现形态。
 
+## 当前工程状态
+
+截至当前候选版本，项目已完成 M0–M18 路线中的主要功能闭环：静态扫描、证据映射、事务式改写、双框架 Trace 对齐、训练/数据/Graph 诊断、安全留出集、上下文事实保留、doctor、安装脚本、演示脚本、最终证据聚合和跨平台 CI 配置。PR #7 已通过 GitHub Actions 中的 Python 3.10、Python 3.12、Ubuntu Rust、Windows Rust 以及 schema/benchmark integrity 检查；仓库仍待合并该 PR，并由用户决定是否创建正式版本 tag 与 GitHub Release。
+
+尚未完成、也不应写成已完成的数据是：真实 Provider Token/Cache 命中率、正式单/多 Agent 配对收益，以及 Candle 本地推理后端的生产可用实现。
+
 ## 项目由来与技术演进
 
 项目源于 MindSpore 迁移中的真实痛点：把 PyTorch 示例机械替换为 MindSpore API 后，代码可能继续运行，但中间张量已经发生 dtype、shape、返回结构或默认语义变化，最终报错位置往往不是根因；缺失算子和行为差异也难以仅靠异常栈定位。
@@ -45,9 +51,9 @@ flowchart LR
 | 安全回归与冻结留出 | M8 开发集 12/12 攻击被拦截/门禁、10/10 正常放行；M18 Linux 留出集 12/12 可评估攻击被拦截/门禁、8/8 正常项无误拦 | M18 共 15 个攻击项，压缩包入口、symlink 竞态和 Windows junction 三项明确不适用且不计入分母；不代表未知攻击防御率 |
 | 上下文事实保留 | 20/20 文件/命令/错误/待办/决策事实保留；20/20 历史事实任务可回答；估算 Token 23,146→4,221，减少 81.76% | 冻结确定性会话与启发式 Token，不是 Provider 计费数据或未知会话泛化率 |
 | Provider 缓存 | Bridge 已支持采集并设置完整性门禁；已发布基准仍为 `null` | 尚未固定真实 Provider 请求集，不能声称具体缓存命中率 |
-| 当前全量测试 | Rust 177/177；Python 350/350；Clippy `-D warnings` 通过 | Linux 隔离测试目录与 `zgr` Python；托管 Ubuntu/Windows CI 需在 PR 后取得首次结果 |
+| 当前全量测试 | Rust 177/177；Python 350/350；Clippy `-D warnings` 通过；PR #7 的 Python 3.10/3.12、Ubuntu Rust、Windows Rust、schema/benchmark integrity 全部通过 | Linux 隔离测试目录与 `zgr` Python；GitHub Actions 结果来自当前 PR 候选分支，仍待合并进入 main |
 
-机器可读结果和完整限制分别位于 `benchmarks/results`、`docs/M6_REAL_PROJECT_RESULTS.md`、`docs/M7_RUNTIME_PARITY.md`、`docs/M8_SECURITY_BENCHMARK.md`、`docs/M9_CONTEXT_BENCHMARK.md`、`docs/M11_COMPONENT_PARITY.md`、`docs/M12_TRAINING_PARITY.md`、`docs/M13_END_TO_END_WORKFLOW.md`、`docs/M14_REAL_MODEL_DUAL_RUNTIME.md`、`docs/M15_DATA_PIPELINE_RANDOMNESS.md` 与 `docs/M16_GRAPH_ADVANCED_TRAINING.md`。
+机器可读结果和完整限制分别位于 `benchmarks/results`、`docs/M6_REAL_PROJECT_RESULTS.md`、`docs/M7_RUNTIME_PARITY.md`、`docs/M8_SECURITY_BENCHMARK.md`、`docs/M9_CONTEXT_BENCHMARK.md`、`docs/M11_COMPONENT_PARITY.md`、`docs/M12_TRAINING_PARITY.md`、`docs/M13_END_TO_END_WORKFLOW.md`、`docs/M14_REAL_MODEL_DUAL_RUNTIME.md`、`docs/M15_DATA_PIPELINE_RANDOMNESS.md`、`docs/M16_GRAPH_ADVANCED_TRAINING.md`、`docs/M17_CONTEXT_AGENT_ABLATION.md`、`docs/M18_RELEASE_SECURITY_CI.md` 与 `docs/FINAL_BENCHMARK_REPORT_CN.md`。
 
 ## 推荐简历版本
 
@@ -85,11 +91,11 @@ flowchart LR
 
 这些限定不会降低项目含金量，反而说明评测口径、数据泄漏和工程证据意识是设计的一部分。
 
-## 下一轮最有价值的开发
+## 合并 PR #7 后的建议动作
 
-1. **运行真实 Token/Cache 评测：** Bridge 已能聚合 input/output/cached input tokens，实验协议也已冻结；下一步选择 Provider、模型和价格日期，完成真实配对运行。
-2. **完成单/多 Agent 消融：** 共享预算机制和 10 个迁移任务已就绪，需在相同请求、工具和超时预算下完成三次重复并决定是否存在可写入简历的收益。
-3. **验证并发布候选版本：** CI、安装脚本、Changelog、证据聚合和 Release dry run 已实现；下一步在 PR 上取得 Ubuntu/Windows 托管结果，再由用户确认版本号、Tag 与 Release。
+1. **同步 main 并创建候选发布版本：** 合并 PR #7 后同步本地和服务器代码，确认 README、README_CN、简历摘要、Changelog、安装脚本和 demo 脚本均指向同一组证据；随后由用户决定版本号、tag 与 GitHub Release。
+2. **运行真实 Token/Cache 评测：** Bridge 已能聚合 input/output/cached input tokens，实验协议也已冻结；下一步选择 Provider、模型和价格日期，完成真实配对运行。完成前只能写“支持采集”，不能写具体缓存命中率。
+3. **完成单/多 Agent 消融：** 共享预算机制和 10 个迁移任务已就绪，需在相同请求、工具和超时预算下完成三次重复，并判断是否存在可写入简历的稳定收益。
 4. **继续拆解 AdamW 差异：** 对偏置修正、权重衰减、学习率序列和状态槽逐项消融，形成可执行迁移建议。
 
-项目已经完成真实模型、数据流水线、Graph Mode、多步训练状态和确定性上下文事实保留的可审计验证；下一步应完成真实 Provider Token/Cache 与单多 Agent 配对运行，再通过 CI 和正式发布形成完整工程闭环。
+项目已经完成真实模型切片、数据流水线、Graph Mode、多步训练状态、安全留出集和确定性上下文事实保留的可审计验证。当前最优先动作不是继续堆功能，而是先合并 PR #7、同步 main、固定发布口径，再决定是否补真实 Provider Token/Cache 与单/多 Agent 配对实验。

@@ -8,23 +8,31 @@
 
 `candle-cli` 是面向 PyTorch→MindSpore 工程迁移的 Rust-first 智能诊断 CLI：通过确定性 AST 扫描、官方映射、双框架运行证据和事务式 Patch，定位首个语义偏差并生成可验证、可回滚的迁移结果。
 
-项目的一句话定位、可复现指标、推荐简历表述与能力边界见 [`docs/RESUME_PROJECT_SUMMARY_CN.md`](docs/RESUME_PROJECT_SUMMARY_CN.md)。
+它解决的是框架迁移中的具体问题：机械替换 PyTorch API 后，代码可能仍能运行，但 dtype、shape、返回结构、默认训练语义、随机数据流或优化器状态已经发生变化，最终异常位置往往不是根因。`candle-cli` 将这个过程收敛为可审计流程：不执行目标工程即可扫描 API，基于官方证据生成改写，按需自动启动 PyTorch/MindSpore 双运行时，比较 Trace，定位首个可观测偏差，并在不安全时自动回滚。
+
+## 当前证据状态
+
+| 能力方向 | 当前随仓库固定的证据 | 边界 |
+|---|---|---|
+| 静态扫描与映射 | PyTorch Examples/nanoGPT/DETR 共 25/25 文件扫描成功，调用映射覆盖率由 24.22% 提升至 44.77%；冻结规则后 Segment Anything 留出集为 41.98% | 静态覆盖率，不是运行时迁移准确率 |
+| 双框架运行诊断 | PyTorch 2.6.0+cu124 与 MindSpore 2.9.0 覆盖 API 链、组件、训练步、数据流水线/随机性、Graph Mode、优化器状态和 Checkpoint 恢复 | 固定小型基准，不代表未知项目成功率 |
+| 端到端迁移闭环 | `migrate run` 串联扫描、改写、验证、Trace 比较和回滚；MNIST 分类器头切片完成 3/3 双运行时场景和 2/2 字节级回滚 | 25 行可执行切片，不是完整 MNIST 迁移 |
+| 安全与上下文 | M18 Linux 留出集中 12/12 可评估攻击被拦截或门禁，8/8 正常项无误拦；20 个冻结会话中事实保留 20/20，估算 Token 减少 81.76% | 确定性评测集；Provider 缓存命中率仍不声明 |
+| CI 与发布状态 | PR #7 已通过 Rust、Python、schema/evidence、Ubuntu Rust 和 Windows Rust 检查 | 仍待合并和是否正式 release 的决策 |
+
+项目的一句话定位、可复现指标、推荐简历表述与能力边界见 [`docs/RESUME_PROJECT_SUMMARY_CN.md`](docs/RESUME_PROJECT_SUMMARY_CN.md)、[`docs/MILESTONE_EXECUTION_PLAN_CN.md`](docs/MILESTONE_EXECUTION_PLAN_CN.md) 与 `benchmarks/results/`。
 
 ## 核心特性
 
-- **Agentic 工具循环** — 有界多步执行，支持子 Agent 任务委派
-- **流式输出** — token 级实时打印，边生成边显示
-- **分层记忆** — 会话记忆 + 项目级持久化记忆
-- **沙盒执行** — 可选 Docker 容器隔离，网络切断
-- **多模型后端** — DeepSeek、Ollama、vLLM、OpenAI，通过持久化 Python bridge 统一接入
-- **权限控制** — 四种模式，路径边界检查，交互式确认
-- **可观测性** — `/tools`、`/status`（含 token 估算）、`/trace`（含毫秒计时和 JSON 导出）
-- **容错机制** — API 指数退避重试（4xx 不重试），shell 超时强制终止
-- **Rust 核心 + Python 桥接** — Rust 负责 CLI、agent loop、工具、权限；Python 桥接模型后端，子进程跨轮复用
 - **迁移静态扫描** — 无需安装 PyTorch/MindSpore，解析 import 别名、Tensor Method、源码位置和参数信息
-- **组件级差分验证** — 分离采集 PyTorch/MindSpore 前向与梯度轨迹，评估等价性、缺陷分类和首错 Top-1
 - **可验证迁移重写** — 最小化预览 API/dtype 修改，事务式应用，显式执行验证命令，并支持校验和保护的回滚
 - **端到端迁移闭环** — 单个命令串联扫描、预览、应用、程序验证、Trace 比较和失败回滚，输出统一 JSON/Markdown 报告
+- **双框架差分诊断** — 分离采集 PyTorch/MindSpore 前向、梯度、数据流水线、Graph Mode、优化器和 Checkpoint 轨迹，评估等价性、缺陷分类和首错 Top-1
+- **Rust 核心 + Python 桥接** — Rust 负责 CLI、Agent Loop、工具、权限和结构化协议；Python 桥接 OpenAI-compatible API、Ollama 原生模式、本地模型和迁移分析
+- **Agentic 工具循环** — 有界多步执行，支持只读子 Agent 委派和共享预算
+- **安全控制** — 路径边界检查、确认门禁、read/Shell 输出上限、可选 Docker shell 隔离，以及冻结安全回归/留出评测
+- **上下文与可观测性** — 分层记忆、确定性上下文裁切、`/tools`、`/status`、`/trace`、毫秒级计时、JSON 导出和 Provider usage 采集入口
+- **容错机制** — API 指数退避重试（4xx 不重试）、持久化 Python Worker 复用、shell 超时和进程清理
 
 ## 快速开始
 

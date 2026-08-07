@@ -8,21 +8,31 @@
 
 `candle-cli` is a Rust-first diagnostic CLI for PyTorch-to-MindSpore migration. It combines deterministic AST scanning, official mappings, cross-framework runtime evidence, and transactional patches to locate the first semantic divergence and produce verifiable, reversible migration results.
 
+It was built for a concrete migration failure mode: direct API replacement can make a PyTorch example run under MindSpore while silently changing dtype, shape, return structure, default training semantics, random data flow, or optimizer state. `candle-cli` turns that process into an auditable workflow: scan APIs without executing the project, apply evidence-backed rewrites, run both frameworks when configured, compare traces, identify the first observable divergence, and roll back unsafe edits.
+
+## Current evidence status
+
+| Area | Current checked-in evidence | Boundary |
+|------|-----------------------------|----------|
+| Static scan and mapping | 25/25 real-project files scanned; mapped-call coverage improved from 24.22% to 44.77% on PyTorch Examples/nanoGPT/DETR; 41.98% on the frozen Segment Anything holdout | Static coverage, not runtime migration accuracy |
+| Runtime parity | PyTorch 2.6.0+cu124 and MindSpore 2.9.0 runs cover API chains, components, training steps, data pipeline/randomness, graph mode, optimizer state, and checkpoint recovery | Fixed small benchmarks, not unseen-project success rate |
+| End-to-end workflow | `migrate run` composes scan, rewrite, validation, trace comparison, and rollback; the MNIST classifier-head slice passes 3/3 frozen dual-runtime scenarios with 2/2 byte-level rollbacks | 25-line executable slice, not full MNIST migration |
+| Safety and context | M18 Linux heldout blocks or gates 12/12 applicable attacks with 0/8 benign false blocks; context retention keeps 20/20 frozen facts while reducing estimated tokens by 81.76% | Deterministic suites; provider cache hit rate remains unclaimed |
+| CI and release readiness | Rust, Python, schema/evidence, Ubuntu Rust, and Windows Rust checks passed on PR #7 | Pending repository merge/release decision |
+
+Full reproducibility notes and résumé-safe wording are maintained in [`docs/RESUME_PROJECT_SUMMARY_CN.md`](docs/RESUME_PROJECT_SUMMARY_CN.md), [`docs/MILESTONE_EXECUTION_PLAN_CN.md`](docs/MILESTONE_EXECUTION_PLAN_CN.md), and `benchmarks/results/`.
+
 ## Highlights
 
-- **Agentic tool loop** — bounded multi-step execution with sub-agent task delegation
-- **Streaming output** — real-time token-by-token display as the model generates
-- **Layered memory** — session memory + project-level persistent memory
-- **Sandboxed shell** — optional Docker container isolation with network cutoff
-- **Multi-model** — DeepSeek, Ollama, vLLM, OpenAI via persistent Python bridge
-- **Permission control** — four modes with path boundary enforcement and interactive confirmation
-- **Observability** — `/tools`, `/status` (with token estimation), `/trace` (with millisecond timing and JSON export)
-- **Fault tolerance** — API retry with exponential backoff (4xx not retried), shell timeout with kill
-- **Rust core + Python bridge** — Rust owns CLI, agent loop, tools, permissions; Python bridges model backends with persistent worker
 - **Migration scanner** — discovers aliased PyTorch calls, inferred Tensor methods, source spans, and arguments without importing either framework
-- **Component parity** — captures PyTorch/MindSpore forward and gradient traces separately, then scores equivalence, defect class, and first-divergence Top-1
 - **Verified migration rewrites** — previews minimal API/dtype edits, applies them transactionally, runs an explicit validator, and supports checksum-protected rollback
 - **End-to-end migration workflow** — one command composes scan, preview, apply, program validation, trace comparison, and failure rollback into a JSON/Markdown report
+- **Cross-framework diagnostics** — captures PyTorch/MindSpore forward, gradient, data pipeline, graph-mode, optimizer, and checkpoint traces, then scores equivalence, defect class, and first-divergence Top-1
+- **Rust core + Python bridge** — Rust owns CLI, agent loop, tools, permissions, and structured protocols; Python bridges OpenAI-compatible APIs, Ollama native mode, local models, and migration analysis
+- **Agentic tool loop** — bounded multi-step execution with read-only sub-agent task delegation and shared budgets
+- **Safety controls** — path-boundary enforcement, confirmation gates, bounded read/shell output, optional Docker shell isolation, and frozen security regression/heldout suites
+- **Context and observability** — layered memory, deterministic context compaction, `/tools`, `/status`, `/trace`, millisecond timing, JSON export, and provider usage collection hooks
+- **Fault tolerance** — API retry with exponential backoff (4xx not retried), persistent Python worker reuse, shell timeout, and process cleanup
 
 ## Quickstart
 
