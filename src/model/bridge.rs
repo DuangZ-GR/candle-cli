@@ -6,9 +6,11 @@ use serde_json::Value;
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, Command, Stdio};
 
+type BridgeProcess = (Child, Box<dyn Write + Send>, Box<dyn BufRead + Send>);
+
 pub struct LocalBridgeRuntime {
     command: String,
-    child: Option<(Child, Box<dyn Write + Send>, Box<dyn BufRead + Send>)>,
+    child: Option<BridgeProcess>,
 }
 
 impl LocalBridgeRuntime {
@@ -69,6 +71,8 @@ impl CandleTargetRuntime for LocalBridgeRuntime {
                     "system_prompt": request.system_prompt,
                     "messages_json": request.messages_json,
                     "tools_json": request.tools_json,
+                    "timeout_ms": request.timeout_ms,
+                    "deadline_unix_ms": request.deadline_unix_ms,
                 }
             })
         )
@@ -206,7 +210,23 @@ impl CandleTargetRuntime for LocalBridgeRuntime {
 
 fn parse_token_usage(value: &Value) -> Option<TokenUsage> {
     let usage = value.as_object()?;
-    let prompt_tokens = usage.get("prompt_tokens")?.as_u64()?;
+    let retry_count = usage
+        .get("retry_count")
+        .and_then(Value::as_u64)
+        .unwrap_or_default();
+    let provider_latency_ms = usage
+        .get("provider_latency_ms")
+        .and_then(Value::as_u64)
+        .unwrap_or_default();
+    let Some(prompt_tokens) = usage.get("prompt_tokens").and_then(Value::as_u64) else {
+        return (usage.contains_key("retry_count") || usage.contains_key("provider_latency_ms"))
+            .then_some(TokenUsage {
+                request_count: 1,
+                retry_count,
+                provider_latency_ms,
+                ..TokenUsage::default()
+            });
+    };
     let completion_tokens = usage.get("completion_tokens")?.as_u64()?;
     let total_tokens = usage.get("total_tokens")?.as_u64()?;
     if total_tokens != prompt_tokens.checked_add(completion_tokens)? {
@@ -229,6 +249,8 @@ fn parse_token_usage(value: &Value) -> Option<TokenUsage> {
 
     Some(TokenUsage {
         request_count: 1,
+        retry_count,
+        provider_latency_ms,
         usage_reported_request_count: 1,
         prompt_tokens,
         completion_tokens,
@@ -237,6 +259,15 @@ fn parse_token_usage(value: &Value) -> Option<TokenUsage> {
         cached_prompt_tokens: cached_prompt_tokens.unwrap_or_default(),
         cache_miss_prompt_tokens,
     })
+}
+
+impl Drop for LocalBridgeRuntime {
+    fn drop(&mut self) {
+        if let Some((mut child, ref mut stdin, _)) = self.child.take() {
+            let _ = writeln!(stdin, "{}", serde_json::json!({ "type": "shutdown" }));
+            let _ = child.wait();
+        }
+    }
 }
 
 #[cfg(test)]
@@ -263,13 +294,20 @@ mod tests {
         assert!(!usage.cache_metrics_complete());
         assert_eq!(usage.provider_cache_hit_rate(), None);
     }
-}
 
-impl Drop for LocalBridgeRuntime {
-    fn drop(&mut self) {
-        if let Some((mut child, ref mut stdin, _)) = self.child.take() {
-            let _ = writeln!(stdin, "{}", serde_json::json!({ "type": "shutdown" }));
-            let _ = child.wait();
-        }
+    #[test]
+    fn request_telemetry_survives_when_provider_omits_token_usage() {
+        let telemetry = serde_json::json!({
+            "retry_count": 2,
+            "provider_latency_ms": 3210
+        });
+
+        let usage = parse_token_usage(&telemetry).unwrap();
+
+        assert_eq!(usage.request_count, 1);
+        assert_eq!(usage.retry_count, 2);
+        assert_eq!(usage.provider_latency_ms, 3210);
+        assert!(!usage.usage_complete());
+        assert_eq!(usage.provider_cache_hit_rate(), None);
     }
 }

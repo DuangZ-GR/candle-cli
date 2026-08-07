@@ -2,6 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 ![Rust Edition](https://img.shields.io/badge/Rust-2021-orange.svg)
+[![CI](https://github.com/DuangZ-GR/candle-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/DuangZ-GR/candle-cli/actions/workflows/ci.yml)
 
 [English](README.md) | [中文](README_CN.md)
 
@@ -35,6 +36,15 @@ cd candle-cli
 cargo build
 ```
 
+Repository helpers install the Rust CLI without downloading framework dependencies by default:
+
+```bash
+sh scripts/install.sh                # Linux/macOS
+.\scripts\install.ps1               # Windows PowerShell
+```
+
+Use `--with-python` on Linux or `-InstallPythonDependencies` on Windows only when Bridge/framework dependencies are needed. `sh scripts/demo.sh` and `scripts/demo.ps1` run an offline doctor, mapping, scan, patch preview, and frozen-security walkthrough without modifying the example source.
+
 ### Recommended: DeepSeek API
 
 ```bash
@@ -53,7 +63,8 @@ cargo run --
 ollama pull qwen2:0.5b
 
 export CANDLE_CLI_RUNTIME="bridge"
-export CANDLE_CLI_API_BASE_URL="http://localhost:11434/v1"
+export CANDLE_CLI_API_STYLE="ollama-native"
+export CANDLE_CLI_API_BASE_URL="http://localhost:11434"
 export CANDLE_CLI_API_KEY="ollama"
 export CANDLE_CLI_MODEL_ID="qwen2:0.5b"
 
@@ -70,8 +81,9 @@ cargo run -- prompt "Hello, introduce yourself"
 | `cargo run --` | Interactive REPL with readline editing |
 | `cargo run -- harness` | Run automated scenario benchmark |
 | `cargo run -- security-harness` | Run deterministic path/permission security regression benchmark |
+| `cargo run -- security-heldout` | Run the independently frozen M18 security heldout suite |
 | `cargo run -- context-harness` | Measure deterministic turn-compaction reduction and integrity |
-| `cargo run -- doctor` | Print runtime status |
+| `cargo run -- doctor [--json]` | Check Rust, Python, frameworks, Docker, Bridge, Provider, and dual-runtime configuration |
 | `cargo run -- migrate scan <path>` | Scan PyTorch APIs and emit a versioned JSON report |
 | `cargo run -- migrate run <path>` | Run the scan, rewrite, validation, trace comparison, and rollback workflow |
 | `cargo run -- migrate map <api>` | Query a versioned MindSpore mapping with official evidence |
@@ -161,7 +173,9 @@ The version-gated runtime parity microbenchmark captures five deterministic API 
 
 The checked-in `security-regression-v1` suite exercises 12 local path/permission attacks and 10 benign controls without running dangerous shell commands. All 12 attacks were intercepted (10 hard blocks and 2 confirmation gates), while 10/10 benign cases were allowed. These figures apply only to this deterministic regression set, not unknown attacks, container escape, prompt injection, or network exfiltration; see `docs/M8_SECURITY_BENCHMARK.md`.
 
-The `context-compaction-v1` suite reduces estimated serialized-message tokens from 4,434 to 1,395 (68.54%) across four deterministic conversations while preserving system messages and tool-call/result integrity. This is a heuristic compaction metric, not provider billing data. The Bridge now collects provider-reported token/cache usage when available, but no real provider benchmark has been checked in; the deterministic context report therefore keeps cache hit rate as `null`. See `docs/M9_CONTEXT_BENCHMARK.md` and `docs/M10_PROVIDER_USAGE.md`.
+M18 adds a separately frozen `security-heldout-v1` suite. On Linux, 12/15 attack cases were applicable and all 12 were blocked or confirmation-gated; 8/8 benign controls were allowed or intentionally gated, for a 0% false-block rate. Archive traversal (no extractor exists), race-free symlink swapping, and Windows junctions remain explicitly `not_applicable` and are excluded from the rate. M18 also prevents recursive search from following external symlinks, passes web queries as opaque arguments, requires confirmation for network access, and bounds file/shell output memory. See `docs/M18_RELEASE_SECURITY_CI.md` and `docs/FINAL_BENCHMARK_REPORT_CN.md`.
+
+The `context-fact-retention-v2` suite uses recent verbatim turns plus structured task state and verifiable source digests across 20 frozen migration conversations. Estimated tokens fall from 23,146 to 4,221 (81.76%); required file, command, error, pending-action, and decision facts are retained 20/20, historical-fact tasks remain answerable 20/20, and source digests verify 20/20. This is still a deterministic heuristic, not provider billing data. The Bridge collects provider-reported token/cache usage, and Agent ablation now has a `--smoke` capability gate whose output is ineligible for formal claims. The available `qwen2:0.5b` did not pass the tool-use smoke, so the formal provider ablation has not run and cache hit rate remains `null`. See `docs/M17_CONTEXT_AGENT_ABLATION.md`.
 
 ### REPL commands
 
@@ -212,13 +226,14 @@ Rust parses the block, executes the tool, records the result in session, and fee
 | Mode | Behavior |
 |------|----------|
 | `read-only` | Allow `pwd`, `read`, `glob`, `grep` only |
+| `read-only-with-task` | Allow read tools plus `task`, without shell or mutation |
 | `workspace-write` (default) | Allow workspace file edits; require confirmation for host shell commands |
 | `prompt` | Auto-allow read tools; confirm `edit`, `write`, `shell` interactively |
 | `danger-full-access` | Allow all tools, including host shell commands, without confirmation |
 
 ### Multi-agent coordination
 
-The `task` tool spawns a sub-agent with read-only permission and a 3-step bounded loop. The main agent can delegate code analysis, research, or verification subtasks to isolated sub-agents and receive structured results.
+The `task` tool spawns a sub-agent with read-only permission and a 3-step bounded loop. Parent and sub-agent share model-request and tool-step budgets, and the sub-agent inherits the parent's workspace root. This keeps single/delegated ablations budget-comparable and prevents reads from an unrelated process directory.
 
 ### Layered memory
 
@@ -265,7 +280,7 @@ Set `CANDLE_CLI_RUNTIME=bridge` for real model calls (default `mock` for testing
 | Backend | `CANDLE_CLI_API_BASE_URL` | `CANDLE_CLI_API_KEY` | `CANDLE_CLI_MODEL_ID` |
 |---------|---------------------------|----------------------|-----------------------|
 | DeepSeek | `https://api.deepseek.com/v1` | `YOUR_DEEPSEEK_API_KEY` | `deepseek-v4-flash` |
-| Ollama | `http://localhost:11434/v1` | `ollama` | `qwen2:0.5b` |
+| Ollama native | `http://localhost:11434` | `ollama` | `qwen2:0.5b` |
 | vLLM | `http://localhost:8000/v1` | `not-needed` | `Qwen/Qwen2-0.5B-Instruct` |
 | OpenAI | `https://api.openai.com/v1` | `sk-xxx` | `gpt-4o-mini` |
 
@@ -296,6 +311,7 @@ Set `CANDLE_CLI_VERBOSE=1` for API request details, token usage, timing, and GPU
 | `CANDLE_CLI_LOCAL_FILES_ONLY` | `true` | Use only local files (no download) |
 | `CANDLE_CLI_API_BASE_URL` | (empty) | OpenAI-compatible API base URL |
 | `CANDLE_CLI_API_KEY` | (empty) | API key |
+| `CANDLE_CLI_API_STYLE` | `openai` | `openai` or `ollama-native`; native mode supports Ollama `think=false` |
 | `CANDLE_CLI_MAX_NEW_TOKENS` | `512` | Max generated tokens per turn |
 | `CANDLE_CLI_TEMPERATURE` | `0.7` | Sampling temperature |
 | `CANDLE_CLI_TOP_P` | `0.9` | Top-p sampling |
@@ -304,6 +320,8 @@ Set `CANDLE_CLI_VERBOSE=1` for API request details, token usage, timing, and GPU
 | `CANDLE_CLI_PERMISSION` | `workspace-write` | Permission mode |
 | `CANDLE_CLI_PERMISSION_RESPONSE` | (empty) | Pre-set prompt responses (`y`/`allow`/`deny`) |
 | `CANDLE_CLI_SHELL_TIMEOUT_SECS` | `30` | Shell command timeout (seconds) |
+| `CANDLE_CLI_MAX_SHELL_OUTPUT_BYTES` | `1048576` | Maximum retained bytes for each shell stdout/stderr stream |
+| `CANDLE_CLI_MAX_READ_BYTES` | `2097152` | Maximum UTF-8 file size accepted by the read tool |
 | `CANDLE_CLI_MAX_TOOL_OUTPUT_CHARS` | `65536` | Maximum tool-result characters retained in model/session context |
 | `CANDLE_CLI_ALLOW_STUB_FALLBACK` | `false` | Enable echo-only bridge stub for demos/tests; never enable for real agent tasks |
 | `CANDLE_CLI_INCLUDE_USAGE` | `true` | Request usage in streaming API responses; disable for incompatible local backends |

@@ -55,20 +55,22 @@ pub fn build_turn_request(session: &mut Session, tools_json: &str) -> Result<Tur
 
     let memory_ctx =
         crate::session::memory::ProjectMemory::load(&session.workspace_root).to_context_string();
-    let system_prompt = if memory_ctx.lines().count() > 1 {
-        format!(
-            "{}\n\n{}",
-            resolve_system_prompt_with_tools(tools_json),
-            memory_ctx
-        )
-    } else {
-        resolve_system_prompt_with_tools(tools_json)
-    };
+    let mut context_sections = vec![resolve_system_prompt_with_tools(tools_json)];
+    if memory_ctx.lines().count() > 1 {
+        context_sections.push(memory_ctx);
+    }
+    let task_state_ctx = session.task_state.to_prompt_string();
+    if !task_state_ctx.is_empty() {
+        context_sections.push(task_state_ctx);
+    }
+    let system_prompt = context_sections.join("\n\n");
 
     Ok(TurnRequest {
         system_prompt,
         messages_json,
         tools_json: tools_json.to_string(),
+        timeout_ms: None,
+        deadline_unix_ms: None,
     })
 }
 
@@ -119,10 +121,8 @@ fn inject_rag_context(session: &mut Session) {
         .rev()
         .find(|m| m.role == MessageRole::User)
     {
-        if let Some(block) = msg.blocks.first_mut() {
-            if let ContentBlock::Text { text } = block {
-                *text = rag_block;
-            }
+        if let Some(ContentBlock::Text { text }) = msg.blocks.first_mut() {
+            *text = rag_block;
         }
     }
 }

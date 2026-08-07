@@ -5,7 +5,23 @@ use std::thread;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
+const DEFAULT_MAX_STREAM_BYTES: usize = 1024 * 1024;
+
+struct BoundedOutput {
+    bytes: Vec<u8>,
+    truncated_bytes: usize,
+}
+
 pub fn run(command: &str, workspace_root: &Path, timeout: Duration) -> Result<String, String> {
+    run_with_limits(command, workspace_root, timeout, max_stream_bytes())
+}
+
+pub(crate) fn run_with_limits(
+    command: &str,
+    workspace_root: &Path,
+    timeout: Duration,
+    max_stream_bytes: usize,
+) -> Result<String, String> {
     let sandbox = std::env::var("CANDLE_CLI_SANDBOX").unwrap_or_default();
 
     let mut child_command = match sandbox.as_str() {
@@ -27,14 +43,7 @@ pub fn run(command: &str, workspace_root: &Path, timeout: Duration) -> Result<St
             ]);
             command_builder
         }
-        _ => {
-            let mut command_builder = Command::new("sh");
-            command_builder
-                .arg("-c")
-                .arg(command)
-                .current_dir(workspace_root);
-            command_builder
-        }
+        _ => native_shell_command(command, workspace_root),
     };
     configure_process_group(&mut child_command);
     let mut child = child_command
@@ -48,12 +57,14 @@ pub fn run(command: &str, workspace_root: &Path, timeout: Duration) -> Result<St
             .stdout
             .take()
             .ok_or_else(|| "shell stdout unavailable".to_string())?,
+        max_stream_bytes,
     );
     let stderr_reader = spawn_reader(
         child
             .stderr
             .take()
             .ok_or_else(|| "shell stderr unavailable".to_string())?,
+        max_stream_bytes,
     );
 
     let started = Instant::now();
@@ -88,24 +99,72 @@ pub fn run(command: &str, workspace_root: &Path, timeout: Duration) -> Result<St
     }
 }
 
-fn spawn_reader<R>(mut reader: R) -> JoinHandle<Result<Vec<u8>, String>>
+fn spawn_reader<R>(mut reader: R, max_bytes: usize) -> JoinHandle<Result<BoundedOutput, String>>
 where
     R: Read + Send + 'static,
 {
     thread::spawn(move || {
         let mut bytes = Vec::new();
-        reader
-            .read_to_end(&mut bytes)
-            .map_err(|error| format!("failed to read shell output: {error}"))?;
-        Ok(bytes)
+        let mut truncated_bytes = 0usize;
+        let mut chunk = [0u8; 8192];
+        loop {
+            let count = reader
+                .read(&mut chunk)
+                .map_err(|error| format!("failed to read shell output: {error}"))?;
+            if count == 0 {
+                break;
+            }
+            let remaining = max_bytes.saturating_sub(bytes.len());
+            let keep = remaining.min(count);
+            bytes.extend_from_slice(&chunk[..keep]);
+            truncated_bytes = truncated_bytes.saturating_add(count - keep);
+        }
+        Ok(BoundedOutput {
+            bytes,
+            truncated_bytes,
+        })
     })
 }
 
-fn finish_reader(reader: JoinHandle<Result<Vec<u8>, String>>) -> Result<String, String> {
-    let bytes = reader
+#[cfg(unix)]
+fn native_shell_command(command: &str, workspace_root: &Path) -> Command {
+    let mut command_builder = Command::new("sh");
+    command_builder
+        .arg("-c")
+        .arg(command)
+        .current_dir(workspace_root);
+    command_builder
+}
+
+#[cfg(windows)]
+fn native_shell_command(command: &str, workspace_root: &Path) -> Command {
+    let mut command_builder = Command::new("cmd");
+    command_builder
+        .args(["/D", "/S", "/C", command])
+        .current_dir(workspace_root);
+    command_builder
+}
+
+fn finish_reader(reader: JoinHandle<Result<BoundedOutput, String>>) -> Result<String, String> {
+    let output = reader
         .join()
         .map_err(|_| "shell output reader panicked".to_string())??;
-    Ok(String::from_utf8_lossy(&bytes).trim().to_string())
+    let mut text = String::from_utf8_lossy(&output.bytes).trim().to_string();
+    if output.truncated_bytes > 0 {
+        text.push_str(&format!(
+            "\n[shell output truncated: {} bytes omitted]",
+            output.truncated_bytes
+        ));
+    }
+    Ok(text)
+}
+
+fn max_stream_bytes() -> usize {
+    std::env::var("CANDLE_CLI_MAX_SHELL_OUTPUT_BYTES")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(DEFAULT_MAX_STREAM_BYTES)
 }
 
 #[cfg(unix)]
@@ -146,4 +205,20 @@ fn format_shell_result(success: bool, exit_code: i32, stdout: &str, stderr: &str
     format!(
         "status: {status}\ntool: shell\nexit_code: {exit_code}\nstdout:\n{stdout}\n\nstderr:\n{stderr}"
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
+
+    #[test]
+    fn shell_reader_bounds_memory_and_reports_omitted_bytes() {
+        let reader = spawn_reader(Cursor::new(vec![b'x'; 4096]), 1024);
+        let output = finish_reader(reader).unwrap();
+
+        assert!(output.starts_with(&"x".repeat(1024)));
+        assert!(output.ends_with("[shell output truncated: 3072 bytes omitted]"));
+        assert!(output.len() < 1200);
+    }
 }

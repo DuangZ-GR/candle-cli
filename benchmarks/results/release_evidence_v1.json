@@ -1,0 +1,168 @@
+{
+  "schema_version": "1.0",
+  "release_report_version": "release-evidence-v1",
+  "frozen_at": "2026-08-06",
+  "source_tree": "m18-candidate-before-release-tag",
+  "evidence_count": 13,
+  "claim_eligible_evidence_count": 12,
+  "non_claim_evidence_count": 1,
+  "evidence": [
+    {
+      "id": "real-project-development",
+      "source": "benchmarks/results/real_projects_v1_after.json",
+      "source_sha256": "07787400465b28053d9d73f498ad486c1c8d39e1c12351a1ab3b0f18f1c09199",
+      "claim_eligible": true,
+      "metrics": {
+        "files": 25,
+        "source_lines": 4436,
+        "mapped_finding_coverage": 0.447706,
+        "syntax_valid_rate": 1.0
+      }
+    },
+    {
+      "id": "real-project-heldout",
+      "source": "benchmarks/results/real_projects_heldout_v1.json",
+      "source_sha256": "c2e7c1fcb725bfac56eef0bfc78515e8eff17e55ccc57d891652375361dad30d",
+      "claim_eligible": true,
+      "metrics": {
+        "files": 17,
+        "source_lines": 3052,
+        "mapped_finding_coverage": 0.419811,
+        "syntax_valid_rate": 1.0
+      }
+    },
+    {
+      "id": "runtime-parity",
+      "source": "benchmarks/results/runtime_parity_v2.json",
+      "source_sha256": "ba9316b0797d8915d9880963690e454ff717636975d3226f5904f08aaa5afb29",
+      "claim_eligible": true,
+      "metrics": {
+        "case_count": 5,
+        "runtime_parity_rate": 1.0,
+        "classification_accuracy": 1.0
+      }
+    },
+    {
+      "id": "component-parity",
+      "source": "benchmarks/results/runtime_components_v1.json",
+      "source_sha256": "3429abc9addd626d7157d67ad4f2f5cb6dd4de7132c2ecbb9196cfca2b859eb7",
+      "claim_eligible": true,
+      "metrics": {
+        "case_count": 7,
+        "component_parity_rate": 1.0,
+        "first_divergence_top1_accuracy": 1.0
+      }
+    },
+    {
+      "id": "training-parity",
+      "source": "benchmarks/results/runtime_training_v1.json",
+      "source_sha256": "d3fe0ff24f8663a859acf0edae4bee2b2233ca99e93984c3e523281667a8410d",
+      "claim_eligible": true,
+      "metrics": {
+        "case_count": 3,
+        "training_step_parity_rate": 1.0,
+        "optimizer_defect_top1_accuracy": 1.0
+      }
+    },
+    {
+      "id": "workflow-e2e",
+      "source": "benchmarks/results/workflow_e2e_v1.json",
+      "source_sha256": "e4284e2a821635f33cc6eb5f5d6b200ba39825819b04a92497e7979cde1465a5",
+      "claim_eligible": true,
+      "metrics": {
+        "case_count": 4,
+        "workflow_pass_rate": 1.0,
+        "fault_rollback_rate": 1.0
+      }
+    },
+    {
+      "id": "real-model-dual-runtime",
+      "source": "benchmarks/results/real_model_dual_runtime_v1.json",
+      "source_sha256": "0c58e3e8998d0c2975b97936fa1b5d61a503c88a3a7e4b523328d017af654ca9",
+      "claim_eligible": true,
+      "metrics": {
+        "case_count": 3,
+        "pass_rate": 1.0,
+        "rollback_success_rate": 1.0
+      }
+    },
+    {
+      "id": "data-pipeline-randomness",
+      "source": "benchmarks/results/data_pipeline_randomness_v1.json",
+      "source_sha256": "63bb1d823c54530afa5bc57d443969a035170b2745be6c411f09e98a438563a8",
+      "claim_eligible": true,
+      "metrics": {
+        "case_count": 18,
+        "classification_accuracy": 1.0,
+        "first_divergence_top1_accuracy": 1.0
+      }
+    },
+    {
+      "id": "advanced-training",
+      "source": "benchmarks/results/advanced_training_v1.json",
+      "source_sha256": "033a6ae1b0cdb5eebdae08481c2f6ac0f99152c75d5724089c5eed69c7c29d27",
+      "claim_eligible": true,
+      "metrics": {
+        "case_count": 13,
+        "classification_accuracy": 1.0,
+        "diagnostic_top1_accuracy": 1.0,
+        "checkpoint_restore_rate": 1.0
+      }
+    },
+    {
+      "id": "security-development",
+      "source": "benchmarks/results/security_regression_v1.json",
+      "source_sha256": "b39f90a41dad8798adaaa1ff65701a1c68bd062602a9e90b6206eecd3386af2c",
+      "claim_eligible": true,
+      "metrics": {
+        "attack_case_count": 12,
+        "attack_interception_rate": 1.0,
+        "benign_false_positive_rate": 0.0
+      }
+    },
+    {
+      "id": "security-heldout",
+      "source": "benchmarks/results/security_heldout_v1.json",
+      "source_sha256": "cbc5b1c2bce289640b58f04be21f721eabe3f60891db050c32ea38a6b8474c8c",
+      "claim_eligible": true,
+      "metrics": {
+        "attack_case_count": 15,
+        "attack_evaluated_count": 12,
+        "attack_not_applicable_count": 3,
+        "attack_interception_rate": 1.0,
+        "benign_false_positive_rate": 0.0
+      }
+    },
+    {
+      "id": "context-fact-retention",
+      "source": "benchmarks/results/context_fact_retention_v2.json",
+      "source_sha256": "2992716108eec642de13567c27cae031fc02344f832638558ee901d16d43291d",
+      "claim_eligible": true,
+      "metrics": {
+        "case_count": 20,
+        "fact_retention_rate": 1.0,
+        "task_pass_rate": 1.0,
+        "estimated_token_reduction_rate": 0.8176358766093493,
+        "provider_cache_hit_rate": null
+      }
+    },
+    {
+      "id": "agent-ollama-smoke",
+      "source": "benchmarks/results/agent_ablation_ollama_smoke_v1.json",
+      "source_sha256": "d2da5a39ef3130cb6129bfa5898834e5e4c571891da68ac9eb8a407bf8d72011",
+      "claim_eligible": false,
+      "metrics": {
+        "run_mode": "smoke",
+        "model": "qwen2:0.5b",
+        "claim_eligible": false
+      }
+    }
+  ],
+  "limitations": [
+    "Metrics retain the scope and limitations of their source benchmark; aggregation does not create a broader generalization claim.",
+    "Provider cache remains null when the Provider does not report cache fields.",
+    "The Ollama smoke result is included as rejected capability evidence and is not claim eligible.",
+    "Security rates exclude cases explicitly reported as not_applicable and disclose that count.",
+    "A release tag and commit must be recorded only after user-approved publication."
+  ]
+}

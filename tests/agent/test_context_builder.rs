@@ -1,4 +1,5 @@
 use candle_cli::context::builder::build_turn_request;
+use candle_cli::context::compact::compact_session;
 use candle_cli::session::model::{ContentBlock, Message, MessageRole, Session};
 
 #[test]
@@ -74,6 +75,51 @@ fn rag_enrichment_does_not_mutate_or_recursively_expand_the_session() {
         .messages_json
         .contains("The following code may be relevant to the question"));
     assert_eq!(first.messages_json.matches("Question:").count(), 1);
+}
+
+#[test]
+fn build_turn_request_injects_verified_structured_state_after_compaction() {
+    let mut session = Session::new(".".to_string());
+    session.messages.extend([
+        Message {
+            role: MessageRole::User,
+            blocks: vec![ContentBlock::Text {
+                text: "Inspect src/model.py".to_string(),
+            }],
+        },
+        Message {
+            role: MessageRole::Assistant,
+            blocks: vec![ContentBlock::ToolCall {
+                id: "call-1".to_string(),
+                name: "shell".to_string(),
+                input: serde_json::json!({"command": "python -m pytest"}).to_string(),
+            }],
+        },
+        Message {
+            role: MessageRole::Tool,
+            blocks: vec![ContentBlock::ToolResult {
+                tool_call_id: "call-1".to_string(),
+                output: "Error: dtype mismatch at src/model.py:17".to_string(),
+                is_error: true,
+            }],
+        },
+        Message {
+            role: MessageRole::User,
+            blocks: vec![ContentBlock::Text {
+                text: "What remains?".to_string(),
+            }],
+        },
+    ]);
+
+    compact_session(&mut session, 1);
+    let request = build_turn_request(&mut session, "[]").unwrap();
+
+    assert!(request.system_prompt.contains("[Structured Task State]"));
+    assert!(request.system_prompt.contains("src/model.py"));
+    assert!(request.system_prompt.contains("python -m pytest"));
+    assert!(request.system_prompt.contains("dtype mismatch"));
+    assert!(session.task_state.evidence_valid());
+    assert!(!request.system_prompt.contains("source_excerpt"));
 }
 
 fn user_text(session: &Session) -> &str {

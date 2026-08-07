@@ -3,6 +3,12 @@ pub struct TurnRequest {
     pub system_prompt: String,
     pub messages_json: String,
     pub tools_json: String,
+    /// Remaining wall-clock budget for this provider request. `None` keeps
+    /// the runtime default for non-experiment callers.
+    pub timeout_ms: Option<u64>,
+    /// Absolute Unix deadline so bridge process startup is included in the
+    /// same wall-clock budget as provider inference.
+    pub deadline_unix_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,6 +35,8 @@ pub struct TurnResult {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TokenUsage {
     pub request_count: u64,
+    pub retry_count: u64,
+    pub provider_latency_ms: u64,
     pub usage_reported_request_count: u64,
     pub prompt_tokens: u64,
     pub completion_tokens: u64,
@@ -48,6 +56,8 @@ impl TokenUsage {
 
     pub fn merge(&mut self, other: &Self) {
         self.request_count += other.request_count;
+        self.retry_count += other.retry_count;
+        self.provider_latency_ms += other.provider_latency_ms;
         self.usage_reported_request_count += other.usage_reported_request_count;
         self.prompt_tokens += other.prompt_tokens;
         self.completion_tokens += other.completion_tokens;
@@ -90,6 +100,8 @@ impl TokenUsage {
         let cache_complete = self.cache_metrics_complete();
         serde_json::json!({
             "request_count": self.request_count,
+            "retry_count": self.retry_count,
+            "provider_latency_ms": self.provider_latency_ms,
             "usage_reported_request_count": self.usage_reported_request_count,
             "usage_complete": usage_complete,
             "prompt_tokens": usage_complete.then_some(self.prompt_tokens),
@@ -123,6 +135,8 @@ mod tests {
     fn reported_usage(prompt: u64, cached: Option<u64>) -> TokenUsage {
         TokenUsage {
             request_count: 1,
+            retry_count: 0,
+            provider_latency_ms: 25,
             usage_reported_request_count: 1,
             prompt_tokens: prompt,
             completion_tokens: 10,
@@ -151,6 +165,7 @@ mod tests {
         assert!(usage.usage_complete());
         assert!(usage.cache_metrics_complete());
         assert_eq!(usage.prompt_tokens, 150);
+        assert_eq!(usage.provider_latency_ms, 50);
         assert_eq!(usage.cached_prompt_tokens, 100);
         assert_eq!(usage.provider_cache_hit_rate(), Some(2.0 / 3.0));
     }

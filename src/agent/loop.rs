@@ -1,3 +1,4 @@
+use crate::agent::state::AgentRunBudget;
 use crate::agent::tool_call::{parse_tool_call, ToolCallParseError};
 use crate::agent::trace::{ExecutionTrace, TraceEvent};
 use crate::agent::turn::finish_turn;
@@ -56,12 +57,68 @@ pub fn run_single_turn_with_limit_and_trace<R: CandleTargetRuntime>(
     max_steps: usize,
     trace: &mut ExecutionTrace,
 ) -> Result<TurnResult, String> {
+    let mut budget = AgentRunBudget::new(max_steps, max_steps);
+    run_single_turn_with_budget_and_trace(
+        session,
+        runtime,
+        tools,
+        policy,
+        max_steps,
+        &mut budget,
+        trace,
+    )
+}
+
+pub fn run_single_turn_with_budget<R: CandleTargetRuntime>(
+    session: &mut Session,
+    runtime: &mut R,
+    tools: &ToolRegistry,
+    policy: &PermissionPolicy,
+    max_steps: usize,
+    budget: &mut AgentRunBudget,
+) -> Result<TurnResult, String> {
+    let mut trace = ExecutionTrace::new();
+    run_single_turn_with_budget_and_trace(
+        session, runtime, tools, policy, max_steps, budget, &mut trace,
+    )
+}
+
+fn run_single_turn_with_budget_and_trace<R: CandleTargetRuntime>(
+    session: &mut Session,
+    runtime: &mut R,
+    tools: &ToolRegistry,
+    policy: &PermissionPolicy,
+    max_steps: usize,
+    budget: &mut AgentRunBudget,
+    trace: &mut ExecutionTrace,
+) -> Result<TurnResult, String> {
     let verbose = verbose_enabled();
     let mut accumulated_usage = TokenUsage::default();
 
     for step in 0..max_steps {
+        if budget.timed_out() {
+            return finish_budget_stop(
+                session,
+                trace,
+                accumulated_usage,
+                "stopped after reaching shared wall-clock timeout".to_string(),
+            );
+        }
+        if !budget.consume_model_request() {
+            return finish_budget_stop(
+                session,
+                trace,
+                accumulated_usage,
+                format!(
+                    "stopped after reaching shared model request budget ({})",
+                    budget.max_model_requests()
+                ),
+            );
+        }
         trace.push(TraceEvent::BuildTurnRequest);
-        let request = crate::context::builder::build_turn_request(session, tools_json())?;
+        let mut request = crate::context::builder::build_turn_request(session, tools_json())?;
+        request.timeout_ms = budget.remaining_timeout_ms();
+        request.deadline_unix_ms = budget.deadline_unix_ms();
 
         trace.push(TraceEvent::RuntimeGenerateTurn);
         let streaming = runtime.capabilities().supports_streaming
@@ -82,6 +139,17 @@ pub fn run_single_turn_with_limit_and_trace<R: CandleTargetRuntime>(
         trace.push(TraceEvent::ParseToolCall);
         match parse_tool_call(&result.final_text) {
             Ok(Some(tool_call)) => {
+                if !budget.consume_tool_step() {
+                    return finish_budget_stop(
+                        session,
+                        trace,
+                        accumulated_usage,
+                        format!(
+                            "stopped after reaching shared tool step budget ({})",
+                            budget.max_tool_steps()
+                        ),
+                    );
+                }
                 trace.push(TraceEvent::ToolCall {
                     name: tool_call.name.clone(),
                 });
@@ -106,13 +174,16 @@ pub fn run_single_turn_with_limit_and_trace<R: CandleTargetRuntime>(
                         true,
                     )
                 } else if tool_call.name == "task" {
+                    budget.record_subagent_invocation();
                     let desc: serde_json::Value =
                         serde_json::from_str(&tool_call.input_json).unwrap_or_default();
                     let desc = desc
                         .get("description")
                         .and_then(|v| v.as_str())
                         .unwrap_or("");
-                    match crate::tools::builtin::task::run(desc, runtime, tools, policy) {
+                    match crate::tools::builtin::task::run_with_budget(
+                        desc, runtime, tools, policy, budget,
+                    ) {
                         Ok(sub_result) => {
                             accumulated_usage.merge(&sub_result.usage);
                             trace.record_usage(&sub_result.usage);
@@ -153,6 +224,21 @@ pub fn run_single_turn_with_limit_and_trace<R: CandleTargetRuntime>(
     }
 
     let final_text = format!("stopped after reaching maximum tool steps ({max_steps})");
+    trace.push(TraceEvent::FinalAnswer);
+    append_assistant_text(session, final_text.clone());
+    Ok(TurnResult {
+        final_text,
+        tool_calls: Vec::new(),
+        usage: accumulated_usage,
+    })
+}
+
+fn finish_budget_stop(
+    session: &mut Session,
+    trace: &mut ExecutionTrace,
+    accumulated_usage: TokenUsage,
+    final_text: String,
+) -> Result<TurnResult, String> {
     trace.push(TraceEvent::FinalAnswer);
     append_assistant_text(session, final_text.clone());
     Ok(TurnResult {

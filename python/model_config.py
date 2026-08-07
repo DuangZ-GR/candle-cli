@@ -45,6 +45,7 @@ ENV_VERBOSE = "CANDLE_CLI_VERBOSE"
 ENV_MODEL_CONFIG = "CANDLE_CLI_MODEL_CONFIG"
 ENV_API_BASE_URL = "CANDLE_CLI_API_BASE_URL"
 ENV_API_KEY = "CANDLE_CLI_API_KEY"
+ENV_API_STYLE = "CANDLE_CLI_API_STYLE"
 ENV_ALLOW_STUB_FALLBACK = "CANDLE_CLI_ALLOW_STUB_FALLBACK"
 ENV_INCLUDE_USAGE = "CANDLE_CLI_INCLUDE_USAGE"
 
@@ -69,6 +70,7 @@ class ModelConfig:
         self.verbose: bool = False
         self.api_base_url: str = ""
         self.api_key: str = ""
+        self.api_style: str = "openai"
         self.allow_stub_fallback: bool = False
         self.include_usage: bool = True
 
@@ -104,6 +106,8 @@ class ModelConfig:
             self.api_base_url = api["base_url"]
         if "key" in api:
             self.api_key = api["key"]
+        if "style" in api:
+            self.api_style = api["style"]
 
     def _apply_env_overrides(self):
         self.model_id = _env_str(ENV_MODEL_ID, self.model_id)
@@ -115,6 +119,7 @@ class ModelConfig:
         self.verbose = _env_bool(ENV_VERBOSE, self.verbose)
         self.api_base_url = _env_str(ENV_API_BASE_URL, self.api_base_url)
         self.api_key = _env_str(ENV_API_KEY, self.api_key)
+        self.api_style = _env_str(ENV_API_STYLE, self.api_style).strip().lower()
         self.allow_stub_fallback = _env_bool(
             ENV_ALLOW_STUB_FALLBACK, self.allow_stub_fallback
         )

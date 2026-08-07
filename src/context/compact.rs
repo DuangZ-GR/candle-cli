@@ -31,6 +31,15 @@ pub fn compact_session(session: &mut Session, max_turns: usize) {
         .map(|(index, _)| index)
         .expect("user_count is greater than remove_count");
 
+    let removed_messages: Vec<_> = session
+        .messages
+        .iter()
+        .enumerate()
+        .filter(|(index, message)| *index < keep_from && message.role != MessageRole::System)
+        .map(|(_, message)| message.clone())
+        .collect();
+    session.task_state.absorb_messages(&removed_messages);
+
     session.messages = std::mem::take(&mut session.messages)
         .into_iter()
         .enumerate()

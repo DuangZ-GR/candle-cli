@@ -357,7 +357,7 @@ fn migrate_map_returns_an_evidence_backed_exact_mapping() {
     assert_eq!(result["status"], "exact");
     assert_eq!(result["target_api"], "mindspore.mint.sum");
     assert_eq!(result["target_framework_version"], "2.9.0");
-    assert!(result["evidence_urls"].as_array().unwrap().len() > 0);
+    assert!(!result["evidence_urls"].as_array().unwrap().is_empty());
 }
 
 #[test]

@@ -1,0 +1,39 @@
+name: Release dry run
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact: candle-cli-linux-x86_64
+            binary: target/x86_64-unknown-linux-gnu/release/candle-cli
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact: candle-cli-windows-x86_64
+            binary: target/x86_64-pc-windows-msvc/release/candle-cli.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - run: cargo test --locked --all
+      - run: cargo build --locked --release --target ${{ matrix.target }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.binary }}
+          if-no-files-found: error
+
+# This workflow intentionally uploads CI artifacts only. It never creates a tag,
+# GitHub Release, or package publication without a separate user-approved action.

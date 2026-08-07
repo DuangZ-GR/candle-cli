@@ -1,5 +1,6 @@
 use candle_cli::tools::registry::ToolRegistry;
 use std::fs;
+#[cfg(unix)]
 use std::time::{Duration, Instant};
 
 #[test]
@@ -13,6 +14,7 @@ fn shell_tool_executes_command_inside_workspace_root() {
     assert!(result.contains(dir.path().file_name().unwrap().to_str().unwrap()));
 }
 
+#[cfg(unix)]
 #[test]
 fn shell_tool_times_out() {
     let dir = tempfile::tempdir().unwrap();
@@ -31,6 +33,7 @@ fn shell_tool_times_out() {
     assert!(started.elapsed() < Duration::from_secs(4));
 }
 
+#[cfg(unix)]
 #[test]
 fn shell_tool_drains_large_output_without_deadlock() {
     let dir = tempfile::tempdir().unwrap();
@@ -43,6 +46,7 @@ fn shell_tool_drains_large_output_without_deadlock() {
     assert!(result.len() > 100_000);
 }
 
+#[cfg(unix)]
 #[test]
 fn shell_tool_cleans_up_background_processes_before_returning() {
     let dir = tempfile::tempdir().unwrap();
@@ -129,6 +133,7 @@ fn edit_tool_fails_when_old_string_matches_multiple_times() {
     assert!(err.contains("old_string matched 2 times"));
 }
 
+#[cfg(unix)]
 #[test]
 fn shell_tool_returns_error_envelope_for_non_zero_exit() {
     let dir = tempfile::tempdir().unwrap();
@@ -140,4 +145,17 @@ fn shell_tool_returns_error_envelope_for_non_zero_exit() {
     assert!(err.contains("status: error"));
     assert!(err.contains("tool: shell"));
     assert!(err.contains("exit_code: 7"));
+}
+
+#[cfg(windows)]
+#[test]
+fn windows_shell_uses_cmd_and_reports_output() {
+    let dir = tempfile::tempdir().unwrap();
+    let registry = ToolRegistry::workspace_write(dir.path());
+    let result = registry
+        .execute("shell", r#"{"command":"echo windows-shell-ok"}"#)
+        .unwrap();
+
+    assert!(result.contains("windows-shell-ok"));
+    assert!(result.contains("exit_code: 0"));
 }

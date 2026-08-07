@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0",
+  "release_report_version": "release-evidence-v1",
+  "frozen_at": "2026-08-06",
+  "source_tree": "m18-candidate-before-release-tag",
+  "entries": [
+    {"id":"real-project-development","path":"benchmarks/results/real_projects_v1_after.json","claim_eligible":true,"metrics":[["files","summary.files"],["source_lines","summary.source_lines"],["mapped_finding_coverage","summary.mapped_finding_coverage"],["syntax_valid_rate","summary.rewrite.syntax_valid_rate"]]},
+    {"id":"real-project-heldout","path":"benchmarks/results/real_projects_heldout_v1.json","claim_eligible":true,"metrics":[["files","summary.files"],["source_lines","summary.source_lines"],["mapped_finding_coverage","summary.mapped_finding_coverage"],["syntax_valid_rate","summary.rewrite.syntax_valid_rate"]]},
+    {"id":"runtime-parity","path":"benchmarks/results/runtime_parity_v2.json","claim_eligible":true,"required_true":"passed","metrics":[["case_count","case_count"],["runtime_parity_rate","runtime_parity_rate"],["classification_accuracy","classification_accuracy"]]},
+    {"id":"component-parity","path":"benchmarks/results/runtime_components_v1.json","claim_eligible":true,"required_true":"passed","metrics":[["case_count","case_count"],["component_parity_rate","equivalent_component_parity_rate"],["first_divergence_top1_accuracy","first_divergence_top1_accuracy"]]},
+    {"id":"training-parity","path":"benchmarks/results/runtime_training_v1.json","claim_eligible":true,"required_true":"passed","metrics":[["case_count","case_count"],["training_step_parity_rate","training_step_parity_rate"],["optimizer_defect_top1_accuracy","optimizer_defect_top1_accuracy"]]},
+    {"id":"workflow-e2e","path":"benchmarks/results/workflow_e2e_v1.json","claim_eligible":true,"required_true":"passed","metrics":[["case_count","summary.case_count"],["workflow_pass_rate","summary.workflow_pass_rate"],["fault_rollback_rate","summary.fault_rollback_rate"]]},
+    {"id":"real-model-dual-runtime","path":"benchmarks/results/real_model_dual_runtime_v1.json","claim_eligible":true,"metrics":[["case_count","summary.case_count"],["pass_rate","summary.pass_rate"],["rollback_success_rate","summary.rollback_success_rate"]]},
+    {"id":"data-pipeline-randomness","path":"benchmarks/results/data_pipeline_randomness_v1.json","claim_eligible":true,"required_true":"passed","metrics":[["case_count","case_count"],["classification_accuracy","classification_accuracy"],["first_divergence_top1_accuracy","first_divergence_top1_accuracy"]]},
+    {"id":"advanced-training","path":"benchmarks/results/advanced_training_v1.json","claim_eligible":true,"required_true":"passed","metrics":[["case_count","case_count"],["classification_accuracy","classification_accuracy"],["diagnostic_top1_accuracy","diagnostic_top1_accuracy"],["checkpoint_restore_rate","checkpoint_restore_rate"]]},
+    {"id":"security-development","path":"benchmarks/results/security_regression_v1.json","claim_eligible":true,"required_true":"passed","metrics":[["attack_case_count","attack_case_count"],["attack_interception_rate","attack_interception_rate"],["benign_false_positive_rate","benign_false_positive_rate"]]},
+    {"id":"security-heldout","path":"benchmarks/results/security_heldout_v1.json","claim_eligible":true,"required_true":"passed","metrics":[["attack_case_count","attack_case_count"],["attack_evaluated_count","attack_evaluated_count"],["attack_not_applicable_count","attack_not_applicable_count"],["attack_interception_rate","attack_interception_rate"],["benign_false_positive_rate","benign_false_positive_rate"]]},
+    {"id":"context-fact-retention","path":"benchmarks/results/context_fact_retention_v2.json","claim_eligible":true,"required_true":"passed","metrics":[["case_count","case_count"],["fact_retention_rate","fact_retention_rate"],["task_pass_rate","task_pass_rate"],["estimated_token_reduction_rate","estimated_token_reduction_rate"],["provider_cache_hit_rate","provider_cache_hit_rate"]]},
+    {"id":"agent-ollama-smoke","path":"benchmarks/results/agent_ablation_ollama_smoke_v1.json","claim_eligible":false,"required_false":"claim_eligible","metrics":[["run_mode","run_mode"],["model","model"],["claim_eligible","claim_eligible"]]}
+  ],
+  "limitations": [
+    "Metrics retain the scope and limitations of their source benchmark; aggregation does not create a broader generalization claim.",
+    "Provider cache remains null when the Provider does not report cache fields.",
+    "The Ollama smoke result is included as rejected capability evidence and is not claim eligible.",
+    "Security rates exclude cases explicitly reported as not_applicable and disclose that count.",
+    "A release tag and commit must be recorded only after user-approved publication."
+  ]
+}

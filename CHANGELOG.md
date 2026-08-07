@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Frozen M18 security heldout suite with explicit applicable/not-applicable accounting.
+- Structured `doctor --json` checks for Rust, Python, PyTorch, MindSpore, Docker, Bridge, Provider, and dual-runtime environments.
+- Linux/Windows install and offline demo scripts.
+- Linux/Windows GitHub Actions CI plus a manual artifact-only release dry run.
+- Traceable final benchmark JSON/Markdown aggregation with source SHA-256 digests.
+
+### Security
+
+- Prevent recursive grep/glob from following workspace symlinks to external paths.
+- Pass web-search queries as opaque Python arguments instead of interpolating them into executable source.
+- Require confirmation for network search in prompt and workspace-write modes.
+- Bound read-tool file size and retained shell stdout/stderr bytes.
+
+### Changed
+
+- Native Shell uses `cmd.exe` on Windows and `sh` on Unix.
+- Strict Clippy checks are clean on the M18 candidate.
+
 ## v0.4.0 - 2026-06-06
 
 ### Added

@@ -26,6 +26,38 @@ fn parses_context_harness_mode() {
 }
 
 #[test]
+fn parses_agent_experiment_mode() {
+    let cli = Cli::parse_from([
+        "candle-cli",
+        "agent-experiment",
+        "--config",
+        "benchmarks/agent/config.json",
+        "--output",
+        "runs.json",
+        "--smoke",
+    ]);
+
+    match cli.command {
+        Some(CommandMode::AgentExperiment {
+            config,
+            output,
+            smoke,
+        }) => {
+            assert_eq!(config.to_string_lossy(), "benchmarks/agent/config.json");
+            assert_eq!(output.to_string_lossy(), "runs.json");
+            assert!(smoke);
+        }
+        other => panic!("unexpected command: {other:?}"),
+    }
+}
+
+#[test]
+fn parses_security_heldout_mode() {
+    let cli = Cli::parse_from(["candle-cli", "security-heldout"]);
+    assert!(matches!(cli.command, Some(CommandMode::SecurityHeldout)));
+}
+
+#[test]
 fn parses_migrate_scan_mode() {
     let cli = Cli::parse_from([
         "candle-cli",
