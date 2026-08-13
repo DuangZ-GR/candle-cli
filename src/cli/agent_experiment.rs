@@ -1,6 +1,9 @@
 use crate::agent::r#loop::run_single_turn_with_budget;
 use crate::agent::state::AgentRunBudget;
+use crate::agent::tool_call::{parse_tool_call, ToolCallParseError};
 use crate::model::configured::ConfiguredRuntime;
+use crate::model::runtime::CandleTargetRuntime;
+use crate::model::types::{TokenUsage, TurnRequest, TurnResult};
 use crate::permissions::mode::PermissionMode;
 use crate::permissions::policy::PermissionPolicy;
 use crate::session::model::{ContentBlock, Message, MessageRole, Session};
@@ -49,6 +52,8 @@ struct BudgetConfig {
 struct ArmConfig {
     id: String,
     task_tool_enabled: bool,
+    #[serde(default)]
+    baseline_loop: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -208,13 +213,16 @@ fn load_manifest(path: &Path) -> Result<ExperimentManifest, String> {
     }
     let arm_ids: std::collections::HashSet<_> =
         manifest.arms.iter().map(|arm| arm.id.as_str()).collect();
-    if arm_ids != std::collections::HashSet::from(["single", "delegated"])
-        || manifest
-            .arms
-            .iter()
-            .any(|arm| arm.task_tool_enabled != (arm.id == "delegated"))
+    if arm_ids != std::collections::HashSet::from(["baseline_loop", "single", "delegated"])
+        || manifest.arms.iter().any(|arm| {
+            arm.task_tool_enabled != (arm.id == "delegated")
+                || arm.baseline_loop != (arm.id == "baseline_loop")
+        })
     {
-        return Err("agent experiment arms must be single(no task) and delegated(task)".into());
+        return Err(
+            "agent experiment arms must be baseline_loop(minimal PI), single(no task), and delegated(task)"
+                .into(),
+        );
     }
     Ok(manifest)
 }
@@ -322,6 +330,12 @@ fn execute_run(
     tools: &ToolRegistry,
     runtime: &mut ConfiguredRuntime,
 ) -> RawRunRecord {
+    if arm.baseline_loop {
+        return execute_baseline_loop_run(
+            manifest, scenario, arm, trial, workspace, tools, runtime,
+        );
+    }
+
     let policy = PermissionPolicy::new(if arm.task_tool_enabled {
         PermissionMode::ReadOnlyWithTask
     } else {
@@ -420,11 +434,238 @@ fn execute_run(
     }
 }
 
-fn balanced_arm_order(scenario_index: usize, trial: usize) -> [&'static str; 2] {
-    if (scenario_index + trial) & 1 == 0 {
-        ["single", "delegated"]
-    } else {
-        ["delegated", "single"]
+#[allow(clippy::too_many_arguments)]
+fn execute_baseline_loop_run(
+    manifest: &ExperimentManifest,
+    scenario: &ScenarioConfig,
+    arm: &ArmConfig,
+    trial: usize,
+    workspace: &Path,
+    tools: &ToolRegistry,
+    runtime: &mut ConfiguredRuntime,
+) -> RawRunRecord {
+    let mut session = Session::new(workspace.display().to_string());
+    session.messages.push(Message {
+        role: MessageRole::User,
+        blocks: vec![ContentBlock::Text {
+            text: format!(
+                "Task: {}\n\nUse only read/grep/glob/pwd if needed. Return a concise answer containing exact code identifiers as evidence.",
+                scenario.goal
+            ),
+        }],
+    });
+    let mut budget = AgentRunBudget::with_timeout(
+        manifest.budgets.max_model_requests,
+        manifest.budgets.max_tool_steps,
+        Duration::from_millis(manifest.budgets.timeout_ms),
+    );
+    let started = Instant::now();
+    let result = run_minimal_pi_loop(runtime, tools, &mut session, &mut budget);
+    let elapsed_ms = started.elapsed().as_millis() as u64;
+
+    match result {
+        Ok(result) => {
+            let missing_evidence =
+                missing_evidence(&result.final_text, &scenario.required_evidence);
+            let budget_exhausted = result.final_text.contains("minimal PI loop stopped after");
+            let timed_out = budget.timed_out() || elapsed_ms > manifest.budgets.timeout_ms;
+            let passed = missing_evidence.is_empty() && !budget_exhausted && !timed_out;
+            let failure_type = if timed_out {
+                Some("timeout".to_string())
+            } else if budget_exhausted {
+                Some("budget_exhausted".to_string())
+            } else if !missing_evidence.is_empty() {
+                Some("missing_evidence".to_string())
+            } else {
+                None
+            };
+            RawRunRecord {
+                scenario_id: scenario.id.clone(),
+                arm_id: arm.id.clone(),
+                trial,
+                passed,
+                elapsed_ms,
+                tool_steps: budget.tool_steps_used(),
+                model_requests: budget.model_requests_used(),
+                subagent_invocations: 0,
+                human_interventions: 0,
+                failure_type,
+                missing_evidence,
+                final_answer_digest: digest(&result.final_text),
+                usage: result.usage.to_json(),
+            }
+        }
+        Err(error) => {
+            let timed_out = budget.timed_out()
+                || error.to_ascii_lowercase().contains("timed out")
+                || elapsed_ms > manifest.budgets.timeout_ms;
+            RawRunRecord {
+                scenario_id: scenario.id.clone(),
+                arm_id: arm.id.clone(),
+                trial,
+                passed: false,
+                elapsed_ms,
+                tool_steps: budget.tool_steps_used(),
+                model_requests: budget.model_requests_used(),
+                subagent_invocations: 0,
+                human_interventions: 0,
+                failure_type: Some(
+                    if timed_out {
+                        "timeout"
+                    } else {
+                        "runtime_error"
+                    }
+                    .to_string(),
+                ),
+                missing_evidence: scenario.required_evidence.clone(),
+                final_answer_digest: digest(&error),
+                usage: serde_json::Value::Null,
+            }
+        }
+    }
+}
+
+fn run_minimal_pi_loop<R: CandleTargetRuntime>(
+    runtime: &mut R,
+    tools: &ToolRegistry,
+    session: &mut Session,
+    budget: &mut AgentRunBudget,
+) -> Result<TurnResult, String> {
+    let mut usage = TokenUsage::default();
+    while !budget.timed_out() {
+        if !budget.consume_model_request() {
+            let final_text = format!(
+                "minimal PI loop stopped after reaching model request budget ({})",
+                budget.max_model_requests()
+            );
+            append_baseline_text(session, final_text.clone());
+            return Ok(TurnResult {
+                final_text,
+                tool_calls: Vec::new(),
+                usage,
+            });
+        }
+        let request = TurnRequest {
+            system_prompt: baseline_system_prompt(),
+            messages_json: serde_json::to_string(&session.messages).map_err(|e| e.to_string())?,
+            tools_json: baseline_tools_json().to_string(),
+            timeout_ms: budget.remaining_timeout_ms(),
+            deadline_unix_ms: budget.deadline_unix_ms(),
+        };
+        let result = runtime.generate_turn(request)?;
+        usage.merge(&result.usage);
+        match parse_tool_call(&result.final_text) {
+            Ok(Some(tool_call)) => {
+                if !budget.consume_tool_step() {
+                    let final_text = format!(
+                        "minimal PI loop stopped after reaching tool step budget ({})",
+                        budget.max_tool_steps()
+                    );
+                    append_baseline_text(session, final_text.clone());
+                    return Ok(TurnResult {
+                        final_text,
+                        tool_calls: Vec::new(),
+                        usage,
+                    });
+                }
+                append_baseline_tool_call(session, &tool_call);
+                let (output, is_error) = if tool_call.name == "task" {
+                    (
+                        "status: error\nmessage: task is disabled in baseline_loop".to_string(),
+                        true,
+                    )
+                } else {
+                    match tools.execute(&tool_call.name, &tool_call.input_json) {
+                        Ok(output) => (format!("status: ok\noutput:\n{output}"), false),
+                        Err(error) => (format!("status: error\nmessage: {error}"), true),
+                    }
+                };
+                append_baseline_tool_result(session, &tool_call.id, output, is_error);
+            }
+            Ok(None) => {
+                append_baseline_text(session, result.final_text.clone());
+                return Ok(TurnResult {
+                    final_text: result.final_text,
+                    tool_calls: Vec::new(),
+                    usage,
+                });
+            }
+            Err(error) => {
+                append_baseline_text(session, baseline_parse_error_message(&error));
+            }
+        }
+    }
+    let final_text = "minimal PI loop stopped after reaching wall-clock timeout".to_string();
+    append_baseline_text(session, final_text.clone());
+    Ok(TurnResult {
+        final_text,
+        tool_calls: Vec::new(),
+        usage,
+    })
+}
+
+fn baseline_system_prompt() -> String {
+    format!(
+        "You are a minimal PI baseline code agent. PI means a simple perceive-act loop: read the task, optionally call one tool, observe the result, and continue until a final answer.\n\
+This baseline intentionally excludes candle-cli enhancements such as grep-RAG, project memory, sub-agents, migration-specific workflow orchestration, trace diagnostics, and transactional patch rollback.\n\
+Allowed tools are pwd, read, glob, and grep. To call a tool, output exactly one raw <tool_call>{{\"id\":\"call-1\",\"name\":\"read\",\"input\":{{\"file_path\":\"README.md\"}}}}</tool_call> block and no other text.\n\
+When you have enough evidence, return the final answer directly.\n\nAvailable tools JSON: {}",
+        baseline_tools_json()
+    )
+}
+
+fn baseline_tools_json() -> &'static str {
+    r#"[{"name":"pwd"},{"name":"read"},{"name":"glob"},{"name":"grep"}]"#
+}
+
+fn baseline_parse_error_message(error: &ToolCallParseError) -> String {
+    format!(
+        "Your previous tool call was malformed: {error}. Return exactly one valid <tool_call> block or a final answer."
+    )
+}
+
+fn append_baseline_tool_call(
+    session: &mut Session,
+    tool_call: &crate::model::types::ToolCallIntent,
+) {
+    session.messages.push(Message {
+        role: MessageRole::Assistant,
+        blocks: vec![ContentBlock::ToolCall {
+            id: tool_call.id.clone(),
+            name: tool_call.name.clone(),
+            input: tool_call.input_json.clone(),
+        }],
+    });
+}
+
+fn append_baseline_tool_result(
+    session: &mut Session,
+    tool_call_id: &str,
+    output: String,
+    is_error: bool,
+) {
+    session.messages.push(Message {
+        role: MessageRole::Tool,
+        blocks: vec![ContentBlock::ToolResult {
+            tool_call_id: tool_call_id.to_string(),
+            output,
+            is_error,
+        }],
+    });
+}
+
+fn append_baseline_text(session: &mut Session, text: String) {
+    session.messages.push(Message {
+        role: MessageRole::Assistant,
+        blocks: vec![ContentBlock::Text { text }],
+    });
+}
+
+fn balanced_arm_order(scenario_index: usize, trial: usize) -> [&'static str; 3] {
+    match (scenario_index + trial) % 3 {
+        0 => ["baseline_loop", "single", "delegated"],
+        1 => ["single", "delegated", "baseline_loop"],
+        _ => ["delegated", "baseline_loop", "single"],
     }
 }
 
@@ -470,6 +711,9 @@ mod tests {
     fn paired_order_alternates_across_scenarios_and_trials() {
         assert_ne!(balanced_arm_order(0, 1), balanced_arm_order(0, 2));
         assert_ne!(balanced_arm_order(0, 1), balanced_arm_order(1, 1));
+        assert!(balanced_arm_order(0, 1).contains(&"baseline_loop"));
+        assert!(balanced_arm_order(0, 1).contains(&"single"));
+        assert!(balanced_arm_order(0, 1).contains(&"delegated"));
     }
 
     #[test]
@@ -513,5 +757,65 @@ mod tests {
 
         assert_eq!(execution_limits(&manifest, true), (1, 1));
         assert_eq!(execution_limits(&manifest, false), (2, 3));
+    }
+
+    #[test]
+    fn baseline_arm_must_be_marked_as_pi_loop() {
+        let manifest = ExperimentManifest {
+            schema_version: "1.0".into(),
+            benchmark_version: "fixture".into(),
+            experiment_status: "ready".into(),
+            provider: ProviderConfig {
+                name: "fixture".into(),
+                model: "fixture".into(),
+                temperature: 0.0,
+            },
+            pricing: PricingConfig {
+                price_date: "2026-08-06".into(),
+                input_per_million_tokens: Some(0.0),
+                output_per_million_tokens: Some(0.0),
+            },
+            repetitions: 3,
+            budgets: BudgetConfig {
+                max_model_requests: 8,
+                max_tool_steps: 8,
+                timeout_ms: 120_000,
+            },
+            arms: vec![
+                ArmConfig {
+                    id: "baseline_loop".into(),
+                    task_tool_enabled: false,
+                    baseline_loop: true,
+                },
+                ArmConfig {
+                    id: "single".into(),
+                    task_tool_enabled: false,
+                    baseline_loop: false,
+                },
+                ArmConfig {
+                    id: "delegated".into(),
+                    task_tool_enabled: true,
+                    baseline_loop: false,
+                },
+            ],
+            scenarios: (0..10)
+                .map(|index| ScenarioConfig {
+                    id: format!("scenario-{index}"),
+                    goal: "goal".into(),
+                    evidence_paths: vec!["README.md".into()],
+                    required_evidence: vec!["candle-cli".into()],
+                })
+                .collect(),
+        };
+
+        let arm_ids: std::collections::HashSet<_> =
+            manifest.arms.iter().map(|arm| arm.id.as_str()).collect();
+        assert_eq!(
+            arm_ids,
+            std::collections::HashSet::from(["baseline_loop", "single", "delegated"])
+        );
+        assert!(manifest.arms[0].baseline_loop);
+        assert!(!manifest.arms[1].baseline_loop);
+        assert!(manifest.arms[2].task_tool_enabled);
     }
 }
