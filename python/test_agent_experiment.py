@@ -19,8 +19,9 @@ def _config():
         "repetitions": 3,
         "budgets": {"max_model_requests": 8, "max_tool_steps": 8, "timeout_ms": 1000},
         "arms": [
-            {"id": "single", "task_tool_enabled": False},
-            {"id": "delegated", "task_tool_enabled": True},
+            {"id": "baseline_loop", "task_tool_enabled": False, "baseline_loop": True},
+            {"id": "single", "task_tool_enabled": False, "baseline_loop": False},
+            {"id": "delegated", "task_tool_enabled": True, "baseline_loop": False},
         ],
         "scenarios": [{"id": "case-a"}, {"id": "case-b"}],
     }
@@ -43,7 +44,7 @@ def _runs(*, cached=None, delegated_passes=True):
     records = []
     for scenario in ("case-a", "case-b"):
         for trial in range(1, 4):
-            for arm in ("single", "delegated"):
+            for arm in ("baseline_loop", "single", "delegated"):
                 passed = arm == "delegated" and delegated_passes
                 records.append(
                     {
@@ -51,7 +52,7 @@ def _runs(*, cached=None, delegated_passes=True):
                         "arm_id": arm,
                         "trial": trial,
                         "passed": passed,
-                        "elapsed_ms": 100 if arm == "single" else 80,
+                        "elapsed_ms": {"baseline_loop": 120, "single": 100, "delegated": 80}[arm],
                         "tool_steps": 4,
                         "model_requests": 5,
                         "human_interventions": 0,
@@ -91,8 +92,10 @@ def test_evaluator_reports_unsupported_cache_as_null(tmp_path):
     assert report["arms"]["single"]["retry_count"] == 6
     assert report["arms"]["single"]["retry_rate"] == 0.2
     assert report["arms"]["single"]["provider_latency_ms"] == 300
-    assert report["provider_retry_count"] == 12
+    assert report["arms"]["baseline_loop"]["retry_count"] == 6
+    assert report["provider_retry_count"] == 18
     assert report["provider_retry_rate"] == 0.2
+    assert report["comparison"]["delegated_vs_baseline_pass_rate_delta"] == 1.0
     assert report["passed"] is True
 
 

@@ -59,8 +59,10 @@ def load_config(path: str | Path) -> ExperimentConfig:
     arms = tuple(_required_text(item, "id") for item in payload.get("arms", []))
     if len(scenarios) < 1 or len(set(scenarios)) != len(scenarios):
         raise ValueError("agent experiment scenarios must be non-empty and unique")
-    if set(arms) != {"single", "delegated"}:
-        raise ValueError("agent experiment requires single and delegated arms")
+    if set(arms) != {"baseline_loop", "single", "delegated"}:
+        raise ValueError(
+            "agent experiment requires baseline_loop, single, and delegated arms"
+        )
     provider_name = _required_text(provider, "name")
     model = _required_text(provider, "model")
     price_date = _required_text(pricing, "price_date")
@@ -148,7 +150,7 @@ def evaluate_runs(config_path: str | Path, runs_path: str | Path) -> dict[str, A
     return {
         "schema_version": "1.0",
         "benchmark_version": config.benchmark_version,
-        "dataset_kind": "paired_equal_budget_agent_ablation",
+        "dataset_kind": "paired_equal_budget_agent_ablation_with_pi_baseline",
         "provider": config.provider,
         "model": config.model,
         "temperature": config.temperature,
@@ -177,7 +179,8 @@ def evaluate_runs(config_path: str | Path, runs_path: str | Path) -> dict[str, A
         "passed": passed,
         "limitations": [
             "Cache metrics use provider-returned token fields only; unsupported providers remain null.",
-            "A delegated-agent resume claim is allowed only when comparison.claim_supported is true.",
+            "The baseline_loop arm is a minimal PI-style loop and excludes candle-cli context, memory, migration workflow, and sub-agent enhancements.",
+            "A delegated-agent benefit claim is allowed only when comparison.claim_supported is true.",
             "Cost uses the frozen price snapshot and excludes network, host, and accelerator costs.",
         ],
     }
@@ -327,31 +330,52 @@ def _compare_arms(
     usage_state: dict[str, Any],
     repetitions: int,
 ) -> dict[str, Any]:
+    baseline = arms["baseline_loop"]
     single = arms["single"]
     delegated = arms["delegated"]
     pass_rate_delta = delegated["pass_rate"] - single["pass_rate"]
     elapsed_delta = delegated["mean_elapsed_ms"] - single["mean_elapsed_ms"]
+    single_vs_baseline_pass_rate_delta = single["pass_rate"] - baseline["pass_rate"]
+    delegated_vs_baseline_pass_rate_delta = delegated["pass_rate"] - baseline["pass_rate"]
     token_delta = None
+    single_vs_baseline_token_delta = None
+    delegated_vs_baseline_token_delta = None
     if usage_state["usage_complete"]:
         token_delta = delegated["total_tokens"] - single["total_tokens"]
+        single_vs_baseline_token_delta = single["total_tokens"] - baseline["total_tokens"]
+        delegated_vs_baseline_token_delta = (
+            delegated["total_tokens"] - baseline["total_tokens"]
+        )
 
     paired = {}
     for run in records:
         paired[(run.scenario_id, run.trial, run.arm_id)] = run
     delegated_wins = single_wins = ties = 0
+    single_over_baseline_wins = baseline_over_single_wins = baseline_single_ties = 0
     for scenario, trial, arm in list(paired):
         if arm != "single":
             continue
         left = paired[(scenario, trial, "single")]
         right = paired[(scenario, trial, "delegated")]
+        base = paired[(scenario, trial, "baseline_loop")]
         if right.passed and not left.passed:
             delegated_wins += 1
         elif left.passed and not right.passed:
             single_wins += 1
         else:
             ties += 1
+        if left.passed and not base.passed:
+            single_over_baseline_wins += 1
+        elif base.passed and not left.passed:
+            baseline_over_single_wins += 1
+        else:
+            baseline_single_ties += 1
 
     success_benefit = pass_rate_delta > 0 and delegated_wins > single_wins
+    full_loop_beats_baseline = (
+        single_vs_baseline_pass_rate_delta > 0
+        and single_over_baseline_wins > baseline_over_single_wins
+    )
     efficiency_benefit = False
     if pass_rate_delta == 0 and single["pass_rate"] == 1.0:
         token_benefit = (
@@ -363,6 +387,14 @@ def _compare_arms(
         efficiency_benefit = token_benefit or latency_benefit
     claim_supported = repetitions >= 3 and (success_benefit or efficiency_benefit)
     return {
+        "single_vs_baseline_pass_rate_delta": single_vs_baseline_pass_rate_delta,
+        "delegated_vs_baseline_pass_rate_delta": delegated_vs_baseline_pass_rate_delta,
+        "single_vs_baseline_total_tokens_delta": single_vs_baseline_token_delta,
+        "delegated_vs_baseline_total_tokens_delta": delegated_vs_baseline_token_delta,
+        "paired_single_over_baseline_wins": single_over_baseline_wins,
+        "paired_baseline_over_single_wins": baseline_over_single_wins,
+        "paired_baseline_single_ties": baseline_single_ties,
+        "full_loop_beats_baseline": full_loop_beats_baseline,
         "delegated_pass_rate_delta": pass_rate_delta,
         "delegated_mean_elapsed_ms_delta": elapsed_delta,
         "delegated_total_tokens_delta": token_delta,

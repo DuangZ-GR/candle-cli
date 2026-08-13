@@ -21,12 +21,20 @@
   },
   "arms": [
     {
+      "id": "baseline_loop",
+      "task_tool_enabled": false,
+      "baseline_loop": true,
+      "description": "Minimal PI-style perceive-act loop: model call, tool execution, observation append, no candle-cli context/memory/subagent enhancements."
+    },
+    {
       "id": "single",
-      "task_tool_enabled": false
+      "task_tool_enabled": false,
+      "baseline_loop": false
     },
     {
       "id": "delegated",
       "task_tool_enabled": true,
+      "baseline_loop": false,
       "subagent_permissions": "read_only",
       "subagent_max_steps": 3
     }
